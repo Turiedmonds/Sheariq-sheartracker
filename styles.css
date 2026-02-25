@@ -498,26 +498,35 @@ td {
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  z-index: 50;
+  z-index: 99999;
 }
 
 .modal-dialog {
-  width: min(420px, 100%);
+  width: calc(100% - 32px);
+  max-width: 420px;
   background: #fff;
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 1rem;
   border: 1px solid #d1d5db;
 }
 
 .modal-dialog h3 {
-  margin: 0 0 1rem;
+  margin: 0 0 0.65rem;
   font-size: 1rem;
+}
+
+.modal-dialog p {
+  margin: 0 0 1rem;
 }
 
 .modal-actions {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
+}
+
+.modal-actions button {
+  touch-action: manipulation;
 }
 
 @media (max-width: 700px) {
