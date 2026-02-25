@@ -15,119 +15,194 @@
     <p><a class="nav-link" href="connection.html">Connection Settings</a></p>
   </header>
 
-  <main class="dashboard">
-    <section class="panel full-width" aria-labelledby="simulation-title">
-      <h2 id="simulation-title">Simulation Controls</h2>
-      <div class="form-grid single-row sim-toggle-row">
-        <label for="simulationModeToggle">Simulation Mode</label>
-        <input id="simulationModeToggle" type="checkbox" />
-      </div>
-      <div id="simulationBanner" class="sim-banner" hidden>
-        Simulation active: Shelly polling is paused.
-      </div>
-      <div id="simulationControls" class="button-row" hidden>
-        <button id="simMotorOnBtn" type="button">Motor ON</button>
-        <button id="simMotorOffBtn" type="button">Motor OFF</button>
-      </div>
-      <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
-    </section>
-
-    <section class="panel" aria-labelledby="run-config-title">
-      <h2 id="run-config-title">Run Configuration Panel</h2>
-      <div class="form-grid">
-        <label for="farmInput">Farm</label>
-        <div>
-          <input id="farmInput" type="text" placeholder="Enter or select farm name" list="farmOptions" />
-          <datalist id="farmOptions"></datalist>
-          <div id="savedFarmsList" class="saved-items" aria-live="polite"></div>
+  <main id="dashboardPanels" class="dashboard">
+    <section id="panel-sim" class="panel full-width" aria-labelledby="simulation-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="simulation-title">Simulation Controls</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
-
-        <label for="runType">Time System</label>
-        <select id="runType">
-          <option value="8">8hr</option>
-          <option value="9">9hr</option>
-          <option value="custom">Custom</option>
-        </select>
-
-        <label for="customHours">Custom Hours</label>
-        <input id="customHours" type="number" min="1" step="0.5" value="8" />
-
-        <label for="targetSheepInput">Target Sheep</label>
-        <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
       </div>
-      <div class="button-row run-config-actions">
-        <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
-        <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
-        <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
-        <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
-      </div>
-    </section>
-
-    <section class="panel" aria-labelledby="live-performance-title">
-      <h2 id="live-performance-title">Live Performance Panel</h2>
-      <div class="metrics-grid">
-        <div>Total sheep: <strong id="totalSheep">0</strong></div>
-        <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
-        <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
-        <div>Average full cycle: <strong id="avgCycle">0.0s</strong></div>
-        <div>Sheep per hour: <strong id="sheepPerHour">0.00</strong></div>
+      <div class="panel-body">
+        <div class="form-grid single-row sim-toggle-row">
+          <label for="simulationModeToggle">Simulation Mode</label>
+          <input id="simulationModeToggle" type="checkbox" />
+        </div>
+        <div id="simulationBanner" class="sim-banner" hidden>
+          Simulation active: Shelly polling is paused.
+        </div>
+        <div id="simulationControls" class="button-row" hidden>
+          <button id="simMotorOnBtn" type="button">Motor ON</button>
+          <button id="simMotorOffBtn" type="button">Motor OFF</button>
+        </div>
+        <div class="button-row">
+          <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
+          <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
+          <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
+          <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
+        </div>
+        <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="current-cycle-title">
-      <h2 id="current-cycle-title">Current Cycle Panel</h2>
-      <div class="metrics-grid">
-        <div>Motor state: <strong id="motorState">OFF</strong></div>
-        <div>Current shear time: <strong id="currentShear">0.0s</strong></div>
-        <div>Current catch time: <strong id="currentCatch">0.0s</strong></div>
+    <section id="panel-config" class="panel" aria-labelledby="run-config-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="run-config-title">Run Configuration Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="form-grid">
+          <label for="farmInput">Farm</label>
+          <div class="farm-dropdown" id="farmDropdown">
+            <div class="farm-input-row">
+              <input id="farmInput" type="text" placeholder="Enter or select farm name" autocomplete="off" />
+              <button id="farmDropdownToggle" class="farm-dropdown-toggle" type="button" aria-label="Toggle farm list" aria-expanded="false">▼</button>
+            </div>
+            <div id="farmDropdownMenu" class="farm-dropdown-menu" hidden role="listbox"></div>
+          </div>
+
+          <label for="runType">Time System</label>
+          <select id="runType">
+            <option value="8">8hr</option>
+            <option value="9">9hr</option>
+            <option value="custom">Custom</option>
+          </select>
+
+          <label for="customHours">Custom Hours</label>
+          <input id="customHours" type="number" min="1" step="0.5" value="8" />
+
+          <label for="targetSheepInput">Target Sheep</label>
+          <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
+        </div>
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="target-pace-title">
-      <h2 id="target-pace-title">Target / Pace Panel</h2>
-      <div class="metrics-grid">
-        <div>Required average cycle time: <strong id="requiredCycle">0.0s</strong></div>
-        <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
-        <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
-        <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+    <section id="panel-live" class="panel" aria-labelledby="live-performance-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="live-performance-title">Live Performance Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="metrics-grid">
+          <div>Total sheep: <strong id="totalSheep">0</strong></div>
+          <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
+          <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
+          <div>Average full cycle: <strong id="avgCycle">0.0s</strong></div>
+          <div>Sheep per hour: <strong id="sheepPerHour">0.00</strong></div>
+        </div>
       </div>
     </section>
 
-    <section class="panel" aria-labelledby="time-block-title">
-      <h2 id="time-block-title">Time Block Analysis Panel</h2>
-      <div class="form-grid single-row">
-        <label for="blockMinutes">Custom minutes</label>
-        <input id="blockMinutes" type="number" min="1" value="15" />
+    <section id="panel-cycle" class="panel" aria-labelledby="current-cycle-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="current-cycle-title">Current Cycle Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
       </div>
-      <div class="button-row">
-        <button class="block-btn" data-minutes="5" type="button">5</button>
-        <button class="block-btn" data-minutes="10" type="button">10</button>
-        <button class="block-btn" data-minutes="15" type="button">15</button>
-        <button class="block-btn" data-minutes="30" type="button">30</button>
-        <button class="block-btn" data-minutes="60" type="button">60</button>
+      <div class="panel-body">
+        <div class="metrics-grid">
+          <div>Motor state: <strong id="motorState">OFF</strong></div>
+          <div>Current shear time: <strong id="currentShear">0.0s</strong></div>
+          <div>Current catch time: <strong id="currentCatch">0.0s</strong></div>
+        </div>
       </div>
-      <div id="blockResults">No block data yet.</div>
     </section>
 
-    <section class="panel" aria-labelledby="sheep-log-title">
-      <h2 id="sheep-log-title">Sheep Log Table Panel</h2>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Sheep #</th>
-              <th>Start Time</th>
-              <th>End Time</th>
-              <th>Shear Duration</th>
-              <th>Catch Duration</th>
-              <th>Full Cycle</th>
-            </tr>
-          </thead>
-          <tbody id="sheepLogBody"></tbody>
-        </table>
+    <section id="panel-target" class="panel" aria-labelledby="target-pace-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="target-pace-title">Target / Pace Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="metrics-grid">
+          <div>Required average cycle time: <strong id="requiredCycle">0.0s</strong></div>
+          <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
+          <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
+          <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-block" class="panel" aria-labelledby="time-block-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="time-block-title">Time Block Analysis Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="form-grid single-row">
+          <label for="blockMinutes">Custom minutes</label>
+          <input id="blockMinutes" type="number" min="1" value="15" />
+        </div>
+        <div class="button-row">
+          <button class="block-btn" data-minutes="5" type="button">5</button>
+          <button class="block-btn" data-minutes="10" type="button">10</button>
+          <button class="block-btn" data-minutes="15" type="button">15</button>
+          <button class="block-btn" data-minutes="30" type="button">30</button>
+          <button class="block-btn" data-minutes="60" type="button">60</button>
+        </div>
+        <div id="blockResults">No block data yet.</div>
+      </div>
+    </section>
+
+    <section id="panel-log" class="panel" aria-labelledby="sheep-log-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="sheep-log-title">Sheep Log Table Panel</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Sheep #</th>
+                <th>Start Time</th>
+                <th>End Time</th>
+                <th>Shear Duration</th>
+                <th>Catch Duration</th>
+                <th>Full Cycle</th>
+              </tr>
+            </thead>
+            <tbody id="sheepLogBody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
   </main>
+
+  <div id="resetModalOverlay" class="modal-overlay" hidden>
+    <div class="modal-dialog" role="dialog" aria-modal="true" aria-labelledby="resetModalTitle" tabindex="-1">
+      <h3 id="resetModalTitle">Reset run data? This will clear sheep log and timers.</h3>
+      <div class="modal-actions">
+        <button id="confirmResetBtn" type="button">Yes, reset</button>
+        <button id="cancelResetBtn" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
 
   <script src="script.js"></script>
   <script>
