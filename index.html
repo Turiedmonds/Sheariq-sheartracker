@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>SHEARiQ Shear Tracker</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>SHEARiQ Shear Tracker</h1>
+    <p>Run Status: <strong id="runStatus">Idle</strong></p>
+  </header>
+
+  <main class="dashboard">
+    <section class="panel" aria-labelledby="run-config-title">
+      <h2 id="run-config-title">Run Configuration Panel</h2>
+      <div class="form-grid">
+        <label for="farmInput">Farm</label>
+        <input id="farmInput" type="text" placeholder="Enter farm name" />
+
+        <label for="runType">Run Type</label>
+        <select id="runType">
+          <option value="8">8hr</option>
+          <option value="9">9hr</option>
+          <option value="custom">Custom</option>
+        </select>
+
+        <label for="customHours">Custom Hours</label>
+        <input id="customHours" type="number" min="1" step="0.5" value="8" />
+
+        <label for="targetSheepInput">Target Sheep</label>
+        <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
+      </div>
+      <div class="button-row">
+        <button id="startRunBtn" type="button">Start Run</button>
+        <button id="stopRunBtn" type="button" disabled>Stop Run</button>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="live-performance-title">
+      <h2 id="live-performance-title">Live Performance Panel</h2>
+      <div class="metrics-grid">
+        <div>Total sheep: <strong id="totalSheep">0</strong></div>
+        <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
+        <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
+        <div>Average full cycle: <strong id="avgCycle">0.0s</strong></div>
+        <div>Sheep per hour: <strong id="sheepPerHour">0.00</strong></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="current-cycle-title">
+      <h2 id="current-cycle-title">Current Cycle Panel</h2>
+      <div class="metrics-grid">
+        <div>Motor state: <strong id="motorState">OFF</strong></div>
+        <div>Current shear time: <strong id="currentShear">0.0s</strong></div>
+        <div>Current catch time: <strong id="currentCatch">0.0s</strong></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="target-pace-title">
+      <h2 id="target-pace-title">Target / Pace Panel</h2>
+      <div class="metrics-grid">
+        <div>Required average cycle time: <strong id="requiredCycle">0.0s</strong></div>
+        <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
+        <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
+        <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-labelledby="time-block-title">
+      <h2 id="time-block-title">Time Block Analysis Panel</h2>
+      <div class="form-grid single-row">
+        <label for="blockMinutes">Custom minutes</label>
+        <input id="blockMinutes" type="number" min="1" value="15" />
+      </div>
+      <div class="button-row">
+        <button class="block-btn" data-minutes="5" type="button">5</button>
+        <button class="block-btn" data-minutes="10" type="button">10</button>
+        <button class="block-btn" data-minutes="15" type="button">15</button>
+        <button class="block-btn" data-minutes="30" type="button">30</button>
+        <button class="block-btn" data-minutes="60" type="button">60</button>
+      </div>
+      <div id="blockResults">No block data yet.</div>
+    </section>
+
+    <section class="panel" aria-labelledby="sheep-log-title">
+      <h2 id="sheep-log-title">Sheep Log Table Panel</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Sheep #</th>
+              <th>Start Time</th>
+              <th>End Time</th>
+              <th>Shear Duration</th>
+              <th>Catch Duration</th>
+              <th>Full Cycle</th>
+            </tr>
+          </thead>
+          <tbody id="sheepLogBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((error) => {
+          console.error('Service Worker registration failed:', error);
+        });
+      });
+    }
+  </script>
+</body>
+</html>
