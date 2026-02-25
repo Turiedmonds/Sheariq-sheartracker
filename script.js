@@ -94,6 +94,7 @@ const appState = {
   autosaveTimerId: null,
   trendGraphRenderPoints: [],
   selectedTrendBucketKey: null,
+  trendDetailsExpanded: false,
   autosaveEnabled: true,
   controlsDockEnabled: false,
   controlsDockPos: { x: 20, y: 90 },
@@ -167,6 +168,7 @@ const elements = {
   trendGraphMessage: document.getElementById("trendGraphMessage"),
   trendLatestSummary: document.getElementById("trendLatestSummary"),
   trendGraphTooltip: document.getElementById("trendGraphTooltip"),
+  trendDetailsToggle: document.getElementById("trendDetailsToggle"),
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   trendFlags: document.getElementById("trendFlags"),
@@ -910,6 +912,34 @@ function formatDeltaPlain(delta) {
   return `${sign}${Math.abs(delta).toFixed(3)}s`;
 }
 
+function formatClockHHMM(timestamp) {
+  if (!Number.isFinite(timestamp)) return "--:--";
+  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function getTrendWindowMeta(windowRows, windowSize) {
+  if (!windowRows.length) {
+    return { sheepStart: 0, sheepEnd: 0, timeStart: "--:--", timeEnd: "--:--", windowSize };
+  }
+  const first = windowRows[0];
+  const last = windowRows[windowRows.length - 1];
+  const sheepStart = Number.isFinite(first.number) ? first.number : (appState.sheep.length - windowRows.length + 1);
+  const sheepEnd = Number.isFinite(last.number) ? last.number : appState.sheep.length;
+  return {
+    sheepStart,
+    sheepEnd,
+    timeStart: formatClockHHMM(first.startTime),
+    timeEnd: formatClockHHMM(last.endTime),
+    windowSize
+  };
+}
+
+function getDeltaTone(delta) {
+  if (delta < 0) return "good";
+  if (delta > 0) return "bad";
+  return "neutral";
+}
+
 function describeAheadBehind(delta) {
   if (delta > 0.05) return `behind by ${formatDeltaPlain(delta)} per sheep`;
   if (delta < -0.05) return `ahead by ${formatDeltaPlain(delta)} per sheep`;
@@ -932,13 +962,12 @@ function updateTrendLatestSummary(points, requiredCycle) {
 function updateTrendGraphTooltip(point) {
   if (!elements.trendGraphTooltip) return;
   if (!point) {
-    elements.trendGraphTooltip.hidden = false;
     elements.trendGraphTooltip.textContent = "Tap graph points to see bucket details.";
+    elements.trendGraphTooltip.hidden = !appState.trendDetailsExpanded;
     return;
   }
   const bucketEnd = point.startElapsed + appState.trendBucketMinutes * 60;
   const delta = point.avgCycle - point.requiredCycle;
-  elements.trendGraphTooltip.hidden = false;
   elements.trendGraphTooltip.innerHTML = [
     `Bucket: ${buildRangeLabel(point.startElapsed, bucketEnd)}`,
     `Count: ${point.count} sheep`,
@@ -947,6 +976,17 @@ function updateTrendGraphTooltip(point) {
     `Target catch-to-release: ${formatSeconds(point.requiredCycle)}`,
     `Delta: ${formatDeltaPlain(delta)} (${describeAheadBehind(delta)})`
   ].map((line) => `<div>${line}</div>`).join("");
+  elements.trendGraphTooltip.hidden = !appState.trendDetailsExpanded;
+}
+
+function updateTrendDetailsVisibility() {
+  if (elements.trendDetailsToggle) {
+    elements.trendDetailsToggle.textContent = appState.trendDetailsExpanded ? "Details ▴" : "Details ▾";
+    elements.trendDetailsToggle.setAttribute("aria-expanded", String(appState.trendDetailsExpanded));
+  }
+  if (elements.trendGraphTooltip) {
+    elements.trendGraphTooltip.hidden = !appState.trendDetailsExpanded;
+  }
 }
 
 function handleTrendGraphPointSelection(event) {
@@ -984,44 +1024,111 @@ function updateTrendFlags() {
     elements.trendFlags.textContent = appState.trendFlags[0];
     return;
   }
-  const cycles = appState.sheep.map((s) => s.fullCycle);
-  const flags = [];
-  if (cycles.length >= 5) {
-    const last5 = cycles.slice(-5);
-    const avgLast5 = last5.reduce((a, b) => a + b, 0) / last5.length;
-    const deltaLast5 = avgLast5 - requiredCycle;
-    if (last5.every((v) => v > requiredCycle)) {
-      flags.push(`Sustained behind: last 5 sheep all over target (all > ${formatSeconds(requiredCycle)}). Last 5 avg catch-to-release time is ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(deltaLast5)} behind per sheep).`);
+
+  const rows = appState.sheep;
+  const cycles = rows.map((s) => s.fullCycle);
+  const catches = rows.map((s) => s.catchDuration);
+  const windowSize = 5;
+  const cards = [];
+
+  const renderCard = ({ title, windowRows, avgCyclePrev, avgCycleCurr, avgCatchPrev, avgCatchCurr }) => {
+    const meta = getTrendWindowMeta(windowRows, windowSize);
+    const cycleDelta = avgCycleCurr - avgCyclePrev;
+    const catchDelta = avgCatchCurr - avgCatchPrev;
+    return `
+      <div class="trend-flag">
+        <div class="trend-flag-title">${title}</div>
+        <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${meta.windowSize}</div>
+        <div class="trend-flag-lines">
+          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">(Δ ${formatDeltaPlain(cycleDelta)}/sheep)</span></div>
+          <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">(Δ ${formatDeltaPlain(catchDelta)})</span></div>
+        </div>
+      </div>
+    `;
+  };
+
+  if (cycles.length >= windowSize) {
+    const lastRows = rows.slice(-windowSize);
+    const last5Cycle = cycles.slice(-windowSize);
+    const avgLast5Cycle = last5Cycle.reduce((a, b) => a + b, 0) / last5Cycle.length;
+    const avgLast5Catch = catches.slice(-windowSize).reduce((a, b) => a + b, 0) / windowSize;
+    if (last5Cycle.every((v) => v > requiredCycle)) {
+      const lastMeta = getTrendWindowMeta(lastRows, windowSize);
+      cards.push(`
+        <div class="trend-flag">
+          <div class="trend-flag-title">Sustained behind</div>
+          <div class="trend-flag-meta">Sheep ${lastMeta.sheepStart}–${lastMeta.sheepEnd} • ${lastMeta.timeStart}–${lastMeta.timeEnd} • Window: last ${windowSize}</div>
+          <div class="trend-flag-lines">
+            <div><span class="k">Catch-to-release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">(Δ ${formatDeltaPlain(avgLast5Cycle - requiredCycle)}/sheep)</span></div>
+            <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgLast5Catch)}</span> <span class="d neutral">(all 5 above target cycle)</span></div>
+          </div>
+        </div>
+      `);
     }
   }
+
   if (cycles.length >= 10) {
-    const prev5 = cycles.slice(-10, -5);
-    const recent5 = cycles.slice(-5);
-    const prevAvg = prev5.reduce((a, b) => a + b, 0) / prev5.length;
-    const recentAvg = recent5.reduce((a, b) => a + b, 0) / recent5.length;
-    const recentDelta = recentAvg - requiredCycle;
-    if (recentAvg > prevAvg + 0.2) {
-      flags.push(`Pace slipping: last 5 avg catch-to-release time is ${formatSeconds(recentAvg)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(recentDelta)} behind per sheep). Previous 5 avg was ${formatSeconds(prevAvg)}.`);
+    const prevRows = rows.slice(-10, -5);
+    const recentRows = rows.slice(-5);
+    const prevCycle = cycles.slice(-10, -5);
+    const recentCycle = cycles.slice(-5);
+    const prevCatch = catches.slice(-10, -5);
+    const recentCatch = catches.slice(-5);
+    const prevAvgCycle = prevCycle.reduce((a, b) => a + b, 0) / prevCycle.length;
+    const recentAvgCycle = recentCycle.reduce((a, b) => a + b, 0) / recentCycle.length;
+    const prevAvgCatch = prevCatch.reduce((a, b) => a + b, 0) / prevCatch.length;
+    const recentAvgCatch = recentCatch.reduce((a, b) => a + b, 0) / recentCatch.length;
+
+    if (recentAvgCycle > prevAvgCycle + 0.2) {
+      cards.push(renderCard({
+        title: "Pace slipping",
+        windowRows: recentRows,
+        avgCyclePrev: prevAvgCycle,
+        avgCycleCurr: recentAvgCycle,
+        avgCatchPrev: prevAvgCatch,
+        avgCatchCurr: recentAvgCatch
+      }));
     }
-    if (prevAvg > recentAvg + 0.2) {
-      const improve = prevAvg - recentAvg;
-      flags.push(`Recovery: avg improved from ${formatSeconds(prevAvg)} to ${formatSeconds(recentAvg)} over last 10 sheep (${formatDeltaPlain(-improve)} per sheep). Target is ${formatSeconds(requiredCycle)}, so recent pace is ${describeAheadBehind(recentDelta)}.`);
+    if (prevAvgCycle > recentAvgCycle + 0.2) {
+      cards.push(renderCard({
+        title: "Recovery",
+        windowRows: recentRows,
+        avgCyclePrev: prevAvgCycle,
+        avgCycleCurr: recentAvgCycle,
+        avgCatchPrev: prevAvgCatch,
+        avgCatchCurr: recentAvgCatch
+      }));
     }
   }
 
-  if (!flags.length && cycles.length >= 5) {
-    const last5 = cycles.slice(-5);
-    const avgLast5 = last5.reduce((a, b) => a + b, 0) / last5.length;
-    const delta = avgLast5 - requiredCycle;
-    flags.push(`No trend warnings. Last 5 avg ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${describeAheadBehind(delta)}).`);
+  if (!cards.length && cycles.length >= windowSize) {
+    const recentRows = rows.slice(-windowSize);
+    const recentCycle = cycles.slice(-windowSize);
+    const recentCatch = catches.slice(-windowSize);
+    const avgCycle = recentCycle.reduce((a, b) => a + b, 0) / recentCycle.length;
+    const avgCatch = recentCatch.reduce((a, b) => a + b, 0) / recentCatch.length;
+    const delta = avgCycle - requiredCycle;
+    const meta = getTrendWindowMeta(recentRows, windowSize);
+    cards.push(`
+      <div class="trend-flag">
+        <div class="trend-flag-title">No trend warnings</div>
+        <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
+        <div class="trend-flag-lines">
+          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">(Δ ${formatDeltaPlain(delta)}/sheep)</span></div>
+          <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgCatch)}</span></div>
+        </div>
+      </div>
+    `);
   }
 
-  if (!flags.length) {
-    flags.push(`No trend warnings yet. Need at least 5 sheep to compare with target ${formatSeconds(requiredCycle)}.`);
+  if (!cards.length) {
+    appState.trendFlags = [`No trend warnings yet. Need at least 5 sheep to compare with target ${formatSeconds(requiredCycle)}.`];
+    elements.trendFlags.textContent = appState.trendFlags[0];
+    return;
   }
 
-  appState.trendFlags = flags;
-  elements.trendFlags.innerHTML = appState.trendFlags.map((f) => `<div>${f}</div>`).join("");
+  appState.trendFlags = cards.map((card) => card.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  elements.trendFlags.innerHTML = cards.join("");
 }
 
 function drawTrendGraph() {
@@ -1033,6 +1140,7 @@ function drawTrendGraph() {
   if (rect.width > 0 && Math.round(rect.width) !== canvas.width) {
     canvas.width = Math.round(rect.width);
   }
+  canvas.height = 240;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   appState.trendGraphRenderPoints = [];
 
@@ -1047,7 +1155,7 @@ function drawTrendGraph() {
   }
   if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = true;
 
-  const margins = { left: 42, right: 12, top: 12, bottom: 28 };
+  const margins = { left: 46, right: 12, top: 12, bottom: 28 };
   const width = canvas.width - margins.left - margins.right;
   const height = canvas.height - margins.top - margins.bottom;
   const maxX = Math.max(points.length ? points[points.length - 1].startElapsed / 60 : appState.trendBucketMinutes, appState.trendBucketMinutes);
@@ -1055,16 +1163,34 @@ function drawTrendGraph() {
   const x = (minute) => margins.left + (minute / maxX) * width;
   const y = (sec) => margins.top + height - (sec / maxY) * height;
 
-  ctx.strokeStyle = "#e2e8f0";
-  ctx.lineWidth = 1;
-  const gridLines = 4;
-  for (let i = 1; i <= gridLines; i += 1) {
-    const yVal = margins.top + (height / (gridLines + 1)) * i;
+  const yTickStep = maxY <= 30 ? 5 : 10;
+  const yMaxTick = Math.ceil(maxY / yTickStep) * yTickStep;
+  ctx.strokeStyle = "#eef2f7";
+  ctx.fillStyle = "#64748b";
+  ctx.font = "11px Arial";
+  for (let tick = 0; tick <= yMaxTick; tick += yTickStep) {
+    const py = y(tick);
     ctx.beginPath();
-    ctx.moveTo(margins.left, yVal);
-    ctx.lineTo(margins.left + width, yVal);
+    ctx.moveTo(margins.left, py);
+    ctx.lineTo(margins.left + width, py);
     ctx.stroke();
+    ctx.fillText(String(tick), 8, py + 3);
   }
+
+  const xTickEvery = points.length > 8 ? 2 : 1;
+  const tickMinutes = points.length
+    ? points.filter((_, index) => index % xTickEvery === 0).map((p) => p.startElapsed / 60)
+    : [0, maxX];
+  tickMinutes.forEach((minute) => {
+    const px = x(minute);
+    ctx.beginPath();
+    ctx.moveTo(px, margins.top);
+    ctx.lineTo(px, margins.top + height);
+    ctx.strokeStyle = "#f5f7fb";
+    ctx.stroke();
+    ctx.fillStyle = "#64748b";
+    ctx.fillText(String(Math.round(minute)), px - 8, canvas.height - 10);
+  });
 
   ctx.strokeStyle = "#94a3b8";
   ctx.beginPath();
@@ -1074,8 +1200,8 @@ function drawTrendGraph() {
   ctx.stroke();
   ctx.fillStyle = "#475569";
   ctx.font = "12px Arial";
-  ctx.fillText("seconds", 4, margins.top + 10);
-  ctx.fillText("minutes", canvas.width - 56, canvas.height - 6);
+  ctx.fillText("sec", 14, margins.top + 10);
+  ctx.fillText("min", canvas.width - 34, canvas.height - 6);
 
   ctx.strokeStyle = "#f59e0b";
   ctx.beginPath();
@@ -2196,6 +2322,7 @@ function loadLastSave() {
     drawTrendGraph();
     if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
     updateTrendFlags();
+    updateTrendDetailsVisibility();
     updateLivePanel();
     updateStatsPanel();
     updatePauseButtonUI();
@@ -2568,6 +2695,12 @@ function bindEvents() {
       handleTrendGraphPointSelection(event);
     }, { passive: false });
   }
+  if (elements.trendDetailsToggle) {
+    elements.trendDetailsToggle.addEventListener("click", () => {
+      appState.trendDetailsExpanded = !appState.trendDetailsExpanded;
+      updateTrendDetailsVisibility();
+    });
+  }
   if (elements.resetRunBtn) {
     elements.resetRunBtn.addEventListener("click", async () => {
       const confirmed = await confirmModal({
@@ -2866,6 +2999,7 @@ function initialize() {
   updateRunBadge();
   updateDayClockDisplay();
   updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
+  updateTrendDetailsVisibility();
   drawTrendGraph();
   updateTrendFlags();
   updateAutosaveUI();
