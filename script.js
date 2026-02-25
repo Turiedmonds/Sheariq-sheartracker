@@ -170,6 +170,25 @@ const elements = {
   gridSizeSelect: document.getElementById("gridSizeSelect")
 };
 
+const METRIC_VALUE_IDS = new Set([
+  "avgShear",
+  "avgCatch",
+  "avgCycle",
+  "sheepPerHour",
+  "requiredCycle",
+  "requiredRate",
+  "projectedTotal",
+  "catchPrediction",
+  "motorState",
+  "currentShear",
+  "currentCatch",
+  "runCountdown",
+  "dayClock",
+  "totalSheep",
+  "currentSheepNumber",
+  "runBadge"
+]);
+
 function parseStoredBoolean(rawValue, fallback = true) {
   if (rawValue === null) return fallback;
   return rawValue === "true";
@@ -1132,6 +1151,25 @@ function renderLogTable() {
     `;
     elements.sheepLogBody.appendChild(row);
   });
+
+  const tableWrap = elements.sheepLogBody.closest(".table-wrap, .table-scroll");
+  const scroller = tableWrap || findScrollableParent(elements.sheepLogBody);
+  if (scroller) {
+    scroller.scrollTop = scroller.scrollHeight;
+  }
+}
+
+function findScrollableParent(startElement) {
+  let current = startElement?.parentElement || null;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const canScrollY = style.overflowY === "auto" || style.overflowY === "scroll";
+    if (canScrollY && current.scrollHeight > current.clientHeight) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
 }
 
 function updateLivePanel() {
@@ -1659,6 +1697,16 @@ function updateDashboardCanvasSize() {
   elements.dashboardPanels.style.minWidth = `${Math.max(window.innerWidth - 16, maxRight + 20)}px`;
 }
 
+// Scale panel text in layout edit mode based on current absolute panel size.
+function updatePanelScale(panel, layoutItem) {
+  if (!panel || !layoutItem) return;
+  const baseW = 420;
+  const baseH = 240;
+  const rawScale = Math.min(layoutItem.width / baseW, layoutItem.height / baseH);
+  const clampedScale = Math.min(Math.max(rawScale, 0.9), 1.6);
+  panel.style.setProperty("--panelScale", clampedScale.toFixed(3));
+}
+
 function applyPanelLayout() {
   document.body.classList.toggle("layout-edit-on", appState.layoutEditMode);
   if (elements.snapToGridToggle) elements.snapToGridToggle.checked = appState.snapToGridEnabled;
@@ -1675,12 +1723,14 @@ function applyPanelLayout() {
       panel.style.width = `${layout.width}px`;
       panel.style.height = `${layout.height}px`;
       panel.style.zIndex = String(layout.z || 1);
+      updatePanelScale(panel, layout);
     } else {
       if (!(panel.id === "panel-sim" && appState.controlsDockEnabled)) {
         panel.style.left = "";
         panel.style.top = "";
       }
       panel.style.zIndex = "";
+      panel.style.removeProperty("--panelScale");
     }
   });
 
@@ -1860,7 +1910,20 @@ function movePanelResize(moveEvent) {
   resize.panel.style.top = `${y}px`;
   resize.panel.style.width = `${width}px`;
   resize.panel.style.height = `${height}px`;
+  updatePanelScale(resize.panel, item);
   updateDashboardCanvasSize();
+}
+
+// Explicitly mark known panel metric fields so values visually stand out from labels.
+function initializeMetricValueStyling() {
+  METRIC_VALUE_IDS.forEach((id) => {
+    const node = document.getElementById(id);
+    if (!node) return;
+    if (!(node instanceof HTMLElement)) return;
+    if (!node.closest(".panel")) return;
+    if (node.matches("input, button, select, textarea")) return;
+    node.classList.add("metric-value");
+  });
 }
 
 function endPanelResize(endEvent) {
@@ -2596,6 +2659,7 @@ function initialize() {
   loadControlsDockSettings();
   updateConnectionInputs();
   ensurePanelLockButtons();
+  initializeMetricValueStyling();
   bindEvents();
   applyPanelState();
   applyPanelSizes();
