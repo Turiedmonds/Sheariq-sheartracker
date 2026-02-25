@@ -427,8 +427,12 @@ function calculateAverages() {
     { shear: 0, catch: 0, cycle: 0 }
   );
 
+  const currentPauseMs = (appState.paused && appState.pauseStartedAtMs !== null)
+    ? Math.max(Date.now() - appState.pauseStartedAtMs, 0)
+    : 0;
+  const effectivePausedMs = appState.totalPausedMs + currentPauseMs;
   const runElapsedSeconds = Math.max(
-    ((Date.now() - appState.runStartTime) - appState.totalPausedMs) / 1000,
+    ((Date.now() - appState.runStartTime) - effectivePausedMs) / 1000,
     1
   );
   appState.currentStats = {
@@ -442,8 +446,12 @@ function calculateAverages() {
 }
 
 function calculateTargetMetrics() {
+  const currentPauseMs = (appState.paused && appState.pauseStartedAtMs !== null)
+    ? Math.max(Date.now() - appState.pauseStartedAtMs, 0)
+    : 0;
+  const effectivePausedMs = appState.totalPausedMs + currentPauseMs;
   const elapsedSeconds = appState.runStartTime
-    ? Math.max(((Date.now() - appState.runStartTime) - appState.totalPausedMs) / 1000, 0)
+    ? Math.max(((Date.now() - appState.runStartTime) - effectivePausedMs) / 1000, 0)
     : 0;
   const runLengthSeconds = appState.target.runLengthSeconds || 0;
   const targetSheep = appState.target.sheep || 0;
