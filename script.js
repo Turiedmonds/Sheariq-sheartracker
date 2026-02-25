@@ -4,6 +4,7 @@ const PANEL_ORDER_STORAGE_KEY = "sheariq.panelOrder";
 const PANEL_COLLAPSED_STORAGE_KEY = "sheariq.panelCollapsed";
 const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
 const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
+const SESSION_DATE_STORAGE_KEY = "sheariq.sessionDate";
 const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
 const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
 const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
@@ -83,12 +84,14 @@ const appState = {
   controlsDockEnabled: false,
   controlsDockPos: { x: 20, y: 90 },
   pointerPanelDrag: null,
-  controlsDockDrag: null
+  controlsDockDrag: null,
+  sessionDate: ""
 };
 
 const elements = {
   runStatus: document.getElementById("runStatus"),
   farmInput: document.getElementById("farmInput"),
+  sessionDate: document.getElementById("sessionDate"),
   runType: document.getElementById("runType"),
   dayStartTimeInput: document.getElementById("dayStartTimeInput"),
   customHours: document.getElementById("customHours"),
@@ -155,6 +158,38 @@ const elements = {
 function parseStoredBoolean(rawValue, fallback = true) {
   if (rawValue === null) return fallback;
   return rawValue === "true";
+}
+
+function formatDateYYYYMMDD(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function sanitizeSessionDate(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value || "") ? value : "";
+}
+
+function getAutosaveStorageKey() {
+  const sessionDate = sanitizeSessionDate(appState.sessionDate) || formatDateYYYYMMDD(new Date());
+  return `${AUTOSAVE_STORAGE_KEY}.${sessionDate}`;
+}
+
+function initializeSessionDate() {
+  const storedSessionDate = sanitizeSessionDate(localStorage.getItem(SESSION_DATE_STORAGE_KEY));
+  const sessionDate = storedSessionDate || formatDateYYYYMMDD(new Date());
+  appState.sessionDate = sessionDate;
+  localStorage.setItem(SESSION_DATE_STORAGE_KEY, sessionDate);
+  if (elements.sessionDate) elements.sessionDate.value = sessionDate;
+}
+
+function setSessionDate(value) {
+  const nextSessionDate = sanitizeSessionDate(value);
+  if (!nextSessionDate) return;
+  appState.sessionDate = nextSessionDate;
+  localStorage.setItem(SESSION_DATE_STORAGE_KEY, nextSessionDate);
+  if (appState.autosaveEnabled) autosaveState();
 }
 
 function isDashboardPage() {
@@ -758,7 +793,7 @@ function renderReviewList() {
   elements.reviewList.innerHTML = appState.reviewBlocks.map((block) => `
     <div class="review-entry">
       <div><strong>${block.range}</strong></div>
-      <div>Sheep: ${block.count} • Avg cycle: ${block.avgCycle.toFixed(3)}s</div>
+      <div>Sheep: ${block.count} • Avg catch-to-release: ${block.avgCycle.toFixed(3)}s</div>
       <div>${block.deltaText}</div>
       <div>${block.status}</div>
     </div>
@@ -819,7 +854,7 @@ function generateRunReview() {
   const verdict = segs.length > 1 && segs[segs.length - 1].avgCycle < segs[0].avgCycle ? "Strong finish" : "Maintained pace throughout";
   const lostRange = worst ? buildRangeLabel(worst.startElapsed, worst.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
   const bestRange = best ? buildRangeLabel(best.startElapsed, best.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
-  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s cycle. First half averaged ${avg(firstHalf)}s cycle. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.`;
+  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s catch-to-release time. First half averaged ${avg(firstHalf)}s catch-to-release time. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.`;
   elements.runReviewText.textContent = appState.runReviewText;
 }
 
@@ -840,12 +875,12 @@ function updateTrendLatestSummary(points, requiredCycle) {
   const bucketMinutes = appState.trendBucketMinutes;
   const latest = points.length ? points[points.length - 1] : null;
   if (!latest) {
-    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg cycle 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
+    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg catch-to-release 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
     return;
   }
   const delta = latest.avgCycle - requiredCycle;
   const meaning = describeAheadBehind(delta);
-  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg cycle ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
+  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg catch-to-release ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
 }
 
 function updateTrendGraphTooltip(point) {
@@ -861,9 +896,9 @@ function updateTrendGraphTooltip(point) {
   elements.trendGraphTooltip.innerHTML = [
     `Bucket: ${buildRangeLabel(point.startElapsed, bucketEnd)}`,
     `Count: ${point.count} sheep`,
-    `Avg cycle: ${formatSeconds(point.avgCycle)}`,
+    `Avg catch-to-release: ${formatSeconds(point.avgCycle)}`,
     `Avg catch: ${formatSeconds(point.avgCatch)}`,
-    `Target cycle: ${formatSeconds(point.requiredCycle)}`,
+    `Target catch-to-release: ${formatSeconds(point.requiredCycle)}`,
     `Delta: ${formatDeltaPlain(delta)} (${describeAheadBehind(delta)})`
   ].map((line) => `<div>${line}</div>`).join("");
 }
@@ -910,7 +945,7 @@ function updateTrendFlags() {
     const avgLast5 = last5.reduce((a, b) => a + b, 0) / last5.length;
     const deltaLast5 = avgLast5 - requiredCycle;
     if (last5.every((v) => v > requiredCycle)) {
-      flags.push(`Sustained behind: last 5 sheep all over target (all > ${formatSeconds(requiredCycle)}). Last 5 avg cycle is ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(deltaLast5)} behind per sheep).`);
+      flags.push(`Sustained behind: last 5 sheep all over target (all > ${formatSeconds(requiredCycle)}). Last 5 avg catch-to-release time is ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(deltaLast5)} behind per sheep).`);
     }
   }
   if (cycles.length >= 10) {
@@ -920,7 +955,7 @@ function updateTrendFlags() {
     const recentAvg = recent5.reduce((a, b) => a + b, 0) / recent5.length;
     const recentDelta = recentAvg - requiredCycle;
     if (recentAvg > prevAvg + 0.2) {
-      flags.push(`Pace slipping: last 5 avg cycle is ${formatSeconds(recentAvg)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(recentDelta)} behind per sheep). Previous 5 avg was ${formatSeconds(prevAvg)}.`);
+      flags.push(`Pace slipping: last 5 avg catch-to-release time is ${formatSeconds(recentAvg)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(recentDelta)} behind per sheep). Previous 5 avg was ${formatSeconds(prevAvg)}.`);
     }
     if (prevAvg > recentAvg + 0.2) {
       const improve = prevAvg - recentAvg;
@@ -1541,7 +1576,7 @@ function getAutosavePayload() {
 
 function autosaveState() {
   if (!appState.autosaveEnabled) return;
-  localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(getAutosavePayload()));
+  localStorage.setItem(getAutosaveStorageKey(), JSON.stringify(getAutosavePayload()));
 }
 
 function updateAutosaveUI() {
@@ -1636,7 +1671,8 @@ function loadControlsDockSettings() {
 
 function loadLastSave() {
   try {
-    const raw = JSON.parse(localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
+    const autosaveKey = getAutosaveStorageKey();
+    const raw = JSON.parse(localStorage.getItem(autosaveKey) || localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
     if (!raw || !raw.state) return;
     Object.assign(appState, raw.state);
     if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
@@ -1859,7 +1895,7 @@ function renderBlock(minutes) {
     <p><strong>Sheep completed:</strong> ${block.count}</p>
     <p><strong>Average shear:</strong> ${formatSeconds(block.avgShear)}</p>
     <p><strong>Average catch:</strong> ${formatSeconds(block.avgCatch)}</p>
-    <p><strong>Average cycle:</strong> ${formatSeconds(block.avgCycle)}</p>
+    <p><strong>Average catch-to-release time:</strong> ${formatSeconds(block.avgCycle)}</p>
     <p><strong>Rate:</strong> ${block.rate.toFixed(2)} sheep/hour</p>
   `;
 }
@@ -1980,6 +2016,12 @@ function bindEvents() {
   if (elements.dayStartTimeInput) {
     elements.dayStartTimeInput.addEventListener("input", () => {
       appState.dayStartTimeTouched = true;
+    });
+  }
+
+  if (elements.sessionDate) {
+    elements.sessionDate.addEventListener("change", () => {
+      setSessionDate(elements.sessionDate.value);
     });
   }
 
@@ -2105,6 +2147,7 @@ function initialize() {
   loadPanelState();
   loadPanelSizes();
   loadAutosaveSettings();
+  initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
   bindEvents();
