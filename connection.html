@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1f2937" />
+  <title>Connection Settings</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>Connection Settings</h1>
+    <p><a class="nav-link" href="index.html">Back to Dashboard</a></p>
+  </header>
+
+  <main class="dashboard single-column">
+    <section class="panel full-width" aria-labelledby="connection-title">
+      <h2 id="connection-title">Connection Panel</h2>
+      <div class="form-grid">
+        <label for="shellyIpInput">Shelly IP</label>
+        <input id="shellyIpInput" type="text" value="192.168.33.1" />
+
+        <label for="endpointMode">Endpoint Mode</label>
+        <select id="endpointMode">
+          <option value="legacy">/status (legacy)</option>
+          <option value="rpcStatus">/rpc/Shelly.GetStatus (gen2+)</option>
+          <option value="rpcSwitch">/rpc/Switch.GetStatus?id=0 (gen2+)</option>
+        </select>
+
+        <label for="pollIntervalInput">Poll interval (ms)</label>
+        <input id="pollIntervalInput" type="number" min="100" step="50" value="200" />
+      </div>
+      <div class="button-row">
+        <button class="poll-quick-btn" data-ms="100" type="button">100</button>
+        <button class="poll-quick-btn" data-ms="200" type="button">200</button>
+        <button class="poll-quick-btn" data-ms="300" type="button">300</button>
+        <button class="poll-quick-btn" data-ms="500" type="button">500</button>
+        <button class="poll-quick-btn" data-ms="1000" type="button">1000</button>
+        <button id="testConnectionBtn" type="button">Test Connection</button>
+      </div>
+      <div id="connectionStatus" class="status-box">No connection test yet.</div>
+      <pre id="connectionDebug" class="debug-box">Debug output appears here after a test.</pre>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch((error) => {
+          console.error('Service Worker registration failed:', error);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

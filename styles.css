@@ -144,3 +144,33 @@ td {
     grid-template-columns: 1fr;
   }
 }
+
+
+.single-column {
+  grid-template-columns: minmax(280px, 720px);
+  justify-content: center;
+}
+
+.nav-link {
+  display: inline-block;
+  font-size: 0.9rem;
+  color: #1d4ed8;
+  text-decoration: none;
+}
+
+.nav-link:hover {
+  text-decoration: underline;
+}
+
+.minimal-status {
+  font-size: 0.85rem;
+}
+
+.debug-box {
+  margin-top: 0.6rem;
+  padding: 0.6rem;
+  border: 1px dashed #9ca3af;
+  background: #f9fafb;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+}
