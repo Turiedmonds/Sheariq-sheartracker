@@ -145,6 +145,7 @@ const elements = {
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
+  requiredDayTotalSheep: document.getElementById("requiredDayTotalSheep"),
   requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
   projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
@@ -201,6 +202,7 @@ const METRIC_VALUE_IDS = new Set([
   "requiredCycle",
   "requiredRate",
   "projectedTotal",
+  "requiredDayTotalSheep",
   "requiredRunTotalSheep",
   "projectedRunVsRequired",
   "estimatedLastCatchTime",
@@ -335,6 +337,30 @@ function parseRequiredTotalSheep() {
     return null;
   }
   return parsed;
+}
+
+function getRequiredDaySheep() {
+  const parsed = parseRequiredTotalSheep();
+  return parsed === null ? 0 : parsed;
+}
+
+function getScheduleSeconds() {
+  return getScheduleForCurrentType().map((seconds) => Math.max(Number(seconds) || 0, 0));
+}
+
+function getRequiredRunSheep(requiredDaySheep, scheduleSeconds, currentRunIndex) {
+  const safeDaySheep = Math.max(Number(requiredDaySheep) || 0, 0);
+  if (!scheduleSeconds.length) return safeDaySheep;
+
+  const totalDaySeconds = scheduleSeconds.reduce((sum, seconds) => sum + Math.max(Number(seconds) || 0, 0), 0);
+  const safeIndex = Math.max(Math.min(currentRunIndex, scheduleSeconds.length - 1), 0);
+  const thisRunSeconds = scheduleSeconds[safeIndex] ?? scheduleSeconds[0] ?? 0;
+
+  if (totalDaySeconds <= 0) {
+    return Math.max(Math.round(safeDaySheep), 0);
+  }
+
+  return Math.max(Math.round(safeDaySheep * (thisRunSeconds / totalDaySeconds)), 0);
 }
 
 function estimateLastCatchDayClock(projectedRunTotalSheep) {
@@ -822,39 +848,36 @@ function calculateLivePerformanceExtremes() {
 
 function calculateTargetMetrics() {
   const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
-  const runLengthSeconds = appState.target.runLengthSeconds || 0;
-  const targetSheep = appState.target.sheep || 0;
+  const runLengthSeconds = getCurrentRunDurationSeconds();
+  const requiredDaySheep = getRequiredDaySheep();
+  const scheduleSeconds = getScheduleSeconds();
+  const requiredRunSheep = getRequiredRunSheep(requiredDaySheep, scheduleSeconds, appState.currentRunIndex);
 
-  const requiredRate = runLengthSeconds > 0 ? targetSheep / (runLengthSeconds / 3600) : 0;
-  const requiredCycle = targetSheep > 0 && runLengthSeconds > 0 ? runLengthSeconds / targetSheep : 0;
+  const requiredRate = runLengthSeconds > 0 ? (requiredRunSheep / runLengthSeconds) * 3600 : 0;
+  const requiredCycle = requiredRunSheep > 0 && runLengthSeconds > 0 ? runLengthSeconds / requiredRunSheep : 0;
   const projectedTotal = appState.currentStats.sheepPerHour > 0 && runLengthSeconds > 0
     ? Math.round((appState.currentStats.sheepPerHour * runLengthSeconds) / 3600)
     : appState.sheep.length;
 
   const remainingSeconds = Math.max(runLengthSeconds - elapsedSeconds, 0);
-  const remainingSheep = Math.max(targetSheep - appState.sheep.length, 0);
+  const remainingSheep = Math.max(requiredRunSheep - appState.sheep.length, 0);
   const requiredCycleRemaining = remainingSheep > 0 ? remainingSeconds / remainingSheep : 0;
 
-  return { requiredRate, requiredCycle, projectedTotal, requiredCycleRemaining, remainingSheep };
+  return {
+    requiredRate,
+    requiredCycle,
+    projectedTotal,
+    requiredCycleRemaining,
+    remainingSheep,
+    requiredDaySheep,
+    requiredRunSheep
+  };
 }
 
 function calculateRequiredRunTotalSheep() {
   const dayTarget = parseRequiredTotalSheep();
   if (dayTarget === null) return null;
-
-  const dayDone = appState.daySheep.length;
-  const schedule = getScheduleForCurrentType();
-  const runIndex = Math.max(Math.min(appState.currentRunIndex, schedule.length - 1), 0);
-  const remainingTarget = Math.max(dayTarget - dayDone, 0);
-  const remainingRuns = schedule.slice(runIndex);
-  const remainingRunSecondsTotal = remainingRuns.reduce((sum, seconds) => sum + Math.max(Number(seconds) || 0, 0), 0);
-  const currentRunSeconds = Math.max(Number(schedule[runIndex]) || 0, 0);
-
-  if (remainingRunSecondsTotal <= 0) {
-    return remainingTarget;
-  }
-
-  return Math.round(remainingTarget * (currentRunSeconds / remainingRunSecondsTotal));
+  return getRequiredRunSheep(dayTarget, getScheduleSeconds(), appState.currentRunIndex);
 }
 
 function predictCatch() {
@@ -1487,6 +1510,7 @@ function updateLivePanel() {
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
+  const requiredDayTotalSheep = parseRequiredTotalSheep();
   const requiredRunTotalSheep = calculateRequiredRunTotalSheep();
   const { fastest, slowest, last } = calculateLivePerformanceExtremes();
 
@@ -1501,6 +1525,7 @@ function updateStatsPanel() {
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
+  setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
