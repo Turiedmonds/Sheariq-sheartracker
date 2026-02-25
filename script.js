@@ -72,12 +72,26 @@ const elements = {
   pollIntervalInput: document.getElementById("pollIntervalInput"),
   testConnectionBtn: document.getElementById("testConnectionBtn"),
   connectionStatus: document.getElementById("connectionStatus"),
+  connectionSummary: document.getElementById("connectionSummary"),
+  connectionDebug: document.getElementById("connectionDebug"),
   simulationModeToggle: document.getElementById("simulationModeToggle"),
   simulationBanner: document.getElementById("simulationBanner"),
   simulationControls: document.getElementById("simulationControls"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn")
 };
+
+function isDashboardPage() {
+  return Boolean(elements.startRunBtn);
+}
+
+function setText(element, value) {
+  if (element) element.textContent = value;
+}
+
+function setHTML(element, value) {
+  if (element) element.innerHTML = value;
+}
 
 function formatSeconds(seconds) {
   if (!Number.isFinite(seconds) || seconds < 0) return "0.0s";
@@ -122,6 +136,7 @@ function saveConnectionSettings() {
 }
 
 function updateConnectionInputs() {
+  if (!elements.shellyIpInput || !elements.endpointMode || !elements.pollIntervalInput) return;
   elements.shellyIpInput.value = appState.connection.ip;
   elements.endpointMode.value = appState.connection.mode;
   elements.pollIntervalInput.value = String(appState.connection.pollInterval);
@@ -133,6 +148,7 @@ function getShellyUrl() {
 }
 
 function getRunLengthSeconds() {
+  if (!elements.runType || !elements.customHours) return 0;
   if (elements.runType.value === "custom") {
     const customHours = Number(elements.customHours.value) || 0;
     return Math.max(customHours * 3600, 0);
@@ -153,6 +169,9 @@ function resetRunState() {
 }
 
 function startRun() {
+  if (!elements.farmInput || !elements.targetSheepInput || !elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) {
+    return;
+  }
   appState.runActive = true;
   appState.runStartTime = Date.now();
   appState.sheep = [];
@@ -175,6 +194,7 @@ function startRun() {
 }
 
 function stopRun() {
+  if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) return;
   appState.runActive = false;
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -190,6 +210,7 @@ function stopRun() {
 }
 
 function resetRun() {
+  if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus || !elements.blockMinutes) return;
   const ok = window.confirm("Reset run data? This will clear sheep log and timers.");
   if (!ok) return;
 
@@ -344,6 +365,7 @@ function calculateBlockData(minutes) {
 }
 
 function renderLogTable() {
+  if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
 
   appState.sheep.forEach((entry) => {
@@ -369,34 +391,44 @@ function updateLivePanel() {
     ? (Date.now() - appState.currentCycle.catchStart) / 1000
     : 0;
 
-  elements.motorState.textContent = appState.currentMotorDisplay;
-  elements.currentShear.textContent = formatSeconds(shearCurrent);
-  elements.currentCatch.textContent = formatSeconds(catchCurrent);
-  elements.totalSheep.textContent = String(appState.sheep.length);
-  elements.projectedTotal.textContent = String(calculateTargetMetrics().projectedTotal);
+  setText(elements.motorState, appState.currentMotorDisplay);
+  setText(elements.currentShear, formatSeconds(shearCurrent));
+  setText(elements.currentCatch, formatSeconds(catchCurrent));
+  setText(elements.totalSheep, String(appState.sheep.length));
+  setText(elements.projectedTotal, String(calculateTargetMetrics().projectedTotal));
 }
 
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
 
-  elements.totalSheep.textContent = String(appState.sheep.length);
-  elements.avgShear.textContent = formatSeconds(appState.currentStats.avgShear);
-  elements.avgCatch.textContent = formatSeconds(appState.currentStats.avgCatch);
-  elements.avgCycle.textContent = formatSeconds(appState.currentStats.avgCycle);
-  elements.sheepPerHour.textContent = appState.currentStats.sheepPerHour.toFixed(2);
-  elements.requiredCycle.textContent = formatSeconds(target.requiredCycle);
-  elements.requiredRate.textContent = target.requiredRate.toFixed(2);
-  elements.projectedTotal.textContent = String(target.projectedTotal);
-  elements.catchPrediction.textContent = predictCatch();
+  setText(elements.totalSheep, String(appState.sheep.length));
+  setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
+  setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
+  setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
+  setText(elements.sheepPerHour, appState.currentStats.sheepPerHour.toFixed(2));
+  setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
+  setText(elements.requiredRate, target.requiredRate.toFixed(2));
+  setText(elements.projectedTotal, String(target.projectedTotal));
+  setText(elements.catchPrediction, predictCatch());
 }
 
 function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText }) {
   const stateLabel = parsedState === null ? "Unknown" : parsedState ? "ON" : "OFF";
   const outcome = ok ? "ok" : "fail";
   const responsePart = Number.isFinite(responseTimeMs) ? `${Math.round(responseTimeMs)}ms` : "n/a";
-  const debugPart = debugText ? `<br/>debug: ${debugText}` : "";
-  elements.connectionStatus.innerHTML = `status: <strong>${outcome}</strong>, motor: <strong>${stateLabel}</strong>, response: <strong>${responsePart}</strong>${debugPart}`;
+
+  if (elements.connectionStatus) {
+    elements.connectionStatus.innerHTML = `Connection: <strong>${outcome}</strong>, Motor: <strong>${stateLabel}</strong>, Response: <strong>${responsePart}</strong>`;
+  }
+
+  if (elements.connectionSummary) {
+    elements.connectionSummary.textContent = `Shelly: ${outcome} • Response: ${responsePart}`;
+  }
+
+  if (elements.connectionDebug) {
+    elements.connectionDebug.textContent = debugText || "No debug details.";
+  }
 }
 
 function getTopLevelKeys(data) {
@@ -548,6 +580,7 @@ function startPollingLoop() {
 }
 
 function applyConnectionSettingsFromUI() {
+  if (!elements.shellyIpInput || !elements.endpointMode || !elements.pollIntervalInput) return;
   appState.connection.ip = normalizeIp(elements.shellyIpInput.value) || DEFAULT_CONNECTION_SETTINGS.ip;
   appState.connection.mode = ENDPOINT_PATHS[elements.endpointMode.value] ? elements.endpointMode.value : DEFAULT_CONNECTION_SETTINGS.mode;
   appState.connection.pollInterval = sanitizePollInterval(elements.pollIntervalInput.value);
@@ -559,9 +592,9 @@ function applyConnectionSettingsFromUI() {
 
 function setSimulationMode(enabled) {
   appState.simulationMode = Boolean(enabled);
-  elements.simulationModeToggle.checked = appState.simulationMode;
-  elements.simulationBanner.hidden = !appState.simulationMode;
-  elements.simulationControls.hidden = !appState.simulationMode;
+  if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
+  if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
+  if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
 
   if (appState.simulationMode) {
     appState.lastMotorState = null;
@@ -575,6 +608,7 @@ function setSimulationMode(enabled) {
 }
 
 function renderBlock(minutes) {
+  if (!elements.blockResults) return;
   const block = calculateBlockData(minutes);
   elements.blockResults.innerHTML = `
     <p><strong>Window:</strong> ${minutes} minutes</p>
@@ -587,44 +621,54 @@ function renderBlock(minutes) {
 }
 
 function bindEvents() {
-  elements.startRunBtn.addEventListener("click", startRun);
-  elements.stopRunBtn.addEventListener("click", stopRun);
-  elements.resetRunBtn.addEventListener("click", resetRun);
+  if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
+  if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
+  if (elements.resetRunBtn) elements.resetRunBtn.addEventListener("click", resetRun);
 
-  elements.runType.addEventListener("change", () => {
-    elements.customHours.disabled = elements.runType.value !== "custom";
-  });
+  if (elements.runType && elements.customHours) {
+    elements.runType.addEventListener("change", () => {
+      elements.customHours.disabled = elements.runType.value !== "custom";
+    });
+  }
 
-  elements.blockMinutes.addEventListener("change", () => {
-    renderBlock(Number(elements.blockMinutes.value));
-  });
+  if (elements.blockMinutes) {
+    elements.blockMinutes.addEventListener("change", () => {
+      renderBlock(Number(elements.blockMinutes.value));
+    });
+  }
 
   document.querySelectorAll(".block-btn").forEach((button) => {
     button.addEventListener("click", () => {
+      if (!elements.blockMinutes) return;
       const minutes = Number(button.dataset.minutes);
       elements.blockMinutes.value = String(minutes);
       renderBlock(minutes);
     });
   });
 
-  [elements.shellyIpInput, elements.endpointMode, elements.pollIntervalInput].forEach((input) => {
-    input.addEventListener("change", applyConnectionSettingsFromUI);
-  });
+  [elements.shellyIpInput, elements.endpointMode, elements.pollIntervalInput]
+    .filter(Boolean)
+    .forEach((input) => {
+      input.addEventListener("change", applyConnectionSettingsFromUI);
+    });
 
   document.querySelectorAll(".poll-quick-btn").forEach((button) => {
     button.addEventListener("click", () => {
+      if (!elements.pollIntervalInput) return;
       elements.pollIntervalInput.value = button.dataset.ms;
       applyConnectionSettingsFromUI();
     });
   });
 
-  elements.testConnectionBtn.addEventListener("click", testConnection);
-  elements.simulationModeToggle.addEventListener("change", () => {
-    setSimulationMode(elements.simulationModeToggle.checked);
-  });
+  if (elements.testConnectionBtn) elements.testConnectionBtn.addEventListener("click", testConnection);
+  if (elements.simulationModeToggle) {
+    elements.simulationModeToggle.addEventListener("change", () => {
+      setSimulationMode(elements.simulationModeToggle.checked);
+    });
+  }
 
-  elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
-  elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
+  if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
 }
 
 function startRealtimeLoops() {
@@ -643,14 +687,25 @@ function initialize() {
   loadConnectionSettings();
   updateConnectionInputs();
   bindEvents();
-  elements.customHours.disabled = elements.runType.value !== "custom";
+
+  if (elements.customHours && elements.runType) {
+    elements.customHours.disabled = elements.runType.value !== "custom";
+  }
 
   setSimulationMode(false);
-  renderBlock(Number(elements.blockMinutes.value) || 15);
+
+  if (elements.blockMinutes) {
+    renderBlock(Number(elements.blockMinutes.value) || 15);
+  }
+
   renderLogTable();
   updateLivePanel();
   updateStatsPanel();
-  startRealtimeLoops();
+  updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
+
+  if (isDashboardPage()) {
+    startRealtimeLoops();
+  }
 }
 
 initialize();
