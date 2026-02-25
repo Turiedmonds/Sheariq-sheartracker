@@ -1164,27 +1164,27 @@ function renderLogTable() {
     elements.sheepLogBody.appendChild(row);
   });
 
-  cacheSheepLogScroller();
+  const scroller = cacheSheepLogScroller();
 
-  if (!appState.followLatestSheep || appState.userScrolledUp) return;
-  const lastRow = elements.sheepLogBody.lastElementChild;
-  if (!lastRow) return;
+  if (!appState.followLatestSheep || appState.userScrolledUp || !scroller) return;
 
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      lastRow.scrollIntoView({ block: "end", inline: "nearest" });
+      scroller.scrollTop = scroller.scrollHeight;
     });
   });
 }
 
 function cacheSheepLogScroller() {
   if (!elements.sheepLogBody) return null;
-  const logPanelBody = elements.sheepLogBody.closest("#panel-log .panel-body") || elements.sheepLogBody.closest(".panel-body");
+  const logPanel = elements.sheepLogBody.closest("#panel-log") || elements.sheepLogBody.closest(".panel");
+  const logPanelBody = logPanel?.querySelector(".panel-body") || elements.sheepLogBody.closest(".panel-body");
 
   let scroller = appState.sheepLogScroller;
   if (!scroller || !logPanelBody?.contains(scroller)) {
+    const dedicatedScroller = logPanelBody?.querySelector(".sheep-log-scroll");
     const tableWrap = elements.sheepLogBody.closest(".table-wrap, .table-scroll");
-    scroller = tableWrap || findScrollableParent(elements.sheepLogBody, logPanelBody);
+    scroller = dedicatedScroller || tableWrap || findScrollableParent(elements.sheepLogBody, logPanelBody);
     appState.sheepLogScroller = scroller || null;
     appState.sheepLogScrollListenerAttached = false;
   }

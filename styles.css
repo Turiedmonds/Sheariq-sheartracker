@@ -402,8 +402,32 @@ button:disabled {
   max-height: clamp(220px, 35vh, 520px);
 }
 
+#panel-log {
+  display: flex;
+  flex-direction: column;
+}
+
+#panel-log .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.sheep-log-scroll {
+  overflow-y: auto;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: calc(100% - 0px);
+  max-height: none;
+}
+
 .sheep-log-scroll-wrap {
-  padding-bottom: 10px;
+  padding-bottom: 12px;
 }
 
 thead th {
