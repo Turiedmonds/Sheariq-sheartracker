@@ -15,6 +15,11 @@ const ENDPOINT_PATHS = {
   rpcSwitch: "/rpc/Switch.GetStatus?id=0"
 };
 
+const DAY_SCHEDULES = {
+  "9": [7200, 6300, 6300, 6300, 6300],
+  "8": [7200, 7200, 7200, 7200]
+};
+
 const appState = {
   runActive: false,
   runStartTime: null,
@@ -46,6 +51,12 @@ const appState = {
   statsTimerId: null,
   paused: false,
   pauseStartedAtMs: null,
+  runEndTimeMs: null,
+  currentRunIndex: 0,
+  dayClockStartRealMs: null,
+  dayClockStartSecondsFromMidnight: 0,
+  dayStartTimeTouched: false,
+  dayClockTimerId: null,
   savedFarms: [],
   panelCollapsed: {},
   draggedPanelId: null,
@@ -57,6 +68,7 @@ const elements = {
   runStatus: document.getElementById("runStatus"),
   farmInput: document.getElementById("farmInput"),
   runType: document.getElementById("runType"),
+  dayStartTimeInput: document.getElementById("dayStartTimeInput"),
   customHours: document.getElementById("customHours"),
   targetSheepInput: document.getElementById("targetSheepInput"),
   startRunBtn: document.getElementById("startRunBtn"),
@@ -71,6 +83,9 @@ const elements = {
   motorState: document.getElementById("motorState"),
   currentShear: document.getElementById("currentShear"),
   currentCatch: document.getElementById("currentCatch"),
+  runCountdown: document.getElementById("runCountdown"),
+  runBadge: document.getElementById("runBadge"),
+  dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
@@ -113,8 +128,35 @@ function setHTML(element, value) {
 }
 
 function formatSeconds(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "0.0s";
-  return `${seconds.toFixed(1)}s`;
+  if (!Number.isFinite(seconds) || seconds < 0) return "0.000s";
+  return `${seconds.toFixed(3)}s`;
+}
+
+function formatCountdown(totalSeconds) {
+  const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  if (hours > 0) {
+    return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function parseTimeToSecondsFromMidnight(value) {
+  if (typeof value !== "string" || !value.includes(":")) return 0;
+  const [hours, minutes] = value.split(":").map((part) => Number(part));
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return 0;
+  return (Math.max(hours, 0) * 3600) + (Math.max(minutes, 0) * 60);
+}
+
+function formatSecondsFromMidnightClock(secondsFromMidnight) {
+  const daySeconds = 24 * 3600;
+  const safeSeconds = ((Math.floor(secondsFromMidnight) % daySeconds) + daySeconds) % daySeconds;
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
 function formatClock(timestamp) {
@@ -300,6 +342,43 @@ function getRunLengthSeconds() {
   return Number(elements.runType.value) * 3600;
 }
 
+function getScheduleForCurrentType() {
+  if (!elements.runType || !elements.customHours) return [0];
+  if (elements.runType.value === "custom") {
+    return [Math.max((Number(elements.customHours.value) || 0) * 3600, 0)];
+  }
+  return DAY_SCHEDULES[elements.runType.value] || DAY_SCHEDULES["8"];
+}
+
+function getCurrentRunDurationSeconds() {
+  const schedule = getScheduleForCurrentType();
+  const index = Math.min(appState.currentRunIndex, schedule.length - 1);
+  return schedule[Math.max(index, 0)] || 0;
+}
+
+function getDefaultDayStartTime() {
+  if (!elements.runType) return "07:00";
+  if (elements.runType.value === "9") return "05:00";
+  if (elements.runType.value === "8") return "07:00";
+  return "07:00";
+}
+
+function updateRunBadge() {
+  const schedule = getScheduleForCurrentType();
+  const runNumber = Math.min(appState.currentRunIndex + 1, schedule.length);
+  setText(elements.runBadge, `Run ${Math.max(runNumber, 1)}`);
+}
+
+function updateDayClockDisplay() {
+  if (!elements.dayClock || appState.dayClockStartRealMs === null) {
+    setText(elements.dayClock, "00:00:00");
+    return;
+  }
+  const elapsedSeconds = (Date.now() - appState.dayClockStartRealMs) / 1000;
+  const dayClockSeconds = appState.dayClockStartSecondsFromMidnight + elapsedSeconds;
+  setText(elements.dayClock, formatSecondsFromMidnightClock(dayClockSeconds));
+}
+
 function resetRunState() {
   appState.runActive = false;
   appState.runStartTime = null;
@@ -311,6 +390,10 @@ function resetRunState() {
   appState.currentMotorDisplay = "OFF";
   appState.paused = false;
   appState.pauseStartedAtMs = null;
+  appState.runEndTimeMs = null;
+  appState.currentRunIndex = 0;
+  appState.dayClockStartRealMs = null;
+  appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(getDefaultDayStartTime());
   calculateAverages();
 }
 
@@ -322,6 +405,10 @@ function startRun() {
   saveFarmFromInput();
 
   appState.runActive = true;
+  if (appState.runStartTime !== null) {
+    const schedule = getScheduleForCurrentType();
+    appState.currentRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
+  }
   appState.runStartTime = Date.now();
   appState.sheep = [];
   appState.currentCycle.motorOn = false;
@@ -331,6 +418,12 @@ function startRun() {
   appState.farm = normalizeFarmName(elements.farmInput.value);
   appState.target.sheep = Math.max(Number(elements.targetSheepInput.value) || 0, 0);
   appState.target.runLengthSeconds = getRunLengthSeconds();
+  const runDurationSeconds = getCurrentRunDurationSeconds();
+  appState.runEndTimeMs = appState.runStartTime + (runDurationSeconds * 1000);
+  if (elements.dayStartTimeInput) {
+    appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
+  }
+  appState.dayClockStartRealMs = appState.runStartTime;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
 
@@ -354,6 +447,7 @@ function stopRun() {
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
+  appState.runEndTimeMs = null;
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -482,21 +576,20 @@ function calculateTargetMetrics() {
 }
 
 function predictCatch() {
-  const { requiredCycleRemaining, remainingSheep } = calculateTargetMetrics();
+  const { requiredCycle } = calculateTargetMetrics();
 
-  if (!appState.runActive) return "Run is not active.";
-  if (appState.target.sheep <= 0 || appState.target.runLengthSeconds <= 0) return "Set target sheep and run length.";
-  if (remainingSheep === 0) return "Target reached. Maintain quality and finish strong.";
-
-  const avgCycle = appState.currentStats.avgCycle;
-  if (avgCycle <= 0) return "Collect more cycles for prediction.";
-
-  if (avgCycle <= requiredCycleRemaining) {
-    return `On pace. Maintain ≤ ${requiredCycleRemaining.toFixed(1)}s per cycle.`;
+  if (!appState.runActive || appState.target.sheep <= 0 || appState.target.runLengthSeconds <= 0) {
+    return "Set a target and start a run.";
   }
 
-  const delta = avgCycle - requiredCycleRemaining;
-  return `Behind pace by ${delta.toFixed(1)}s per cycle. Tighten catch transitions.`;
+  const avgCycle = appState.currentStats.avgCycle;
+  if (avgCycle <= 0 || requiredCycle <= 0) return "Set a target and start a run.";
+
+  if (avgCycle <= requiredCycle) {
+    return `On pace — you have ${(requiredCycle - avgCycle).toFixed(3)}s to spare per sheep.`;
+  }
+
+  return `Behind pace — you are ${(avgCycle - requiredCycle).toFixed(3)}s over per sheep.`;
 }
 
 function calculateBlockData(minutes) {
@@ -531,15 +624,19 @@ function renderLogTable() {
   if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
 
+  const { requiredCycle } = calculateTargetMetrics();
   appState.sheep.forEach((entry) => {
     const row = document.createElement("tr");
+    const fullCycleClass = requiredCycle > 0
+      ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
+      : "pace-neutral";
     row.innerHTML = `
       <td>${entry.number}</td>
       <td>${formatClock(entry.startTime)}</td>
       <td>${formatClock(entry.endTime)}</td>
       <td>${formatSeconds(entry.shearDuration)}</td>
       <td>${formatSeconds(entry.catchDuration)}</td>
-      <td>${formatSeconds(entry.fullCycle)}</td>
+      <td class="${fullCycleClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
     elements.sheepLogBody.appendChild(row);
   });
@@ -553,10 +650,14 @@ function updateLivePanel() {
   const catchCurrent = appState.runActive && !appState.currentCycle.motorOn && appState.currentCycle.catchStart
     ? (Date.now() - appState.currentCycle.catchStart) / 1000
     : 0;
+  const countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - Date.now()) / 1000, 0) : 0;
 
   setText(elements.motorState, appState.currentMotorDisplay);
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
+  setText(elements.runCountdown, formatCountdown(countdownSeconds));
+  updateRunBadge();
+  updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.sheep.length));
   setText(elements.projectedTotal, String(calculateTargetMetrics().projectedTotal));
 }
@@ -574,6 +675,14 @@ function updateStatsPanel() {
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
+
+  if (elements.avgCycle) {
+    const onPaceClass = target.requiredCycle > 0
+      ? (appState.currentStats.avgCycle < target.requiredCycle - 0.05 ? "on-pace-good" : (appState.currentStats.avgCycle > target.requiredCycle + 0.05 ? "on-pace-bad" : "on-pace-neutral"))
+      : "on-pace-neutral";
+    elements.avgCycle.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
+    elements.avgCycle.classList.add(onPaceClass);
+  }
 }
 
 function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText }) {
@@ -755,7 +864,14 @@ function startLiveLoop() {
 
   appState.liveTimerId = setInterval(() => {
     updateLivePanel();
-  }, 250);
+  }, 100);
+}
+
+function startDayClockLoop() {
+  if (appState.dayClockTimerId) {
+    clearInterval(appState.dayClockTimerId);
+  }
+  appState.dayClockTimerId = setInterval(updateDayClockDisplay, 1000);
 }
 
 function startStatsLoop() {
@@ -814,6 +930,9 @@ function setPaused(paused) {
     }
     if (appState.currentCycle.catchStart) {
       appState.currentCycle.catchStart += pauseDurationMs;
+    }
+    if (appState.runEndTimeMs) {
+      appState.runEndTimeMs += pauseDurationMs;
     }
     appState.pauseStartedAtMs = null;
   }
@@ -1055,6 +1174,16 @@ function bindEvents() {
   if (elements.runType && elements.customHours) {
     elements.runType.addEventListener("change", () => {
       elements.customHours.disabled = elements.runType.value !== "custom";
+      if (elements.dayStartTimeInput && !appState.dayStartTimeTouched) {
+        elements.dayStartTimeInput.value = getDefaultDayStartTime();
+      }
+      updateRunBadge();
+    });
+  }
+
+  if (elements.dayStartTimeInput) {
+    elements.dayStartTimeInput.addEventListener("input", () => {
+      appState.dayStartTimeTouched = true;
     });
   }
 
@@ -1173,6 +1302,11 @@ function initialize() {
     elements.customHours.disabled = elements.runType.value !== "custom";
   }
 
+  if (elements.dayStartTimeInput) {
+    elements.dayStartTimeInput.value = getDefaultDayStartTime();
+    appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
+  }
+
   setSimulationMode(false);
 
   if (elements.blockMinutes) {
@@ -1183,7 +1317,10 @@ function initialize() {
   updatePauseButtonUI();
   updateLivePanel();
   updateStatsPanel();
+  updateRunBadge();
+  updateDayClockDisplay();
   updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
+  startDayClockLoop();
 
   if (isDashboardPage()) {
     startRealtimeLoops();
