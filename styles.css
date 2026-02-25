@@ -645,6 +645,53 @@ td {
 }
 
 
+
+#panel-cycle .panel-body {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+#panel-cycle .metrics-grid {
+  gap: 0.35rem;
+}
+
+#panel-cycle .metric-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto;
+  align-items: center;
+  column-gap: 0.55rem;
+}
+
+#panel-cycle .metric-row strong {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+#panel-cycle .run-countdown-row {
+  align-items: center;
+}
+
+#panel-cycle .run-countdown-value-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  #panel-cycle .metric-row {
+    grid-template-columns: 1fr;
+    row-gap: 0.15rem;
+  }
+
+  #panel-cycle .metric-row strong,
+  #panel-cycle .run-countdown-value-wrap {
+    justify-self: start;
+    justify-content: flex-start;
+  }
+}
+
 .run-countdown-row {
   display: flex;
   align-items: center;

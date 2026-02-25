@@ -35,6 +35,7 @@ const appState = {
   runActive: false,
   runStartTime: null,
   sheep: [],
+  daySheep: [],
   currentCycle: {
     motorOn: false,
     shearStart: null,
@@ -336,16 +337,8 @@ function parseRequiredTotalSheep() {
   return parsed;
 }
 
-function formatElapsedHHMMSS(seconds) {
-  const safe = Math.max(Math.floor(seconds || 0), 0);
-  const hh = Math.floor(safe / 3600);
-  const mm = Math.floor((safe % 3600) / 60);
-  const ss = safe % 60;
-  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
-}
-
-function estimateLastCatchTime(projectedTotalSheep) {
-  const n = Number(projectedTotalSheep);
+function estimateLastCatchDayClock(projectedRunTotalSheep) {
+  const n = Number(projectedRunTotalSheep);
   const runElapsedSeconds = getEffectiveElapsedSeconds();
   const avgCycleSeconds = appState.currentStats.avgCycle;
   const avgShearSeconds = appState.currentStats.avgShear;
@@ -361,9 +354,13 @@ function estimateLastCatchTime(projectedTotalSheep) {
     return "—";
   }
 
-  const remainingSecondsToLastCatchStart = ((n - 1) * avgCycleSeconds) + avgShearSeconds;
-  const estimatedRunTimeSeconds = runElapsedSeconds + remainingSecondsToLastCatchStart;
-  return formatElapsedHHMMSS(estimatedRunTimeSeconds);
+  const remainingSecondsToLastCatchStart = Math.max((((n - 1) * avgCycleSeconds) + avgShearSeconds) - runElapsedSeconds, 0);
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  if (!Number.isFinite(currentDayClockSeconds)) {
+    return "—";
+  }
+  const estimatedLastCatchClock = currentDayClockSeconds + remainingSecondsToLastCatchStart;
+  return formatSecondsFromMidnightClock(estimatedLastCatchClock);
 }
 
 function normalizeIp(value) {
@@ -596,6 +593,7 @@ function resetRunState() {
   appState.runActive = false;
   appState.runStartTime = null;
   appState.sheep = [];
+  appState.daySheep = [];
   appState.lastMotorState = null;
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -749,14 +747,21 @@ function handleMotorOff() {
   const fullCycle = shearDuration + catchDuration;
 
   const effectiveElapsedSeconds = getEffectiveElapsedSeconds();
-  appState.sheep.push({
+  const dayNumber = appState.daySheep.length + 1;
+  const runEntry = {
     number: appState.sheep.length + 1,
+    dayNumber,
     startTime: appState.currentCycle.shearStart,
     endTime: now,
     shearDuration,
     catchDuration,
     fullCycle,
     effectiveElapsedSeconds
+  };
+  appState.sheep.push(runEntry);
+  appState.daySheep.push({
+    ...runEntry,
+    number: dayNumber
   });
 
   appState.currentCycle.motorOn = false;
@@ -804,13 +809,13 @@ function calculateAverages() {
 }
 
 function calculateLivePerformanceExtremes() {
-  if (!appState.sheep.length) {
+  if (!appState.daySheep.length) {
     return { fastest: null, slowest: null, last: null };
   }
 
-  const fastest = appState.sheep.reduce((best, entry) => (best === null || entry.fullCycle < best.fullCycle ? entry : best), null);
-  const slowest = appState.sheep.reduce((worst, entry) => (worst === null || entry.fullCycle > worst.fullCycle ? entry : worst), null);
-  const last = appState.sheep[appState.sheep.length - 1] || null;
+  const fastest = appState.daySheep.reduce((best, entry) => (best === null || entry.fullCycle < best.fullCycle ? entry : best), null);
+  const slowest = appState.daySheep.reduce((worst, entry) => (worst === null || entry.fullCycle > worst.fullCycle ? entry : worst), null);
+  const last = appState.daySheep[appState.daySheep.length - 1] || null;
 
   return { fastest, slowest, last };
 }
@@ -831,6 +836,25 @@ function calculateTargetMetrics() {
   const requiredCycleRemaining = remainingSheep > 0 ? remainingSeconds / remainingSheep : 0;
 
   return { requiredRate, requiredCycle, projectedTotal, requiredCycleRemaining, remainingSheep };
+}
+
+function calculateRequiredRunTotalSheep() {
+  const dayTarget = parseRequiredTotalSheep();
+  if (dayTarget === null) return null;
+
+  const dayDone = appState.daySheep.length;
+  const schedule = getScheduleForCurrentType();
+  const runIndex = Math.max(Math.min(appState.currentRunIndex, schedule.length - 1), 0);
+  const remainingTarget = Math.max(dayTarget - dayDone, 0);
+  const remainingRuns = schedule.slice(runIndex);
+  const remainingRunSecondsTotal = remainingRuns.reduce((sum, seconds) => sum + Math.max(Number(seconds) || 0, 0), 0);
+  const currentRunSeconds = Math.max(Number(schedule[runIndex]) || 0, 0);
+
+  if (remainingRunSecondsTotal <= 0) {
+    return remainingTarget;
+  }
+
+  return Math.round(remainingTarget * (currentRunSeconds / remainingRunSecondsTotal));
 }
 
 function predictCatch() {
@@ -1454,7 +1478,7 @@ function updateLivePanel() {
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateRunBadge();
   updateDayClockDisplay();
-  setText(elements.totalSheep, String(appState.sheep.length));
+  setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
   setText(elements.currentSheepNumber, String(currentSheepNumber));
   setText(elements.projectedTotal, String(calculateTargetMetrics().projectedTotal));
@@ -1463,10 +1487,10 @@ function updateLivePanel() {
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
-  const requiredRunTotalSheep = parseRequiredTotalSheep();
+  const requiredRunTotalSheep = calculateRequiredRunTotalSheep();
   const { fastest, slowest, last } = calculateLivePerformanceExtremes();
 
-  setText(elements.totalSheep, String(appState.sheep.length));
+  setText(elements.totalSheep, String(appState.daySheep.length));
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
   setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
@@ -1484,7 +1508,7 @@ function updateStatsPanel() {
   } else {
     setText(elements.projectedRunVsRequired, "—");
   }
-  setText(elements.estimatedLastCatchTime, estimateLastCatchTime(target.projectedTotal));
+  setText(elements.estimatedLastCatchTime, estimateLastCatchDayClock(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
   updateTrendFlags();
 
@@ -2244,6 +2268,7 @@ function getAutosavePayload() {
       runActive: appState.runActive,
       runStartTime: appState.runStartTime,
       sheep: appState.sheep,
+      daySheep: appState.daySheep,
       currentCycle: appState.currentCycle,
       target: appState.target,
       farm: appState.farm,
@@ -2391,6 +2416,7 @@ function loadLastSave() {
     const raw = JSON.parse(localStorage.getItem(autosaveKey) || localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
     if (!raw || !raw.state) return;
     Object.assign(appState, raw.state);
+    appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
     if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
       const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
       raw.panelOrder.forEach((id) => {

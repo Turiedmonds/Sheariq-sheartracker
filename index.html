@@ -133,7 +133,7 @@
 
     <section id="panel-cycle" class="panel" aria-labelledby="current-cycle-title" draggable="true">
       <div class="panel-header" draggable="true">
-        <h2 id="current-cycle-title">Current Cycle Panel</h2>
+        <h2 id="current-cycle-title">Live Timing Panel</h2>
         <div class="panel-header-actions">
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
@@ -142,14 +142,29 @@
       </div>
       <div class="panel-body">
         <div class="metrics-grid">
-          <div>Motor state: <strong id="motorState">OFF</strong></div>
-          <div>Current shear time: <strong id="currentShear">0.0s</strong></div>
-          <div>Current catch time: <strong id="currentCatch">0.0s</strong></div>
-          <div class="run-countdown-row">
-            <span>Run countdown: <strong id="runCountdown">00:00</strong></span>
-            <span id="runBadge" class="run-badge">Run 1</span>
+          <div class="metric-row">
+            <span class="metric-label">Trigger state:</span>
+            <strong id="motorState">OFF</strong>
           </div>
-          <div>Day clock: <strong id="dayClock">00:00:00</strong></div>
+          <div class="metric-row">
+            <span class="metric-label">Current shear time:</span>
+            <strong id="currentShear">0.0s</strong>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Current catch time:</span>
+            <strong id="currentCatch">0.0s</strong>
+          </div>
+          <div class="metric-row run-countdown-row">
+            <span class="metric-label">Run countdown:</span>
+            <span class="run-countdown-value-wrap">
+              <strong id="runCountdown">00:00</strong>
+              <span id="runBadge" class="run-badge">Run 1</span>
+            </span>
+          </div>
+          <div class="metric-row">
+            <span class="metric-label">Day clock:</span>
+            <strong id="dayClock">00:00:00</strong>
+          </div>
         </div>
       </div>
     </section>
@@ -167,7 +182,7 @@
         <div class="metrics-grid">
           <div>Required average catch-to-release time: <strong id="requiredCycle">0.0s</strong></div>
           <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
-          <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
+          <div>Projected run total sheep: <strong id="projectedTotal">0</strong></div>
           <div>Required run total sheep: <strong id="requiredRunTotalSheep">—</strong></div>
           <div>Projected vs required (run): <strong id="projectedRunVsRequired">—</strong></div>
           <div>Estimated last sheep catch time (run): <strong id="estimatedLastCatchTime">—</strong></div>
