@@ -460,21 +460,30 @@ td {
 #trendGraphCanvas {
   width: 100%;
   max-width: 100%;
-  height: 280px;
+  height: 240px;
   border: 1px solid #d1d5db;
   background: #fff;
   margin-top: 0.6rem;
   touch-action: manipulation;
 }
 
+#panel-trend-graph .panel-body {
+  max-height: 520px;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .trend-legend {
   margin-top: 0.6rem;
-  padding: 0.55rem 0.65rem;
+  padding: 0.45rem 0.6rem;
   border: 1px solid #dbe3ef;
   background: #f8fbff;
   color: #1f2937;
-  font-size: 0.88rem;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  line-height: 1.3;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .trend-latest-summary {
@@ -492,8 +501,63 @@ td {
   border: 1px solid #94a3b8;
   background: #f8fafc;
   color: #0f172a;
-  font-size: 0.88rem;
+  font-size: 0.83rem;
   line-height: 1.45;
+}
+
+.trend-details-toggle {
+  margin-top: 0.45rem;
+  padding: 0.28rem 0.55rem;
+  width: auto;
+  font-size: 0.82rem;
+}
+
+.trend-flag {
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.55rem;
+  border-left: 3px solid #94a3b8;
+  background: #ffffff;
+}
+
+.trend-flag:last-child {
+  margin-bottom: 0;
+}
+
+.trend-flag-title {
+  font-weight: 700;
+  font-size: 1.05em;
+  color: #0f172a;
+}
+
+.trend-flag-meta {
+  font-size: 0.95em;
+  opacity: 0.8;
+  margin: 0.15rem 0 0.35rem;
+}
+
+.trend-flag-lines {
+  line-height: 1.4;
+}
+
+.trend-flag-lines .k {
+  color: #475569;
+}
+
+.trend-flag-lines .v {
+  font-weight: 700;
+  color: #111827;
+}
+
+.trend-flag-lines .d.good {
+  color: #166534;
+}
+
+.trend-flag-lines .d.bad {
+  color: #b91c1c;
+}
+
+.trend-flag-lines .d.neutral {
+  color: #334155;
 }
 
 .scroll-list {

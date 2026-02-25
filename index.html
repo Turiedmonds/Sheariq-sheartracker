@@ -242,12 +242,12 @@
           </select>
         </div>
         <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-          <div>Blue: Avg catch-to-release (shear + catch)</div>
-          <div>Green: Avg catch</div>
-          <div>Orange: Target catch-to-release</div>
-          <div>X-axis: minutes into run, Y-axis: seconds per sheep</div>
+          <span><strong>Blue</strong> Avg catch-to-release</span>
+          <span><strong>Green</strong> Avg catch</span>
+          <span><strong>Orange</strong> Target cycle</span>
         </div>
         <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg catch-to-release 0.000s • Target 0.000s • Set target for pace comparison.</div>
+        <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
         <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
         <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
         <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
