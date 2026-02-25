@@ -149,6 +149,8 @@ const elements = {
   requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
   projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
+  timeSpareToBell: document.getElementById("timeSpareToBell"),
+  maxCatchTime: document.getElementById("maxCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
   blockResults: document.getElementById("blockResults"),
@@ -206,6 +208,8 @@ const METRIC_VALUE_IDS = new Set([
   "requiredRunTotalSheep",
   "projectedRunVsRequired",
   "estimatedLastCatchTime",
+  "timeSpareToBell",
+  "maxCatchTime",
   "catchPrediction",
   "motorState",
   "currentShear",
@@ -859,6 +863,28 @@ function calculateTargetMetrics() {
     ? Math.round((appState.currentStats.sheepPerHour * runLengthSeconds) / 3600)
     : appState.sheep.length;
 
+  const avgCycleSeconds = appState.currentStats.avgCycle;
+  const sheepDoneThisRun = appState.sheep.length;
+  const elapsedRunSeconds = elapsedSeconds;
+  const runRemainingSeconds = Math.max(runLengthSeconds - elapsedRunSeconds, 0);
+  const remainingToTarget = requiredRunSheep - sheepDoneThisRun;
+  let targetCatchRunSeconds = elapsedRunSeconds;
+  let timeSpareText = "—";
+  let maxPossibleRunTotal = sheepDoneThisRun;
+
+  if (avgCycleSeconds > 0) {
+    const maxExtraSheep = Math.floor(runRemainingSeconds / avgCycleSeconds);
+    maxPossibleRunTotal = sheepDoneThisRun + Math.max(maxExtraSheep, 0);
+    const targetCatchOffsetSeconds = remainingToTarget <= 0 ? 0 : remainingToTarget * avgCycleSeconds;
+    targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
+    const timeDifference = runLengthSeconds - targetCatchRunSeconds;
+    timeSpareText = timeDifference >= 0
+      ? `${formatCountdown(timeDifference)} spare`
+      : `${formatCountdown(Math.abs(timeDifference))} short`;
+  }
+
+  const maxCatchRunSeconds = Math.max(runLengthSeconds - 2, 0);
+
   const remainingSeconds = Math.max(runLengthSeconds - elapsedSeconds, 0);
   const remainingSheep = Math.max(requiredRunSheep - appState.sheep.length, 0);
   const requiredCycleRemaining = remainingSheep > 0 ? remainingSeconds / remainingSheep : 0;
@@ -870,7 +896,11 @@ function calculateTargetMetrics() {
     requiredCycleRemaining,
     remainingSheep,
     requiredDaySheep,
-    requiredRunSheep
+    requiredRunSheep,
+    targetCatchRunSeconds,
+    timeSpareText,
+    maxCatchRunSeconds,
+    maxPossibleRunTotal
   };
 }
 
@@ -1529,11 +1559,19 @@ function updateStatsPanel() {
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
-    setText(elements.projectedRunVsRequired, `${target.projectedTotal} (${diff >= 0 ? "+" : ""}${diff})`);
+    if (diff > 0) {
+      setText(elements.projectedRunVsRequired, `Ahead ${diff} sheep`);
+    } else if (diff < 0) {
+      setText(elements.projectedRunVsRequired, `Behind ${Math.abs(diff)} sheep`);
+    } else {
+      setText(elements.projectedRunVsRequired, "On target");
+    }
   } else {
     setText(elements.projectedRunVsRequired, "—");
   }
-  setText(elements.estimatedLastCatchTime, estimateLastCatchDayClock(target.projectedTotal));
+  setText(elements.estimatedLastCatchTime, formatCountdown(target.targetCatchRunSeconds));
+  setText(elements.timeSpareToBell, target.timeSpareText);
+  setText(elements.maxCatchTime, formatCountdown(target.maxCatchRunSeconds));
   setText(elements.catchPrediction, predictCatch());
   updateTrendFlags();
 
