@@ -525,6 +525,9 @@ td.pace-neutral {
 
 #panel-sim.panel-docked .panel-header {
   cursor: move;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 #panel-sim.panel-docked-dragging {
