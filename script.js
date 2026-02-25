@@ -141,6 +141,7 @@ const elements = {
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
+  estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
   blockResults: document.getElementById("blockResults"),
@@ -191,6 +192,7 @@ const METRIC_VALUE_IDS = new Set([
   "requiredCycle",
   "requiredRate",
   "projectedTotal",
+  "estimatedLastCatchTime",
   "catchPrediction",
   "motorState",
   "currentShear",
@@ -304,8 +306,33 @@ function formatSecondsFromMidnightClock(secondsFromMidnight) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
-function formatClock(timestamp) {
-  return new Date(timestamp).toLocaleTimeString();
+function formatClock(ms) {
+  const date = new Date(ms);
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${hours}:${minutes}:${seconds}`;
+}
+
+function estimateLastCatchTime(projectedTotalSheep) {
+  const n = Number(projectedTotalSheep);
+  const runStartMs = appState.runStartTime;
+  const avgCycleSeconds = appState.currentStats.avgCycle;
+  const avgShearSeconds = appState.currentStats.avgShear;
+
+  if (!appState.runActive
+    || !Number.isFinite(runStartMs)
+    || !Number.isFinite(n)
+    || n < 1
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(avgShearSeconds)
+    || avgShearSeconds <= 0) {
+    return "—";
+  }
+
+  const catchStartMs = runStartMs + ((n - 1) * avgCycleSeconds * 1000) + (avgShearSeconds * 1000);
+  return formatClock(catchStartMs);
 }
 
 function normalizeIp(value) {
@@ -1392,6 +1419,7 @@ function updateStatsPanel() {
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
+  setText(elements.estimatedLastCatchTime, estimateLastCatchTime(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
   updateTrendFlags();
 
