@@ -402,6 +402,10 @@ button:disabled {
   max-height: clamp(220px, 35vh, 520px);
 }
 
+.sheep-log-scroll-wrap {
+  padding-bottom: 10px;
+}
+
 thead th {
   position: sticky;
   top: 0;

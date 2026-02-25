@@ -6,6 +6,7 @@ const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
 const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
 const SESSION_DATE_STORAGE_KEY = "sheariq.sessionDate";
 const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
+const FOLLOW_LATEST_STORAGE_KEY = "sheariq.followLatest";
 const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
 const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
 const PANEL_LAYOUT_STORAGE_KEY = "sheariq.panelLayout";
@@ -93,6 +94,10 @@ const appState = {
   panelResize: null,
   layoutEditMode: false,
   panelLayout: { mode: "absolute", panels: {}, nextZ: 1 },
+  followLatestSheep: true,
+  sheepLogScroller: null,
+  sheepLogScrollListenerAttached: false,
+  userScrolledUp: false,
   snapToGridEnabled: false,
   snapGridSize: 10,
   panelLocks: {},
@@ -161,6 +166,7 @@ const elements = {
   runReviewText: document.getElementById("runReviewText"),
   trendFlags: document.getElementById("trendFlags"),
   autosaveToggle: document.getElementById("autosaveToggle"),
+  followLatestToggle: document.getElementById("followLatestToggle"),
   autosaveStatus: document.getElementById("autosaveStatus"),
   controlsDockToggle: document.getElementById("controlsDockToggle"),
   controlsDockReset: document.getElementById("controlsDockReset"),
@@ -1152,20 +1158,61 @@ function renderLogTable() {
     elements.sheepLogBody.appendChild(row);
   });
 
-  const tableWrap = elements.sheepLogBody.closest(".table-wrap, .table-scroll");
-  const scroller = tableWrap || findScrollableParent(elements.sheepLogBody);
-  if (scroller) {
-    scroller.scrollTop = scroller.scrollHeight;
+  cacheSheepLogScroller();
+
+  if (!appState.followLatestSheep || appState.userScrolledUp) return;
+  const lastRow = elements.sheepLogBody.lastElementChild;
+  if (!lastRow) return;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      lastRow.scrollIntoView({ block: "end", inline: "nearest" });
+    });
+  });
+}
+
+function cacheSheepLogScroller() {
+  if (!elements.sheepLogBody) return null;
+  const logPanelBody = elements.sheepLogBody.closest("#panel-log .panel-body") || elements.sheepLogBody.closest(".panel-body");
+
+  let scroller = appState.sheepLogScroller;
+  if (!scroller || !logPanelBody?.contains(scroller)) {
+    const tableWrap = elements.sheepLogBody.closest(".table-wrap, .table-scroll");
+    scroller = tableWrap || findScrollableParent(elements.sheepLogBody, logPanelBody);
+    appState.sheepLogScroller = scroller || null;
+    appState.sheepLogScrollListenerAttached = false;
+  }
+
+  if (scroller && !appState.sheepLogScrollListenerAttached) {
+    scroller.addEventListener("scroll", handleSheepLogScroll, { passive: true });
+    appState.sheepLogScrollListenerAttached = true;
+    handleSheepLogScroll();
+  }
+
+  return scroller;
+}
+
+function handleSheepLogScroll() {
+  const scroller = appState.sheepLogScroller;
+  if (!scroller) return;
+  const distanceFromBottom = scroller.scrollHeight - (scroller.scrollTop + scroller.clientHeight);
+  if (distanceFromBottom > 40) {
+    appState.userScrolledUp = true;
+  } else if (distanceFromBottom <= 10) {
+    appState.userScrolledUp = false;
   }
 }
 
-function findScrollableParent(startElement) {
+function findScrollableParent(startElement, boundaryElement = null) {
   let current = startElement?.parentElement || null;
   while (current) {
     const style = window.getComputedStyle(current);
     const canScrollY = style.overflowY === "auto" || style.overflowY === "scroll";
     if (canScrollY && current.scrollHeight > current.clientHeight) {
       return current;
+    }
+    if (boundaryElement && current === boundaryElement) {
+      break;
     }
     current = current.parentElement;
   }
@@ -2032,6 +2079,24 @@ function loadAutosaveSettings() {
   appState.autosaveEnabled = parseStoredBoolean(localStorage.getItem(AUTOSAVE_ENABLED_STORAGE_KEY), true);
 }
 
+function updateFollowLatestUI() {
+  if (elements.followLatestToggle) elements.followLatestToggle.checked = appState.followLatestSheep;
+}
+
+function setFollowLatestEnabled(enabled) {
+  appState.followLatestSheep = Boolean(enabled);
+  localStorage.setItem(FOLLOW_LATEST_STORAGE_KEY, String(appState.followLatestSheep));
+  if (appState.followLatestSheep) {
+    appState.userScrolledUp = false;
+  }
+  updateFollowLatestUI();
+  renderLogTable();
+}
+
+function loadFollowLatestSettings() {
+  appState.followLatestSheep = parseStoredBoolean(localStorage.getItem(FOLLOW_LATEST_STORAGE_KEY), true);
+}
+
 function applyControlsDockPosition() {
   if (!elements.panelSim || !appState.controlsDockEnabled) return;
   elements.panelSim.style.left = `${Math.max(appState.controlsDockPos.x, 8)}px`;
@@ -2534,6 +2599,11 @@ function bindEvents() {
       setAutosaveEnabled(elements.autosaveToggle.checked);
     });
   }
+  if (elements.followLatestToggle) {
+    elements.followLatestToggle.addEventListener("change", () => {
+      setFollowLatestEnabled(elements.followLatestToggle.checked);
+    });
+  }
   if (elements.controlsDockToggle) {
     elements.controlsDockToggle.addEventListener("click", () => {
       setControlsDockEnabled(!appState.controlsDockEnabled);
@@ -2655,6 +2725,7 @@ function initialize() {
   loadPanelLayout();
   loadLayoutEditorSettings();
   loadAutosaveSettings();
+  loadFollowLatestSettings();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
@@ -2695,6 +2766,7 @@ function initialize() {
   drawTrendGraph();
   updateTrendFlags();
   updateAutosaveUI();
+  updateFollowLatestUI();
   updateControlsDockUI();
   if (elements.layoutEditModeToggle) elements.layoutEditModeToggle.checked = appState.layoutEditMode;
   if (appState.layoutEditMode) applyPanelLayout();

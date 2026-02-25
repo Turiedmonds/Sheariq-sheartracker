@@ -13,6 +13,7 @@
     <h1>SHEARiQ Shear Tracker</h1>
     <p>Run Status: <strong id="runStatus">Idle</strong></p>
     <p class="layout-edit-row"><label for="layoutEditModeToggle">Layout Edit Mode</label> <input id="layoutEditModeToggle" type="checkbox" /></p>
+    <p class="layout-edit-row"><label for="followLatestToggle">Follow latest sheep</label> <input id="followLatestToggle" type="checkbox" checked /></p>
     <p class="layout-edit-row"><label for="snapToGridToggle">Snap to grid</label> <input id="snapToGridToggle" type="checkbox" />
       <label for="gridSizeSelect">Grid</label>
       <select id="gridSizeSelect" aria-label="Grid size">
@@ -204,7 +205,7 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="table-wrap">
+        <div class="table-wrap sheep-log-scroll-wrap">
           <table>
             <thead>
               <tr>
