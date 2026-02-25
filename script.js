@@ -46,7 +46,6 @@ const appState = {
   statsTimerId: null,
   paused: false,
   pauseStartedAtMs: null,
-  totalPausedMs: 0,
   savedFarms: [],
   panelCollapsed: {},
   draggedPanelId: null,
@@ -312,7 +311,6 @@ function resetRunState() {
   appState.currentMotorDisplay = "OFF";
   appState.paused = false;
   appState.pauseStartedAtMs = null;
-  appState.totalPausedMs = 0;
   calculateAverages();
 }
 
@@ -335,7 +333,6 @@ function startRun() {
   appState.target.runLengthSeconds = getRunLengthSeconds();
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
-  appState.totalPausedMs = 0;
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
@@ -357,7 +354,6 @@ function stopRun() {
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
-  appState.totalPausedMs = 0;
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -451,12 +447,8 @@ function calculateAverages() {
     { shear: 0, catch: 0, cycle: 0 }
   );
 
-  const currentPauseMs = (appState.paused && appState.pauseStartedAtMs !== null)
-    ? Math.max(Date.now() - appState.pauseStartedAtMs, 0)
-    : 0;
-  const effectivePausedMs = appState.totalPausedMs + currentPauseMs;
   const runElapsedSeconds = Math.max(
-    ((Date.now() - appState.runStartTime) - effectivePausedMs) / 1000,
+    (Date.now() - appState.runStartTime) / 1000,
     1
   );
   appState.currentStats = {
@@ -470,12 +462,8 @@ function calculateAverages() {
 }
 
 function calculateTargetMetrics() {
-  const currentPauseMs = (appState.paused && appState.pauseStartedAtMs !== null)
-    ? Math.max(Date.now() - appState.pauseStartedAtMs, 0)
-    : 0;
-  const effectivePausedMs = appState.totalPausedMs + currentPauseMs;
   const elapsedSeconds = appState.runStartTime
-    ? Math.max(((Date.now() - appState.runStartTime) - effectivePausedMs) / 1000, 0)
+    ? Math.max((Date.now() - appState.runStartTime) / 1000, 0)
     : 0;
   const runLengthSeconds = appState.target.runLengthSeconds || 0;
   const targetSheep = appState.target.sheep || 0;
@@ -800,24 +788,37 @@ function updatePauseButtonUI() {
 }
 
 function setPaused(paused) {
-  appState.paused = Boolean(paused);
+  const nextPaused = Boolean(paused);
+  if (appState.paused === nextPaused) return;
+
+  appState.paused = nextPaused;
 
   if (appState.paused) {
     appState.pauseStartedAtMs = Date.now();
     stopPollingLoop();
     stopLiveAndStatsLoops();
-  } else if (isDashboardPage()) {
-    if (appState.pauseStartedAtMs !== null) {
-      const pauseDurationMs = Math.max(Date.now() - appState.pauseStartedAtMs, 0);
-      appState.totalPausedMs += pauseDurationMs;
-      if (appState.currentCycle.shearStart) {
-        appState.currentCycle.shearStart += pauseDurationMs;
-      }
-      if (appState.currentCycle.catchStart) {
-        appState.currentCycle.catchStart += pauseDurationMs;
-      }
-      appState.pauseStartedAtMs = null;
+    if (appState.runActive && elements.runStatus) {
+      elements.runStatus.textContent = "Paused";
     }
+    updatePauseButtonUI();
+    return;
+  }
+
+  if (appState.pauseStartedAtMs !== null) {
+    const pauseDurationMs = Math.max(Date.now() - appState.pauseStartedAtMs, 0);
+    if (appState.runStartTime) {
+      appState.runStartTime += pauseDurationMs;
+    }
+    if (appState.currentCycle.shearStart) {
+      appState.currentCycle.shearStart += pauseDurationMs;
+    }
+    if (appState.currentCycle.catchStart) {
+      appState.currentCycle.catchStart += pauseDurationMs;
+    }
+    appState.pauseStartedAtMs = null;
+  }
+
+  if (isDashboardPage()) {
     startPollingLoop();
     startLiveLoop();
     startStatsLoop();
