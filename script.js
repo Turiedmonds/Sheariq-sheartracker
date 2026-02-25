@@ -141,6 +141,8 @@ const elements = {
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
+  requiredTotalSheep: document.getElementById("requiredTotalSheep"),
+  projectedVsRequired: document.getElementById("projectedVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
@@ -192,6 +194,8 @@ const METRIC_VALUE_IDS = new Set([
   "requiredCycle",
   "requiredRate",
   "projectedTotal",
+  "requiredTotalSheep",
+  "projectedVsRequired",
   "estimatedLastCatchTime",
   "catchPrediction",
   "motorState",
@@ -314,14 +318,26 @@ function formatClock(ms) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function parseRequiredTotalSheep() {
+  const rawValue = elements.targetSheepInput?.value;
+  if (rawValue === undefined || rawValue === null || String(rawValue).trim() === "") {
+    return null;
+  }
+  const parsed = Number.parseInt(rawValue, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
 function estimateLastCatchTime(projectedTotalSheep) {
   const n = Number(projectedTotalSheep);
-  const runStartMs = appState.runStartTime;
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
   const avgCycleSeconds = appState.currentStats.avgCycle;
   const avgShearSeconds = appState.currentStats.avgShear;
 
   if (!appState.runActive
-    || !Number.isFinite(runStartMs)
+    || !Number.isFinite(currentDayClockSeconds)
     || !Number.isFinite(n)
     || n < 1
     || !Number.isFinite(avgCycleSeconds)
@@ -331,8 +347,9 @@ function estimateLastCatchTime(projectedTotalSheep) {
     return "—";
   }
 
-  const catchStartMs = runStartMs + ((n - 1) * avgCycleSeconds * 1000) + (avgShearSeconds * 1000);
-  return formatClock(catchStartMs);
+  const remainingSecondsToLastCatchStart = ((n - 1) * avgCycleSeconds) + avgShearSeconds;
+  const estimatedDayClockSeconds = currentDayClockSeconds + remainingSecondsToLastCatchStart;
+  return formatSecondsFromMidnightClock(estimatedDayClockSeconds);
 }
 
 function normalizeIp(value) {
@@ -541,13 +558,23 @@ function updateRunBadge() {
   setText(elements.runBadge, `Run ${Math.max(runNumber, 1)}`);
 }
 
+function getCurrentDayClockSeconds() {
+  if (appState.dayClockStartRealMs === null) {
+    return null;
+  }
+  const elapsedSeconds = (Date.now() - appState.dayClockStartRealMs) / 1000;
+  return appState.dayClockStartSecondsFromMidnight + elapsedSeconds;
+}
+
 function updateDayClockDisplay() {
-  if (!elements.dayClock || appState.dayClockStartRealMs === null) {
+  if (!elements.dayClock) {
+    return;
+  }
+  const dayClockSeconds = getCurrentDayClockSeconds();
+  if (!Number.isFinite(dayClockSeconds)) {
     setText(elements.dayClock, "00:00:00");
     return;
   }
-  const elapsedSeconds = (Date.now() - appState.dayClockStartRealMs) / 1000;
-  const dayClockSeconds = appState.dayClockStartSecondsFromMidnight + elapsedSeconds;
   setText(elements.dayClock, formatSecondsFromMidnightClock(dayClockSeconds));
 }
 
@@ -1410,6 +1437,7 @@ function updateLivePanel() {
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
+  const requiredTotalSheep = parseRequiredTotalSheep();
 
   setText(elements.totalSheep, String(appState.sheep.length));
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
@@ -1419,6 +1447,13 @@ function updateStatsPanel() {
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
+  setText(elements.requiredTotalSheep, requiredTotalSheep === null ? "—" : String(requiredTotalSheep));
+  if (requiredTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
+    const diff = target.projectedTotal - requiredTotalSheep;
+    setText(elements.projectedVsRequired, `${target.projectedTotal} (${diff >= 0 ? "+" : ""}${diff})`);
+  } else {
+    setText(elements.projectedVsRequired, "—");
+  }
   setText(elements.estimatedLastCatchTime, estimateLastCatchTime(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
   updateTrendFlags();
