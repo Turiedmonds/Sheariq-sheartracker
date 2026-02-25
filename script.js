@@ -1,5 +1,16 @@
-const SHELLY_ENDPOINT = "http://192.168.33.1/status";
-const POLL_INTERVAL_MS = 200;
+const CONNECTION_STORAGE_KEY = "sheariq.connectionSettings";
+
+const DEFAULT_CONNECTION_SETTINGS = {
+  ip: "192.168.33.1",
+  mode: "legacy",
+  pollInterval: 200
+};
+
+const ENDPOINT_PATHS = {
+  legacy: "/status",
+  rpcStatus: "/rpc/Shelly.GetStatus",
+  rpcSwitch: "/rpc/Switch.GetStatus?id=0"
+};
 
 const appState = {
   runActive: false,
@@ -21,7 +32,15 @@ const appState = {
     avgCatch: 0,
     avgCycle: 0,
     sheepPerHour: 0
-  }
+  },
+  connection: { ...DEFAULT_CONNECTION_SETTINGS },
+  simulationMode: false,
+  currentMotorDisplay: "OFF",
+  connectionDebug: "",
+  lastResponseTimeMs: null,
+  pollTimerId: null,
+  liveTimerId: null,
+  statsTimerId: null
 };
 
 const elements = {
@@ -32,6 +51,7 @@ const elements = {
   targetSheepInput: document.getElementById("targetSheepInput"),
   startRunBtn: document.getElementById("startRunBtn"),
   stopRunBtn: document.getElementById("stopRunBtn"),
+  resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
   avgShear: document.getElementById("avgShear"),
   avgCatch: document.getElementById("avgCatch"),
@@ -46,7 +66,17 @@ const elements = {
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
   blockResults: document.getElementById("blockResults"),
-  sheepLogBody: document.getElementById("sheepLogBody")
+  sheepLogBody: document.getElementById("sheepLogBody"),
+  shellyIpInput: document.getElementById("shellyIpInput"),
+  endpointMode: document.getElementById("endpointMode"),
+  pollIntervalInput: document.getElementById("pollIntervalInput"),
+  testConnectionBtn: document.getElementById("testConnectionBtn"),
+  connectionStatus: document.getElementById("connectionStatus"),
+  simulationModeToggle: document.getElementById("simulationModeToggle"),
+  simulationBanner: document.getElementById("simulationBanner"),
+  simulationControls: document.getElementById("simulationControls"),
+  simMotorOnBtn: document.getElementById("simMotorOnBtn"),
+  simMotorOffBtn: document.getElementById("simMotorOffBtn")
 };
 
 function formatSeconds(seconds) {
@@ -58,6 +88,50 @@ function formatClock(timestamp) {
   return new Date(timestamp).toLocaleTimeString();
 }
 
+function normalizeIp(value) {
+  return (value || "").trim().replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+}
+
+function sanitizePollInterval(value) {
+  const ms = Number(value);
+  if (!Number.isFinite(ms)) return DEFAULT_CONNECTION_SETTINGS.pollInterval;
+  return Math.min(Math.max(Math.round(ms), 100), 5000);
+}
+
+function loadConnectionSettings() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(CONNECTION_STORAGE_KEY) || "null");
+    if (!stored) return;
+    appState.connection = {
+      ip: normalizeIp(stored.ip) || DEFAULT_CONNECTION_SETTINGS.ip,
+      mode: ENDPOINT_PATHS[stored.mode] ? stored.mode : DEFAULT_CONNECTION_SETTINGS.mode,
+      pollInterval: sanitizePollInterval(stored.pollInterval)
+    };
+  } catch (error) {
+    console.debug("Failed to load connection settings", error);
+  }
+}
+
+function saveConnectionSettings() {
+  const payload = {
+    ip: appState.connection.ip,
+    mode: appState.connection.mode,
+    pollInterval: appState.connection.pollInterval
+  };
+  localStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function updateConnectionInputs() {
+  elements.shellyIpInput.value = appState.connection.ip;
+  elements.endpointMode.value = appState.connection.mode;
+  elements.pollIntervalInput.value = String(appState.connection.pollInterval);
+}
+
+function getShellyUrl() {
+  const ip = normalizeIp(appState.connection.ip) || DEFAULT_CONNECTION_SETTINGS.ip;
+  return `http://${ip}${ENDPOINT_PATHS[appState.connection.mode]}`;
+}
+
 function getRunLengthSeconds() {
   if (elements.runType.value === "custom") {
     const customHours = Number(elements.customHours.value) || 0;
@@ -66,7 +140,18 @@ function getRunLengthSeconds() {
   return Number(elements.runType.value) * 3600;
 }
 
-// Start a new run and reset cycle data while preserving the run configuration.
+function resetRunState() {
+  appState.runActive = false;
+  appState.runStartTime = null;
+  appState.sheep = [];
+  appState.lastMotorState = null;
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = null;
+  appState.currentMotorDisplay = "OFF";
+  calculateAverages();
+}
+
 function startRun() {
   appState.runActive = true;
   appState.runStartTime = Date.now();
@@ -77,44 +162,69 @@ function startRun() {
   appState.farm = elements.farmInput.value.trim();
   appState.target.sheep = Math.max(Number(elements.targetSheepInput.value) || 0, 0);
   appState.target.runLengthSeconds = getRunLengthSeconds();
+  appState.currentMotorDisplay = "OFF";
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
   elements.runStatus.textContent = "Running";
 
-  updateDashboard();
+  calculateAverages();
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
 }
 
-// Stop run and clear active cycle markers.
 function stopRun() {
   appState.runActive = false;
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = null;
+  appState.currentMotorDisplay = "OFF";
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
   elements.runStatus.textContent = "Stopped";
 
-  updateDashboard();
+  updateLivePanel();
+  updateStatsPanel();
 }
 
-// Record motor-on transition as shear start for current sheep.
+function resetRun() {
+  const ok = window.confirm("Reset run data? This will clear sheep log and timers.");
+  if (!ok) return;
+
+  resetRunState();
+  elements.startRunBtn.disabled = false;
+  elements.stopRunBtn.disabled = true;
+  elements.runStatus.textContent = "Idle";
+  renderLogTable();
+  renderBlock(Number(elements.blockMinutes.value) || 15);
+  updateLivePanel();
+  updateStatsPanel();
+}
+
 function handleMotorOn() {
   if (!appState.runActive || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
   appState.currentCycle.motorOn = true;
   appState.currentCycle.shearStart = now;
+  appState.currentMotorDisplay = "ON";
 
   if (!appState.currentCycle.catchStart) {
     appState.currentCycle.catchStart = now;
   }
+
+  updateLivePanel();
 }
 
-// Record motor-off transition and finalize one sheep cycle.
 function handleMotorOff() {
-  if (!appState.runActive || !appState.currentCycle.motorOn || !appState.currentCycle.shearStart) return;
+  if (!appState.runActive || !appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
+    appState.currentCycle.motorOn = false;
+    appState.currentMotorDisplay = "OFF";
+    updateLivePanel();
+    return;
+  }
 
   const now = Date.now();
   const shearDuration = (now - appState.currentCycle.shearStart) / 1000;
@@ -134,12 +244,14 @@ function handleMotorOff() {
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = now;
+  appState.currentMotorDisplay = "OFF";
 
   calculateAverages();
-  updateDashboard();
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
 }
 
-// Calculate current averages and sheep/hour based on completed sheep records.
 function calculateAverages() {
   if (!appState.sheep.length || !appState.runStartTime) {
     appState.currentStats = { avgShear: 0, avgCatch: 0, avgCycle: 0, sheepPerHour: 0 };
@@ -167,7 +279,6 @@ function calculateAverages() {
   return appState.currentStats;
 }
 
-// Compute target metrics for required pacing and projected totals.
 function calculateTargetMetrics() {
   const elapsedSeconds = appState.runStartTime ? (Date.now() - appState.runStartTime) / 1000 : 0;
   const runLengthSeconds = appState.target.runLengthSeconds || 0;
@@ -186,7 +297,6 @@ function calculateTargetMetrics() {
   return { requiredRate, requiredCycle, projectedTotal, requiredCycleRemaining, remainingSheep };
 }
 
-// Produce human-readable pace guidance.
 function predictCatch() {
   const { requiredCycleRemaining, remainingSheep } = calculateTargetMetrics();
 
@@ -205,20 +315,13 @@ function predictCatch() {
   return `Behind pace by ${delta.toFixed(1)}s per cycle. Tighten catch transitions.`;
 }
 
-// Compute performance stats for a trailing time block.
 function calculateBlockData(minutes) {
   const windowSeconds = Math.max(Number(minutes) || 0, 1) * 60;
   const now = Date.now();
   const entries = appState.sheep.filter((item) => now - item.endTime <= windowSeconds * 1000);
 
   if (!entries.length) {
-    return {
-      count: 0,
-      avgShear: 0,
-      avgCatch: 0,
-      avgCycle: 0,
-      rate: 0
-    };
+    return { count: 0, avgShear: 0, avgCatch: 0, avgCycle: 0, rate: 0 };
   }
 
   const totals = entries.reduce(
@@ -257,11 +360,7 @@ function renderLogTable() {
   });
 }
 
-// Central render routine for all live dashboard values.
-function updateDashboard() {
-  calculateAverages();
-  const target = calculateTargetMetrics();
-
+function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
     : 0;
@@ -270,47 +369,208 @@ function updateDashboard() {
     ? (Date.now() - appState.currentCycle.catchStart) / 1000
     : 0;
 
+  elements.motorState.textContent = appState.currentMotorDisplay;
+  elements.currentShear.textContent = formatSeconds(shearCurrent);
+  elements.currentCatch.textContent = formatSeconds(catchCurrent);
+  elements.totalSheep.textContent = String(appState.sheep.length);
+  elements.projectedTotal.textContent = String(calculateTargetMetrics().projectedTotal);
+}
+
+function updateStatsPanel() {
+  calculateAverages();
+  const target = calculateTargetMetrics();
+
   elements.totalSheep.textContent = String(appState.sheep.length);
   elements.avgShear.textContent = formatSeconds(appState.currentStats.avgShear);
   elements.avgCatch.textContent = formatSeconds(appState.currentStats.avgCatch);
   elements.avgCycle.textContent = formatSeconds(appState.currentStats.avgCycle);
   elements.sheepPerHour.textContent = appState.currentStats.sheepPerHour.toFixed(2);
-
-  elements.motorState.textContent = appState.currentCycle.motorOn ? "ON" : "OFF";
-  elements.currentShear.textContent = formatSeconds(shearCurrent);
-  elements.currentCatch.textContent = formatSeconds(catchCurrent);
-
   elements.requiredCycle.textContent = formatSeconds(target.requiredCycle);
   elements.requiredRate.textContent = target.requiredRate.toFixed(2);
   elements.projectedTotal.textContent = String(target.projectedTotal);
   elements.catchPrediction.textContent = predictCatch();
-
-  renderLogTable();
 }
 
-// Poll local Shelly endpoint and detect motor state transitions.
+function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText }) {
+  const stateLabel = parsedState === null ? "Unknown" : parsedState ? "ON" : "OFF";
+  const outcome = ok ? "ok" : "fail";
+  const responsePart = Number.isFinite(responseTimeMs) ? `${Math.round(responseTimeMs)}ms` : "n/a";
+  const debugPart = debugText ? `<br/>debug: ${debugText}` : "";
+  elements.connectionStatus.innerHTML = `status: <strong>${outcome}</strong>, motor: <strong>${stateLabel}</strong>, response: <strong>${responsePart}</strong>${debugPart}`;
+}
+
+function getTopLevelKeys(data) {
+  return data && typeof data === "object" ? Object.keys(data).join(", ") : "not-an-object";
+}
+
+function getMotorStateFromResponse(data, mode) {
+  const switchLike = (value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value > 0;
+    if (typeof value === "string") {
+      const lower = value.toLowerCase();
+      if (["on", "true", "1"].includes(lower)) return true;
+      if (["off", "false", "0"].includes(lower)) return false;
+    }
+    return null;
+  };
+
+  const readSwitchState = (obj) => {
+    if (!obj || typeof obj !== "object") return null;
+    const fields = ["output", "ison", "on", "state", "input"];
+    for (const key of fields) {
+      const parsed = switchLike(obj[key]);
+      if (parsed !== null) return parsed;
+    }
+    return null;
+  };
+
+  if (!data || typeof data !== "object") return null;
+
+  if (mode === "legacy") {
+    return readSwitchState(data?.inputs?.[0]) ?? readSwitchState(data?.relays?.[0]);
+  }
+
+  if (mode === "rpcSwitch") {
+    return readSwitchState(data);
+  }
+
+  if (mode === "rpcStatus") {
+    const components = data?.components;
+    if (components && typeof components === "object") {
+      for (const [key, value] of Object.entries(components)) {
+        if (key.toLowerCase().startsWith("switch:0") || key.toLowerCase().startsWith("input:0")) {
+          const parsed = readSwitchState(value);
+          if (parsed !== null) return parsed;
+        }
+      }
+      for (const value of Object.values(components)) {
+        const parsed = readSwitchState(value);
+        if (parsed !== null) return parsed;
+      }
+    }
+
+    const directCandidates = [data?.switches?.[0], data?.inputs?.[0], data?.["switch:0"], data?.["input:0"]];
+    for (const candidate of directCandidates) {
+      const parsed = readSwitchState(candidate);
+      if (parsed !== null) return parsed;
+    }
+  }
+
+  return null;
+}
+
+async function fetchShellyState() {
+  const url = getShellyUrl();
+  const started = performance.now();
+  const response = await fetch(url, { cache: "no-store" });
+  const responseTimeMs = performance.now() - started;
+
+  if (!response.ok) {
+    return { ok: false, parsedState: null, responseTimeMs, debugText: `HTTP ${response.status}` };
+  }
+
+  const data = await response.json();
+  const parsedState = getMotorStateFromResponse(data, appState.connection.mode);
+  const debugText = parsedState === null
+    ? `unable to parse for mode=${appState.connection.mode}; keys=[${getTopLevelKeys(data)}]`
+    : `mode=${appState.connection.mode}`;
+
+  return { ok: true, parsedState, responseTimeMs, debugText };
+}
+
 async function pollShelly() {
-  if (!appState.runActive) return;
+  if (!appState.runActive || appState.simulationMode) return;
 
   try {
-    const response = await fetch(SHELLY_ENDPOINT, { cache: "no-store" });
-    if (!response.ok) return;
+    const result = await fetchShellyState();
+    appState.lastResponseTimeMs = result.responseTimeMs;
+    appState.connectionDebug = result.debugText;
 
-    const data = await response.json();
-    const switchState = Boolean(data?.inputs?.[0]?.input ?? data?.relays?.[0]?.ison ?? false);
+    if (!result.ok) {
+      updateConnectionStatus(result);
+      return;
+    }
+
+    const nextState = result.parsedState;
+    if (nextState === null) {
+      appState.currentMotorDisplay = "Unknown";
+      updateLivePanel();
+      updateConnectionStatus(result);
+      return;
+    }
+
+    appState.currentMotorDisplay = nextState ? "ON" : "OFF";
 
     if (appState.lastMotorState === null) {
-      appState.lastMotorState = switchState;
-    } else if (switchState !== appState.lastMotorState) {
-      appState.lastMotorState = switchState;
-      if (switchState) {
+      appState.lastMotorState = nextState;
+    } else if (nextState !== appState.lastMotorState) {
+      appState.lastMotorState = nextState;
+      if (nextState) {
         handleMotorOn();
       } else {
         handleMotorOff();
       }
     }
+
+    updateLivePanel();
+    updateConnectionStatus(result);
   } catch (error) {
-    console.debug("Shelly poll failed", error);
+    updateConnectionStatus({
+      ok: false,
+      parsedState: null,
+      responseTimeMs: null,
+      debugText: error.message || "fetch failed"
+    });
+  }
+}
+
+async function testConnection() {
+  try {
+    const result = await fetchShellyState();
+    updateConnectionStatus(result);
+  } catch (error) {
+    updateConnectionStatus({
+      ok: false,
+      parsedState: null,
+      responseTimeMs: null,
+      debugText: error.message || "test failed"
+    });
+  }
+}
+
+function startPollingLoop() {
+  if (appState.pollTimerId) {
+    clearInterval(appState.pollTimerId);
+  }
+
+  appState.pollTimerId = setInterval(pollShelly, appState.connection.pollInterval);
+}
+
+function applyConnectionSettingsFromUI() {
+  appState.connection.ip = normalizeIp(elements.shellyIpInput.value) || DEFAULT_CONNECTION_SETTINGS.ip;
+  appState.connection.mode = ENDPOINT_PATHS[elements.endpointMode.value] ? elements.endpointMode.value : DEFAULT_CONNECTION_SETTINGS.mode;
+  appState.connection.pollInterval = sanitizePollInterval(elements.pollIntervalInput.value);
+
+  updateConnectionInputs();
+  saveConnectionSettings();
+  startPollingLoop();
+}
+
+function setSimulationMode(enabled) {
+  appState.simulationMode = Boolean(enabled);
+  elements.simulationModeToggle.checked = appState.simulationMode;
+  elements.simulationBanner.hidden = !appState.simulationMode;
+  elements.simulationControls.hidden = !appState.simulationMode;
+
+  if (appState.simulationMode) {
+    appState.lastMotorState = null;
+    updateConnectionStatus({
+      ok: true,
+      parsedState: appState.currentCycle.motorOn,
+      responseTimeMs: appState.lastResponseTimeMs,
+      debugText: "simulation mode enabled"
+    });
   }
 }
 
@@ -329,6 +589,7 @@ function renderBlock(minutes) {
 function bindEvents() {
   elements.startRunBtn.addEventListener("click", startRun);
   elements.stopRunBtn.addEventListener("click", stopRun);
+  elements.resetRunBtn.addEventListener("click", resetRun);
 
   elements.runType.addEventListener("change", () => {
     elements.customHours.disabled = elements.runType.value !== "custom";
@@ -345,19 +606,51 @@ function bindEvents() {
       renderBlock(minutes);
     });
   });
+
+  [elements.shellyIpInput, elements.endpointMode, elements.pollIntervalInput].forEach((input) => {
+    input.addEventListener("change", applyConnectionSettingsFromUI);
+  });
+
+  document.querySelectorAll(".poll-quick-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      elements.pollIntervalInput.value = button.dataset.ms;
+      applyConnectionSettingsFromUI();
+    });
+  });
+
+  elements.testConnectionBtn.addEventListener("click", testConnection);
+  elements.simulationModeToggle.addEventListener("change", () => {
+    setSimulationMode(elements.simulationModeToggle.checked);
+  });
+
+  elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
 }
 
 function startRealtimeLoops() {
-  setInterval(pollShelly, POLL_INTERVAL_MS);
+  startPollingLoop();
 
-  const frame = () => {
-    updateDashboard();
-    requestAnimationFrame(frame);
-  };
-  requestAnimationFrame(frame);
+  appState.liveTimerId = setInterval(() => {
+    updateLivePanel();
+  }, 250);
+
+  appState.statsTimerId = setInterval(() => {
+    updateStatsPanel();
+  }, 1000);
 }
 
-bindEvents();
-elements.customHours.disabled = elements.runType.value !== "custom";
-startRealtimeLoops();
-updateDashboard();
+function initialize() {
+  loadConnectionSettings();
+  updateConnectionInputs();
+  bindEvents();
+  elements.customHours.disabled = elements.runType.value !== "custom";
+
+  setSimulationMode(false);
+  renderBlock(Number(elements.blockMinutes.value) || 15);
+  renderLogTable();
+  updateLivePanel();
+  updateStatsPanel();
+  startRealtimeLoops();
+}
+
+initialize();
