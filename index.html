@@ -66,6 +66,9 @@
       </div>
       <div class="panel-body">
         <div class="form-grid">
+          <label for="sessionDate">Session Date</label>
+          <input id="sessionDate" type="date" />
+
           <label for="farmInput">Farm</label>
           <div class="farm-dropdown" id="farmDropdown">
             <div class="farm-input-row">
@@ -109,7 +112,7 @@
           <div>Current Sheep Number: <strong id="currentSheepNumber">0</strong></div>
           <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
           <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
-          <div>Average full cycle: <strong id="avgCycle">0.0s</strong></div>
+          <div>Average catch-to-release time: <strong id="avgCycle">0.0s</strong></div>
           <div>Sheep per hour: <strong id="sheepPerHour">0.00</strong></div>
         </div>
       </div>
@@ -149,7 +152,7 @@
       </div>
       <div class="panel-body">
         <div class="metrics-grid">
-          <div>Required average cycle time: <strong id="requiredCycle">0.0s</strong></div>
+          <div>Required average catch-to-release time: <strong id="requiredCycle">0.0s</strong></div>
           <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
           <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
           <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
@@ -201,7 +204,7 @@
                 <th>End Time</th>
                 <th>Shear Duration</th>
                 <th>Catch Duration</th>
-                <th>Full Cycle</th>
+                <th>Catch-to-Release Time</th>
               </tr>
             </thead>
             <tbody id="sheepLogBody"></tbody>
@@ -229,12 +232,12 @@
           </select>
         </div>
         <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-          <div>Blue: Avg cycle (shear + catch)</div>
+          <div>Blue: Avg catch-to-release (shear + catch)</div>
           <div>Green: Avg catch</div>
-          <div>Orange: Target cycle</div>
+          <div>Orange: Target catch-to-release</div>
           <div>X-axis: minutes into run, Y-axis: seconds per sheep</div>
         </div>
-        <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg cycle 0.000s • Target 0.000s • Set target for pace comparison.</div>
+        <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg catch-to-release 0.000s • Target 0.000s • Set target for pace comparison.</div>
         <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
         <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
         <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
