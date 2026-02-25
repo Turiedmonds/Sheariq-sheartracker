@@ -36,9 +36,13 @@ body {
 }
 
 .panel {
+  position: relative;
   background: #ffffff;
   border: 1px solid #d1d5db;
   border-radius: 4px;
+  min-width: 260px;
+  min-height: 130px;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -57,7 +61,7 @@ body {
 
 .panel-header h2 {
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.12rem;
 }
 
 .panel-header-actions {
@@ -75,6 +79,28 @@ body {
 }
 
 .panel.collapsed .panel-body {
+  display: none;
+}
+
+.panel.collapsed {
+  min-height: 0;
+  height: auto !important;
+}
+
+.panel-resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  right: 3px;
+  bottom: 3px;
+  cursor: nwse-resize;
+  border-right: 2px solid #9ca3af;
+  border-bottom: 2px solid #9ca3af;
+  border-radius: 1px;
+  touch-action: none;
+}
+
+.panel.collapsed .panel-resize-handle {
   display: none;
 }
 
@@ -266,6 +292,33 @@ td {
   padding: 0.6rem;
   border: 1px dashed #9ca3af;
   background: #f9fafb;
+}
+
+#trendGraphCanvas {
+  width: 100%;
+  max-width: 100%;
+  height: 280px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  margin-top: 0.6rem;
+}
+
+.scroll-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  padding: 0.5rem;
+}
+
+.review-entry {
+  padding: 0.45rem;
+  border-bottom: 1px solid #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.review-entry:last-child {
+  border-bottom: 0;
 }
 
 .modal-overlay {

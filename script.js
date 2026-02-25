@@ -2,6 +2,8 @@ const CONNECTION_STORAGE_KEY = "sheariq.connectionSettings";
 const SAVED_FARMS_STORAGE_KEY = "sheariq.savedFarms";
 const PANEL_ORDER_STORAGE_KEY = "sheariq.panelOrder";
 const PANEL_COLLAPSED_STORAGE_KEY = "sheariq.panelCollapsed";
+const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
+const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -61,7 +63,17 @@ const appState = {
   panelCollapsed: {},
   draggedPanelId: null,
   resetModalOpen: false,
-  resetModalReturnFocusEl: null
+  resetModalReturnFocusEl: null,
+  effectiveElapsedBeforePauseMs: 0,
+  effectiveResumeRealMs: null,
+  trendBucketMinutes: 15,
+  trendBuckets: {},
+  reviewBlocks: [],
+  nextReviewBlockIndex: 1,
+  runReviewText: "Run review will be generated when you stop a run.",
+  trendFlags: ["Set a target to enable trend flags."],
+  panelSizes: {},
+  autosaveTimerId: null
 };
 
 const elements = {
@@ -112,7 +124,15 @@ const elements = {
   resetModalOverlay: document.getElementById("resetModalOverlay"),
   resetModalDialog: document.querySelector("#resetModalOverlay .modal-dialog"),
   confirmResetBtn: document.getElementById("confirmResetBtn"),
-  cancelResetBtn: document.getElementById("cancelResetBtn")
+  cancelResetBtn: document.getElementById("cancelResetBtn"),
+  loadLastSaveBtn: document.getElementById("loadLastSaveBtn"),
+  currentSheepNumber: document.getElementById("currentSheepNumber"),
+  trendBucketSize: document.getElementById("trendBucketSize"),
+  trendGraphCanvas: document.getElementById("trendGraphCanvas"),
+  trendGraphMessage: document.getElementById("trendGraphMessage"),
+  reviewList: document.getElementById("reviewList"),
+  runReviewText: document.getElementById("runReviewText"),
+  trendFlags: document.getElementById("trendFlags")
 };
 
 function isDashboardPage() {
@@ -141,6 +161,23 @@ function formatCountdown(totalSeconds) {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
   }
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getEffectiveElapsedSeconds() {
+  if (!appState.runActive && appState.effectiveResumeRealMs === null) {
+    return appState.effectiveElapsedBeforePauseMs / 1000;
+  }
+  if (appState.paused || appState.effectiveResumeRealMs === null) {
+    return appState.effectiveElapsedBeforePauseMs / 1000;
+  }
+  return (appState.effectiveElapsedBeforePauseMs + Math.max(Date.now() - appState.effectiveResumeRealMs, 0)) / 1000;
+}
+
+function formatElapsedMMSS(seconds) {
+  const safe = Math.max(Math.floor(seconds || 0), 0);
+  const mm = Math.floor(safe / 60);
+  const ss = safe % 60;
+  return `${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 }
 
 function parseTimeToSecondsFromMidnight(value) {
@@ -394,6 +431,13 @@ function resetRunState() {
   appState.currentRunIndex = 0;
   appState.dayClockStartRealMs = null;
   appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(getDefaultDayStartTime());
+  appState.effectiveElapsedBeforePauseMs = 0;
+  appState.effectiveResumeRealMs = null;
+  appState.trendBuckets = {};
+  appState.reviewBlocks = [];
+  appState.nextReviewBlockIndex = 1;
+  appState.runReviewText = "Run review will be generated when you stop a run.";
+  appState.trendFlags = ["Set a target to enable trend flags."];
   calculateAverages();
 }
 
@@ -426,6 +470,13 @@ function startRun() {
   appState.dayClockStartRealMs = appState.runStartTime;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
+  appState.effectiveElapsedBeforePauseMs = 0;
+  appState.effectiveResumeRealMs = appState.runStartTime;
+  appState.trendBuckets = {};
+  appState.reviewBlocks = [];
+  appState.nextReviewBlockIndex = 1;
+  appState.runReviewText = "Run review will be generated when you stop a run.";
+  appState.trendFlags = ["Set a target to enable trend flags."];
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
@@ -437,10 +488,17 @@ function startRun() {
   updateStatsPanel();
   updateLivePanel();
   renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
 }
 
 function stopRun() {
   if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) return;
+  if (appState.effectiveResumeRealMs !== null) {
+    appState.effectiveElapsedBeforePauseMs += Math.max(Date.now() - appState.effectiveResumeRealMs, 0);
+    appState.effectiveResumeRealMs = null;
+  }
   appState.runActive = false;
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -456,6 +514,10 @@ function stopRun() {
   elements.runStatus.textContent = "Stopped";
   updatePauseButtonUI();
   updateLivePanel();
+  generateRunReview();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
   updateStatsPanel();
 }
 
@@ -471,6 +533,10 @@ function resetRun() {
   renderLogTable();
   renderBlock(Number(elements.blockMinutes.value) || 15);
   updateLivePanel();
+  if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
   updateStatsPanel();
 }
 
@@ -505,13 +571,15 @@ function handleMotorOff() {
   const catchDuration = Math.max((appState.currentCycle.shearStart - catchStart) / 1000, 0);
   const fullCycle = shearDuration + catchDuration;
 
+  const effectiveElapsedSeconds = getEffectiveElapsedSeconds();
   appState.sheep.push({
     number: appState.sheep.length + 1,
     startTime: appState.currentCycle.shearStart,
     endTime: now,
     shearDuration,
     catchDuration,
-    fullCycle
+    fullCycle,
+    effectiveElapsedSeconds
   });
 
   appState.currentCycle.motorOn = false;
@@ -523,6 +591,9 @@ function handleMotorOff() {
   updateStatsPanel();
   updateLivePanel();
   renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
 }
 
 function calculateAverages() {
@@ -542,7 +613,7 @@ function calculateAverages() {
   );
 
   const runElapsedSeconds = Math.max(
-    (Date.now() - appState.runStartTime) / 1000,
+    getEffectiveElapsedSeconds(),
     1
   );
   appState.currentStats = {
@@ -556,9 +627,7 @@ function calculateAverages() {
 }
 
 function calculateTargetMetrics() {
-  const elapsedSeconds = appState.runStartTime
-    ? Math.max((Date.now() - appState.runStartTime) / 1000, 0)
-    : 0;
+  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
   const runLengthSeconds = appState.target.runLengthSeconds || 0;
   const targetSheep = appState.target.sheep || 0;
 
@@ -620,6 +689,188 @@ function calculateBlockData(minutes) {
   };
 }
 
+function getBucketKey(effectiveElapsedSeconds, bucketMinutes = appState.trendBucketMinutes) {
+  const bucketSeconds = Math.max(bucketMinutes, 1) * 60;
+  return Math.floor(Math.max(effectiveElapsedSeconds, 0) / bucketSeconds);
+}
+
+function updateTrendDataForEntry(entry) {
+  if (!entry) return;
+  const key = getBucketKey(entry.effectiveElapsedSeconds);
+  if (!appState.trendBuckets[key]) {
+    appState.trendBuckets[key] = { count: 0, cycleTotal: 0, catchTotal: 0, startElapsed: key * appState.trendBucketMinutes * 60 };
+  }
+  appState.trendBuckets[key].count += 1;
+  appState.trendBuckets[key].cycleTotal += entry.fullCycle;
+  appState.trendBuckets[key].catchTotal += entry.catchDuration;
+}
+
+function getSortedBucketSummaries(bucketMinutes = appState.trendBucketMinutes) {
+  const buckets = {};
+  appState.sheep.forEach((entry) => {
+    const key = getBucketKey(entry.effectiveElapsedSeconds || 0, bucketMinutes);
+    if (!buckets[key]) buckets[key] = { count: 0, cycleTotal: 0, catchTotal: 0 };
+    buckets[key].count += 1;
+    buckets[key].cycleTotal += entry.fullCycle;
+    buckets[key].catchTotal += entry.catchDuration;
+  });
+  return Object.entries(buckets).map(([key, value]) => ({
+    key: Number(key),
+    startElapsed: Number(key) * bucketMinutes * 60,
+    avgCycle: value.count ? value.cycleTotal / value.count : 0,
+    avgCatch: value.count ? value.catchTotal / value.count : 0,
+    count: value.count
+  })).sort((a, b) => a.key - b.key);
+}
+
+function renderReviewList() {
+  if (!elements.reviewList) return;
+  if (!appState.reviewBlocks.length) {
+    elements.reviewList.innerHTML = '<div class="review-entry">No 15-minute reviews yet.</div>';
+    return;
+  }
+  elements.reviewList.innerHTML = appState.reviewBlocks.map((block) => `
+    <div class="review-entry">
+      <div><strong>${block.range}</strong></div>
+      <div>Sheep: ${block.count} • Avg cycle: ${block.avgCycle.toFixed(3)}s</div>
+      <div>${block.deltaText}</div>
+      <div>${block.status}</div>
+    </div>
+  `).join("");
+}
+
+function buildRangeLabel(startSec, endSec) {
+  if (appState.dayClockStartRealMs !== null) {
+    const base = appState.dayClockStartSecondsFromMidnight;
+    const startClock = formatSecondsFromMidnightClock(base + startSec);
+    const endClock = formatSecondsFromMidnightClock(base + endSec);
+    return `${startClock.slice(0, 5)}–${endClock.slice(0, 5)}`;
+  }
+  return `${formatElapsedMMSS(startSec)}–${formatElapsedMMSS(endSec)}`;
+}
+
+function maybeGenerate15MinuteReviews() {
+  const blockSeconds = 15 * 60;
+  const { requiredCycle } = calculateTargetMetrics();
+  while (getEffectiveElapsedSeconds() >= appState.nextReviewBlockIndex * blockSeconds) {
+    const blockIndex = appState.nextReviewBlockIndex - 1;
+    const startSec = blockIndex * blockSeconds;
+    const endSec = appState.nextReviewBlockIndex * blockSeconds;
+    const items = appState.sheep.filter((item) => item.effectiveElapsedSeconds >= startSec && item.effectiveElapsedSeconds < endSec);
+    const count = items.length;
+    const avgCycle = count ? items.reduce((sum, item) => sum + item.fullCycle, 0) / count : 0;
+    const delta = requiredCycle > 0 && count ? avgCycle - requiredCycle : 0;
+    let status = "On pace";
+    if (requiredCycle > 0 && count) {
+      if (delta > 0.4) status = `Lost ${delta.toFixed(3)}s per sheep`;
+      else if (delta < -0.4) status = "Strong recovery";
+    }
+    const deltaText = requiredCycle > 0 && count
+      ? (delta <= 0 ? `Gained ${Math.abs(delta).toFixed(3)}s per sheep vs target.` : `Lost ${delta.toFixed(3)}s per sheep vs target.`)
+      : "Set target for pace comparison.";
+    appState.reviewBlocks.push({ range: buildRangeLabel(startSec, endSec), count, avgCycle, deltaText, status, startSec, endSec });
+    appState.nextReviewBlockIndex += 1;
+  }
+  renderReviewList();
+}
+
+function generateRunReview() {
+  if (!elements.runReviewText) return;
+  if (!appState.sheep.length) {
+    appState.runReviewText = "Run review will be generated when you stop a run.";
+    elements.runReviewText.textContent = appState.runReviewText;
+    return;
+  }
+  const totalElapsed = Math.max(...appState.sheep.map((s) => s.effectiveElapsedSeconds), 1);
+  const quarterPoint = totalElapsed * 0.25;
+  const halfPoint = totalElapsed * 0.5;
+  const segs = getSortedBucketSummaries();
+  const firstQuarter = appState.sheep.filter((s) => s.effectiveElapsedSeconds <= quarterPoint);
+  const firstHalf = appState.sheep.filter((s) => s.effectiveElapsedSeconds <= halfPoint);
+  const avg = (arr) => arr.length ? (arr.reduce((sum, i) => sum + i.fullCycle, 0) / arr.length).toFixed(3) : "n/a";
+  const best = segs.reduce((a, b) => (!a || b.avgCycle < a.avgCycle ? b : a), null);
+  const worst = segs.reduce((a, b) => (!a || b.avgCycle > a.avgCycle ? b : a), null);
+  const verdict = segs.length > 1 && segs[segs.length - 1].avgCycle < segs[0].avgCycle ? "Strong finish" : "Maintained pace throughout";
+  const lostRange = worst ? buildRangeLabel(worst.startElapsed, worst.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
+  const bestRange = best ? buildRangeLabel(best.startElapsed, best.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
+  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s cycle. First half averaged ${avg(firstHalf)}s cycle. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.`;
+  elements.runReviewText.textContent = appState.runReviewText;
+}
+
+function updateTrendFlags() {
+  if (!elements.trendFlags) return;
+  const { requiredCycle } = calculateTargetMetrics();
+  if (requiredCycle <= 0) {
+    appState.trendFlags = ["Set a target to enable trend flags."];
+    elements.trendFlags.textContent = appState.trendFlags[0];
+    return;
+  }
+  const cycles = appState.sheep.map((s) => s.fullCycle);
+  const flags = [];
+  if (cycles.length >= 5) {
+    const last5 = cycles.slice(-5);
+    if (last5.every((v) => v > requiredCycle)) flags.push("Warning: 5 sheep over pace in a row.");
+  }
+  if (cycles.length >= 10) {
+    const first = cycles.slice(-10, -5).reduce((a, b) => a + b, 0) / 5;
+    const second = cycles.slice(-5).reduce((a, b) => a + b, 0) / 5;
+    if (second > first + 0.2) flags.push("Trend: pace slipping over last 10 sheep.");
+  }
+  if (cycles.length >= 10) {
+    const prev = cycles.slice(-10, -5);
+    const recent = cycles.slice(-5);
+    if (prev.every((v) => v > requiredCycle) && recent.every((v) => v <= requiredCycle)) flags.push("Recovery: pace improved over last 5 sheep.");
+  }
+  appState.trendFlags = flags.length ? flags : ["No major trend flags right now."];
+  elements.trendFlags.innerHTML = appState.trendFlags.map((f) => `<div>${f}</div>`).join("");
+}
+
+function drawTrendGraph() {
+  if (!elements.trendGraphCanvas) return;
+  const canvas = elements.trendGraphCanvas;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width > 0 && Math.round(rect.width) !== canvas.width) {
+    canvas.width = Math.round(rect.width);
+  }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const { requiredCycle } = calculateTargetMetrics();
+  if (requiredCycle <= 0) {
+    if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = false;
+    return;
+  }
+  if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = true;
+
+  const points = getSortedBucketSummaries(appState.trendBucketMinutes);
+  const margins = { left: 42, right: 12, top: 12, bottom: 28 };
+  const width = canvas.width - margins.left - margins.right;
+  const height = canvas.height - margins.top - margins.bottom;
+  const maxX = Math.max(points.length ? points[points.length - 1].startElapsed / 60 : appState.trendBucketMinutes, appState.trendBucketMinutes);
+  const maxY = Math.max(requiredCycle, ...points.map((p) => p.avgCycle), ...points.map((p) => p.avgCatch), 1) * 1.2;
+  const x = (minute) => margins.left + (minute / maxX) * width;
+  const y = (sec) => margins.top + height - (sec / maxY) * height;
+
+  ctx.strokeStyle = "#94a3b8"; ctx.beginPath();
+  ctx.moveTo(margins.left, margins.top); ctx.lineTo(margins.left, margins.top + height); ctx.lineTo(margins.left + width, margins.top + height); ctx.stroke();
+  ctx.fillStyle = "#475569"; ctx.font = "12px Arial";
+  ctx.fillText("seconds", 4, margins.top + 10);
+  ctx.fillText("minutes", canvas.width - 56, canvas.height - 6);
+
+  ctx.strokeStyle = "#f59e0b"; ctx.beginPath();
+  ctx.moveTo(x(0), y(requiredCycle)); ctx.lineTo(x(maxX), y(requiredCycle)); ctx.stroke();
+
+  if (points.length) {
+    ctx.strokeStyle = "#2563eb"; ctx.beginPath();
+    points.forEach((p, i) => { const px = x(p.startElapsed / 60); const py = y(p.avgCycle); if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+    ctx.stroke();
+
+    ctx.strokeStyle = "#16a34a"; ctx.beginPath();
+    points.forEach((p, i) => { const px = x(p.startElapsed / 60); const py = y(p.avgCatch); if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+    ctx.stroke();
+  }
+}
+
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
@@ -659,6 +910,8 @@ function updateLivePanel() {
   updateRunBadge();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.sheep.length));
+  const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
+  setText(elements.currentSheepNumber, String(currentSheepNumber));
   setText(elements.projectedTotal, String(calculateTargetMetrics().projectedTotal));
 }
 
@@ -675,6 +928,7 @@ function updateStatsPanel() {
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
+  updateTrendFlags();
 
   if (elements.avgCycle) {
     const onPaceClass = target.requiredCycle > 0
@@ -881,6 +1135,8 @@ function startStatsLoop() {
 
   appState.statsTimerId = setInterval(() => {
     updateStatsPanel();
+    maybeGenerate15MinuteReviews();
+    drawTrendGraph();
   }, 1000);
 }
 
@@ -911,6 +1167,10 @@ function setPaused(paused) {
 
   if (appState.paused) {
     appState.pauseStartedAtMs = Date.now();
+    if (appState.effectiveResumeRealMs !== null) {
+      appState.effectiveElapsedBeforePauseMs += Math.max(Date.now() - appState.effectiveResumeRealMs, 0);
+      appState.effectiveResumeRealMs = null;
+    }
     stopPollingLoop();
     stopLiveAndStatsLoops();
     if (appState.runActive && elements.runStatus) {
@@ -935,6 +1195,10 @@ function setPaused(paused) {
       appState.runEndTimeMs += pauseDurationMs;
     }
     appState.pauseStartedAtMs = null;
+  }
+
+  if (appState.runActive && appState.effectiveResumeRealMs === null) {
+    appState.effectiveResumeRealMs = Date.now();
   }
 
   if (isDashboardPage()) {
@@ -990,6 +1254,147 @@ function loadPanelState() {
 
 function persistPanelCollapsed() {
   localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, JSON.stringify(appState.panelCollapsed));
+}
+
+function loadPanelSizes() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PANEL_SIZES_STORAGE_KEY) || "{}");
+    appState.panelSizes = stored && typeof stored === "object" ? stored : {};
+  } catch (error) {
+    appState.panelSizes = {};
+  }
+}
+
+function persistPanelSizes() {
+  localStorage.setItem(PANEL_SIZES_STORAGE_KEY, JSON.stringify(appState.panelSizes));
+}
+
+function applyPanelSizes() {
+  getPanelElements().forEach((panel) => {
+    const size = appState.panelSizes[panel.id];
+    if (!size) return;
+    panel.style.width = `${Math.max(size.width || 280, 260)}px`;
+    panel.style.height = `${Math.max(size.height || 130, 130)}px`;
+  });
+}
+
+function attachResizeHandle(panel) {
+  if (panel.querySelector('.panel-resize-handle')) return;
+  const handle = document.createElement('div');
+  handle.className = 'panel-resize-handle';
+  panel.appendChild(handle);
+
+  const startResize = (event) => {
+    event.preventDefault();
+    const isTouch = event.type.startsWith('touch');
+    const point = isTouch ? event.touches[0] : event;
+    const startX = point.clientX;
+    const startY = point.clientY;
+    const startW = panel.offsetWidth;
+    const startH = panel.offsetHeight;
+    const onMove = (moveEvent) => {
+      const movePoint = moveEvent.type.startsWith('touch') ? moveEvent.touches[0] : moveEvent;
+      const w = Math.max(startW + (movePoint.clientX - startX), 260);
+      const h = Math.max(startH + (movePoint.clientY - startY), 130);
+      panel.style.width = `${w}px`;
+      panel.style.height = `${h}px`;
+    };
+    const onEnd = () => {
+      appState.panelSizes[panel.id] = { width: panel.offsetWidth, height: panel.offsetHeight };
+      persistPanelSizes();
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+  };
+
+  handle.addEventListener('mousedown', startResize);
+  handle.addEventListener('touchstart', startResize, { passive: false });
+}
+
+function getAutosavePayload() {
+  return {
+    state: {
+      runActive: appState.runActive,
+      runStartTime: appState.runStartTime,
+      sheep: appState.sheep,
+      currentCycle: appState.currentCycle,
+      target: appState.target,
+      farm: appState.farm,
+      paused: appState.paused,
+      pauseStartedAtMs: appState.pauseStartedAtMs,
+      runEndTimeMs: appState.runEndTimeMs,
+      currentRunIndex: appState.currentRunIndex,
+      dayClockStartRealMs: appState.dayClockStartRealMs,
+      dayClockStartSecondsFromMidnight: appState.dayClockStartSecondsFromMidnight,
+      trendBucketMinutes: appState.trendBucketMinutes,
+      trendBuckets: appState.trendBuckets,
+      reviewBlocks: appState.reviewBlocks,
+      nextReviewBlockIndex: appState.nextReviewBlockIndex,
+      runReviewText: appState.runReviewText,
+      trendFlags: appState.trendFlags,
+      panelCollapsed: appState.panelCollapsed,
+      effectiveElapsedBeforePauseMs: appState.effectiveElapsedBeforePauseMs,
+      effectiveResumeRealMs: appState.effectiveResumeRealMs
+    },
+    panelOrder: getPanelElements().map((panel) => panel.id),
+    panelSizes: appState.panelSizes,
+    savedAt: Date.now()
+  };
+}
+
+function autosaveState() {
+  localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(getAutosavePayload()));
+}
+
+function startAutosaveLoop() {
+  if (appState.autosaveTimerId) clearInterval(appState.autosaveTimerId);
+  appState.autosaveTimerId = setInterval(autosaveState, 60000);
+}
+
+function loadLastSave() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
+    if (!raw || !raw.state) return;
+    Object.assign(appState, raw.state);
+    if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
+      const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
+      raw.panelOrder.forEach((id) => {
+        const panel = byId.get(id);
+        if (panel) elements.dashboardPanels.appendChild(panel);
+      });
+    }
+    appState.panelSizes = raw.panelSizes || appState.panelSizes;
+    if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
+    applyPanelState();
+    applyPanelSizes();
+    if (elements.runStatus) elements.runStatus.textContent = appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped';
+    if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
+    if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
+    renderLogTable();
+    renderReviewList();
+    drawTrendGraph();
+    if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+    updateTrendFlags();
+    updateLivePanel();
+    updateStatsPanel();
+    updatePauseButtonUI();
+    if (appState.runActive) {
+      if (appState.paused) {
+        stopPollingLoop();
+        stopLiveAndStatsLoops();
+      } else {
+        startRealtimeLoops();
+      }
+    }
+  } catch (error) {
+    console.debug('Failed to load autosave', error);
+  }
 }
 
 function applyPanelState() {
@@ -1087,6 +1492,13 @@ function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
+  if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
+  if (elements.trendBucketSize) {
+    elements.trendBucketSize.addEventListener("change", () => {
+      appState.trendBucketMinutes = Number(elements.trendBucketSize.value) || 15;
+      drawTrendGraph();
+    });
+  }
   if (elements.resetRunBtn) {
     elements.resetRunBtn.addEventListener("click", (event) => {
       openResetModal(event.currentTarget);
@@ -1227,6 +1639,7 @@ function bindEvents() {
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
 
   getPanelElements().forEach((panel) => {
+    attachResizeHandle(panel);
     const header = panel.querySelector(".panel-header");
     const collapseBtn = panel.querySelector(".panel-collapse");
     const moveUpBtn = panel.querySelector(".panel-move-up");
@@ -1293,9 +1706,11 @@ function initialize() {
   loadConnectionSettings();
   loadSavedFarms();
   loadPanelState();
+  loadPanelSizes();
   updateConnectionInputs();
   bindEvents();
   applyPanelState();
+  applyPanelSizes();
   renderFarmDropdown();
 
   if (elements.customHours && elements.runType) {
@@ -1308,19 +1723,25 @@ function initialize() {
   }
 
   setSimulationMode(false);
+  if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes);
 
   if (elements.blockMinutes) {
     renderBlock(Number(elements.blockMinutes.value) || 15);
   }
 
   renderLogTable();
+  renderReviewList();
+  if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updatePauseButtonUI();
   updateLivePanel();
   updateStatsPanel();
   updateRunBadge();
   updateDayClockDisplay();
   updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
+  drawTrendGraph();
+  updateTrendFlags();
   startDayClockLoop();
+  startAutosaveLoop();
 
   if (isDashboardPage()) {
     startRealtimeLoops();

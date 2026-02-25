@@ -42,6 +42,7 @@
           <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
           <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
           <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
+          <button id="loadLastSaveBtn" type="button">Load Last Save</button>
         </div>
         <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
       </div>
@@ -97,7 +98,8 @@
       </div>
       <div class="panel-body">
         <div class="metrics-grid">
-          <div>Total sheep: <strong id="totalSheep">0</strong></div>
+          <div>Total Sheep Shorn: <strong id="totalSheep">0</strong></div>
+          <div>Current Sheep Number: <strong id="currentSheepNumber">0</strong></div>
           <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
           <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
           <div>Average full cycle: <strong id="avgCycle">0.0s</strong></div>
@@ -198,6 +200,71 @@
             <tbody id="sheepLogBody"></tbody>
           </table>
         </div>
+      </div>
+    </section>
+
+    <section id="panel-trend-graph" class="panel" aria-labelledby="trend-graph-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="trend-graph-title">Trend Graph</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="form-grid single-row">
+          <label for="trendBucketSize">Bucket size</label>
+          <select id="trendBucketSize">
+            <option value="5">5 min</option>
+            <option value="15" selected>15 min</option>
+            <option value="30">30 min</option>
+          </select>
+        </div>
+        <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
+        <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
+      </div>
+    </section>
+
+    <section id="panel-reviews" class="panel" aria-labelledby="reviews-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="reviews-title">15-Minute Reviews</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="reviewList" class="scroll-list"></div>
+      </div>
+    </section>
+
+    <section id="panel-run-review" class="panel" aria-labelledby="run-review-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="run-review-title">Run Review</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="runReviewText" class="status-box">Run review will be generated when you stop a run.</div>
+      </div>
+    </section>
+
+    <section id="panel-trend-flags" class="panel" aria-labelledby="trend-flags-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="trend-flags-title">Trend Flags</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div id="trendFlags" class="status-box">Set a target to enable trend flags.</div>
       </div>
     </section>
   </main>
