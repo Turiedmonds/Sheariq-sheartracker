@@ -132,6 +132,9 @@ const elements = {
   avgCatch: document.getElementById("avgCatch"),
   avgCycle: document.getElementById("avgCycle"),
   sheepPerHour: document.getElementById("sheepPerHour"),
+  fastestSheepToday: document.getElementById("fastestSheepToday"),
+  slowestSheepToday: document.getElementById("slowestSheepToday"),
+  lastSheepTime: document.getElementById("lastSheepTime"),
   motorState: document.getElementById("motorState"),
   currentShear: document.getElementById("currentShear"),
   currentCatch: document.getElementById("currentCatch"),
@@ -141,8 +144,8 @@ const elements = {
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
-  requiredTotalSheep: document.getElementById("requiredTotalSheep"),
-  projectedVsRequired: document.getElementById("projectedVsRequired"),
+  requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
+  projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
@@ -191,11 +194,14 @@ const METRIC_VALUE_IDS = new Set([
   "avgCatch",
   "avgCycle",
   "sheepPerHour",
+  "fastestSheepToday",
+  "slowestSheepToday",
+  "lastSheepTime",
   "requiredCycle",
   "requiredRate",
   "projectedTotal",
-  "requiredTotalSheep",
-  "projectedVsRequired",
+  "requiredRunTotalSheep",
+  "projectedRunVsRequired",
   "estimatedLastCatchTime",
   "catchPrediction",
   "motorState",
@@ -330,14 +336,22 @@ function parseRequiredTotalSheep() {
   return parsed;
 }
 
+function formatElapsedHHMMSS(seconds) {
+  const safe = Math.max(Math.floor(seconds || 0), 0);
+  const hh = Math.floor(safe / 3600);
+  const mm = Math.floor((safe % 3600) / 60);
+  const ss = safe % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+}
+
 function estimateLastCatchTime(projectedTotalSheep) {
   const n = Number(projectedTotalSheep);
-  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  const runElapsedSeconds = getEffectiveElapsedSeconds();
   const avgCycleSeconds = appState.currentStats.avgCycle;
   const avgShearSeconds = appState.currentStats.avgShear;
 
   if (!appState.runActive
-    || !Number.isFinite(currentDayClockSeconds)
+    || !Number.isFinite(runElapsedSeconds)
     || !Number.isFinite(n)
     || n < 1
     || !Number.isFinite(avgCycleSeconds)
@@ -348,8 +362,8 @@ function estimateLastCatchTime(projectedTotalSheep) {
   }
 
   const remainingSecondsToLastCatchStart = ((n - 1) * avgCycleSeconds) + avgShearSeconds;
-  const estimatedDayClockSeconds = currentDayClockSeconds + remainingSecondsToLastCatchStart;
-  return formatSecondsFromMidnightClock(estimatedDayClockSeconds);
+  const estimatedRunTimeSeconds = runElapsedSeconds + remainingSecondsToLastCatchStart;
+  return formatElapsedHHMMSS(estimatedRunTimeSeconds);
 }
 
 function normalizeIp(value) {
@@ -787,6 +801,18 @@ function calculateAverages() {
   };
 
   return appState.currentStats;
+}
+
+function calculateLivePerformanceExtremes() {
+  if (!appState.sheep.length) {
+    return { fastest: null, slowest: null, last: null };
+  }
+
+  const fastest = appState.sheep.reduce((best, entry) => (best === null || entry.fullCycle < best.fullCycle ? entry : best), null);
+  const slowest = appState.sheep.reduce((worst, entry) => (worst === null || entry.fullCycle > worst.fullCycle ? entry : worst), null);
+  const last = appState.sheep[appState.sheep.length - 1] || null;
+
+  return { fastest, slowest, last };
 }
 
 function calculateTargetMetrics() {
@@ -1437,22 +1463,26 @@ function updateLivePanel() {
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
-  const requiredTotalSheep = parseRequiredTotalSheep();
+  const requiredRunTotalSheep = parseRequiredTotalSheep();
+  const { fastest, slowest, last } = calculateLivePerformanceExtremes();
 
   setText(elements.totalSheep, String(appState.sheep.length));
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
   setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
   setText(elements.sheepPerHour, appState.currentStats.sheepPerHour.toFixed(2));
+  setText(elements.fastestSheepToday, fastest ? `#${fastest.number} — ${fastest.fullCycle.toFixed(3)}s` : "—");
+  setText(elements.slowestSheepToday, slowest ? `#${slowest.number} — ${slowest.fullCycle.toFixed(3)}s` : "—");
+  setText(elements.lastSheepTime, last ? `${last.fullCycle.toFixed(3)}s` : "—");
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.projectedTotal, String(target.projectedTotal));
-  setText(elements.requiredTotalSheep, requiredTotalSheep === null ? "—" : String(requiredTotalSheep));
-  if (requiredTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
-    const diff = target.projectedTotal - requiredTotalSheep;
-    setText(elements.projectedVsRequired, `${target.projectedTotal} (${diff >= 0 ? "+" : ""}${diff})`);
+  setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
+  if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
+    const diff = target.projectedTotal - requiredRunTotalSheep;
+    setText(elements.projectedRunVsRequired, `${target.projectedTotal} (${diff >= 0 ? "+" : ""}${diff})`);
   } else {
-    setText(elements.projectedVsRequired, "—");
+    setText(elements.projectedRunVsRequired, "—");
   }
   setText(elements.estimatedLastCatchTime, estimateLastCatchTime(target.projectedTotal));
   setText(elements.catchPrediction, predictCatch());
