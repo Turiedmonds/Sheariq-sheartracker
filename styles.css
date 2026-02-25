@@ -38,6 +38,10 @@ body {
   padding: 0.8rem;
 }
 
+.full-width {
+  grid-column: 1 / -1;
+}
+
 .panel h2 {
   margin-top: 0;
   font-size: 1rem;
@@ -51,7 +55,11 @@ body {
 }
 
 .form-grid.single-row {
-  grid-template-columns: 140px 120px;
+  grid-template-columns: 140px minmax(120px, 1fr);
+}
+
+.sim-toggle-row {
+  margin-top: 0.6rem;
 }
 
 .metrics-grid {
@@ -62,13 +70,15 @@ body {
 input,
 select,
 button {
-  padding: 0.45rem;
+  width: 100%;
+  padding: 0.5rem;
   border: 1px solid #9ca3af;
   border-radius: 3px;
   font-size: 0.95rem;
 }
 
 button {
+  width: auto;
   background: #f3f4f6;
   cursor: pointer;
 }
@@ -83,6 +93,25 @@ button:disabled {
   gap: 0.4rem;
   margin-top: 0.6rem;
   flex-wrap: wrap;
+}
+
+.status-box {
+  margin-top: 0.6rem;
+  padding: 0.6rem;
+  border: 1px dashed #9ca3af;
+  background: #f9fafb;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.sim-banner {
+  margin-top: 0.6rem;
+  border: 1px solid #f59e0b;
+  background: #fffbeb;
+  color: #92400e;
+  padding: 0.6rem;
+  border-radius: 3px;
+  font-weight: 600;
 }
 
 .table-wrap {
@@ -107,4 +136,11 @@ td {
   padding: 0.6rem;
   border: 1px dashed #9ca3af;
   background: #f9fafb;
+}
+
+@media (max-width: 700px) {
+  .form-grid,
+  .form-grid.single-row {
+    grid-template-columns: 1fr;
+  }
 }

@@ -15,6 +15,44 @@
   </header>
 
   <main class="dashboard">
+    <section class="panel full-width" aria-labelledby="connection-title">
+      <h2 id="connection-title">Connection Panel</h2>
+      <div class="form-grid">
+        <label for="shellyIpInput">Shelly IP</label>
+        <input id="shellyIpInput" type="text" value="192.168.33.1" />
+
+        <label for="endpointMode">Endpoint Mode</label>
+        <select id="endpointMode">
+          <option value="legacy">/status (legacy)</option>
+          <option value="rpcStatus">/rpc/Shelly.GetStatus (gen2+)</option>
+          <option value="rpcSwitch">/rpc/Switch.GetStatus?id=0 (gen2+)</option>
+        </select>
+
+        <label for="pollIntervalInput">Poll interval (ms)</label>
+        <input id="pollIntervalInput" type="number" min="100" step="50" value="200" />
+      </div>
+      <div class="button-row">
+        <button class="poll-quick-btn" data-ms="100" type="button">100</button>
+        <button class="poll-quick-btn" data-ms="200" type="button">200</button>
+        <button class="poll-quick-btn" data-ms="300" type="button">300</button>
+        <button class="poll-quick-btn" data-ms="500" type="button">500</button>
+        <button class="poll-quick-btn" data-ms="1000" type="button">1000</button>
+        <button id="testConnectionBtn" type="button">Test Connection</button>
+      </div>
+      <div id="connectionStatus" class="status-box">No connection test yet.</div>
+      <div class="form-grid single-row sim-toggle-row">
+        <label for="simulationModeToggle">Simulation Mode</label>
+        <input id="simulationModeToggle" type="checkbox" />
+      </div>
+      <div id="simulationBanner" class="sim-banner" hidden>
+        Simulation active: Shelly polling is paused.
+      </div>
+      <div id="simulationControls" class="button-row" hidden>
+        <button id="simMotorOnBtn" type="button">Motor ON</button>
+        <button id="simMotorOffBtn" type="button">Motor OFF</button>
+      </div>
+    </section>
+
     <section class="panel" aria-labelledby="run-config-title">
       <h2 id="run-config-title">Run Configuration Panel</h2>
       <div class="form-grid">
@@ -37,6 +75,7 @@
       <div class="button-row">
         <button id="startRunBtn" type="button">Start Run</button>
         <button id="stopRunBtn" type="button" disabled>Stop Run</button>
+        <button id="resetRunBtn" type="button">Reset Run</button>
       </div>
     </section>
 
