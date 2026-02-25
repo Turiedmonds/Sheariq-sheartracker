@@ -71,8 +71,17 @@ const appState = {
   savedFarms: [],
   panelCollapsed: {},
   draggedPanelId: null,
-  resetModalOpen: false,
-  resetModalReturnFocusEl: null,
+  confirmModal: {
+    open: false,
+    overlay: null,
+    dialog: null,
+    title: null,
+    message: null,
+    confirmBtn: null,
+    cancelBtn: null,
+    resolver: null,
+    returnFocusEl: null
+  },
   effectiveElapsedBeforePauseMs: 0,
   effectiveResumeRealMs: null,
   trendBucketMinutes: 15,
@@ -151,10 +160,6 @@ const elements = {
   farmDropdownToggle: document.getElementById("farmDropdownToggle"),
   farmDropdownMenu: document.getElementById("farmDropdownMenu"),
   dashboardPanels: document.getElementById("dashboardPanels"),
-  resetModalOverlay: document.getElementById("resetModalOverlay"),
-  resetModalDialog: document.querySelector("#resetModalOverlay .modal-dialog"),
-  confirmResetBtn: document.getElementById("confirmResetBtn"),
-  cancelResetBtn: document.getElementById("cancelResetBtn"),
   loadLastSaveBtn: document.getElementById("loadLastSaveBtn"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
@@ -624,6 +629,7 @@ function stopRun() {
 
 function resetRun() {
   if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus || !elements.blockMinutes) return;
+  clearPanelInteractionHighlights();
   resetRunState();
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -1804,7 +1810,11 @@ function bringPanelToFront(panel) {
 }
 
 function setLayoutEditMode(enabled) {
-  appState.layoutEditMode = Boolean(enabled);
+  const nextMode = Boolean(enabled);
+  if (appState.layoutEditMode && !nextMode) {
+    clearPanelInteractionHighlights();
+  }
+  appState.layoutEditMode = nextMode;
   if (appState.layoutEditMode) ensureInitialPanelLayout();
   applyPanelLayout();
   if (elements.layoutEditModeToggle) elements.layoutEditModeToggle.checked = appState.layoutEditMode;
@@ -1879,6 +1889,7 @@ function startPanelResize(panel, handle, startEvent) {
   setLayoutScrollLock(true);
   bringPanelToFront(panel);
 
+  panel.classList.add("panel-resizing");
   appState.panelResize = {
     panel,
     handle,
@@ -1979,6 +1990,7 @@ function endPanelResize(endEvent) {
   if (resize.handle.hasPointerCapture?.(resize.pointerId)) {
     resize.handle.releasePointerCapture(resize.pointerId);
   }
+  resize.panel.classList.remove("panel-resizing");
   appState.panelResize = null;
   setLayoutScrollLock(false);
   persistPanelLayout();
@@ -2370,22 +2382,127 @@ function endControlsDockDrag(endEvent) {
   setLayoutScrollLock(false);
 }
 
-function openResetModal(triggerEl) {
-  if (!elements.resetModalOverlay || !elements.resetModalDialog || !elements.confirmResetBtn) return;
-  appState.resetModalOpen = true;
-  appState.resetModalReturnFocusEl = triggerEl || null;
-  elements.resetModalOverlay.hidden = false;
-  elements.resetModalDialog.focus();
+function ensureConfirmModal() {
+  if (appState.confirmModal.overlay instanceof HTMLElement) return appState.confirmModal;
+
+  const overlay = document.createElement("div");
+  overlay.id = "globalConfirmModalOverlay";
+  overlay.className = "modal-overlay";
+  overlay.hidden = true;
+
+  const dialog = document.createElement("div");
+  dialog.className = "modal-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "globalConfirmModalTitle");
+  dialog.setAttribute("aria-describedby", "globalConfirmModalMessage");
+  dialog.tabIndex = -1;
+
+  const title = document.createElement("h3");
+  title.id = "globalConfirmModalTitle";
+
+  const message = document.createElement("p");
+  message.id = "globalConfirmModalMessage";
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.id = "globalConfirmModalConfirm";
+  confirmBtn.type = "button";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.id = "globalConfirmModalCancel";
+  cancelBtn.type = "button";
+
+  actions.append(confirmBtn, cancelBtn);
+  dialog.append(title, message, actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  appState.confirmModal.overlay = overlay;
+  appState.confirmModal.dialog = dialog;
+  appState.confirmModal.title = title;
+  appState.confirmModal.message = message;
+  appState.confirmModal.confirmBtn = confirmBtn;
+  appState.confirmModal.cancelBtn = cancelBtn;
+
+  const resolveConfirmModal = (answer) => {
+    if (!appState.confirmModal.open) return;
+    const resolver = appState.confirmModal.resolver;
+    appState.confirmModal.open = false;
+    appState.confirmModal.resolver = null;
+    overlay.hidden = true;
+    setLayoutScrollLock(false);
+    if (appState.confirmModal.returnFocusEl instanceof HTMLElement) {
+      appState.confirmModal.returnFocusEl.focus();
+    }
+    appState.confirmModal.returnFocusEl = null;
+    if (typeof resolver === "function") resolver(Boolean(answer));
+  };
+
+  confirmBtn.addEventListener("click", () => resolveConfirmModal(true));
+  cancelBtn.addEventListener("click", () => resolveConfirmModal(false));
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) resolveConfirmModal(false);
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      resolveConfirmModal(false);
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      resolveConfirmModal(true);
+    }
+  });
+
+  return appState.confirmModal;
 }
 
-function closeResetModal() {
-  if (!elements.resetModalOverlay) return;
-  appState.resetModalOpen = false;
-  elements.resetModalOverlay.hidden = true;
-  if (appState.resetModalReturnFocusEl instanceof HTMLElement) {
-    appState.resetModalReturnFocusEl.focus();
+function confirmModal({ title, message, confirmText = "Confirm", cancelText = "Cancel" }) {
+  const modal = ensureConfirmModal();
+  if (!modal.overlay || !modal.dialog || !modal.title || !modal.message || !modal.confirmBtn || !modal.cancelBtn) {
+    return Promise.resolve(false);
   }
-  appState.resetModalReturnFocusEl = null;
+
+  if (modal.open && typeof modal.resolver === "function") {
+    const previousResolver = modal.resolver;
+    modal.open = false;
+    modal.resolver = null;
+    modal.overlay.hidden = true;
+    setLayoutScrollLock(false);
+    previousResolver(false);
+  }
+
+  modal.title.textContent = title || "Please confirm";
+  modal.message.textContent = message || "Are you sure?";
+  modal.confirmBtn.textContent = confirmText;
+  modal.cancelBtn.textContent = cancelText;
+  modal.returnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.open = true;
+  modal.overlay.hidden = false;
+  setLayoutScrollLock(true);
+  modal.dialog.focus();
+
+  return new Promise((resolve) => {
+    modal.resolver = resolve;
+  });
+}
+
+function clearPanelInteractionHighlights() {
+  getPanelElements().forEach((panel) => {
+    panel.classList.remove("panel-dragging", "drag-over", "panel-resizing", "panel-active", "panel-selected", "panel-highlighted");
+  });
+  if (elements.panelSim) {
+    elements.panelSim.classList.remove("panel-docked-dragging");
+  }
+  document.querySelectorAll(".panel-drop-placeholder").forEach((node) => node.remove());
+  appState.pointerPanelDrag = null;
+  appState.absolutePanelDrag = null;
+  appState.controlsDockDrag = null;
+  appState.panelResize = null;
+  setLayoutScrollLock(false);
 }
 
 function applyConnectionSettingsFromUI() {
@@ -2432,6 +2549,7 @@ function renderBlock(minutes) {
 }
 
 function bindEvents() {
+  ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
@@ -2451,35 +2569,20 @@ function bindEvents() {
     }, { passive: false });
   }
   if (elements.resetRunBtn) {
-    elements.resetRunBtn.addEventListener("click", (event) => {
-      openResetModal(event.currentTarget);
-    });
-  }
-
-  if (elements.confirmResetBtn) {
-    elements.confirmResetBtn.addEventListener("click", () => {
-      resetRun();
-      closeResetModal();
-    });
-  }
-
-  if (elements.cancelResetBtn) {
-    elements.cancelResetBtn.addEventListener("click", closeResetModal);
-  }
-
-  if (elements.resetModalOverlay) {
-    elements.resetModalOverlay.addEventListener("click", (event) => {
-      if (event.target === elements.resetModalOverlay) {
-        closeResetModal();
+    elements.resetRunBtn.addEventListener("click", async () => {
+      const confirmed = await confirmModal({
+        title: "Reset run data?",
+        message: "This will clear sheep log and timers.",
+        confirmText: "Yes, reset",
+        cancelText: "Cancel"
+      });
+      if (!confirmed) {
+        clearPanelInteractionHighlights();
+        return;
       }
+      resetRun();
     });
   }
-
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && appState.resetModalOpen) {
-      closeResetModal();
-    }
-  });
 
   if (elements.farmInput) {
     elements.farmInput.addEventListener("focus", openFarmDropdown);
