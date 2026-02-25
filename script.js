@@ -1811,11 +1811,16 @@ function startControlsDockDrag(startEvent) {
   if (startEvent.target.closest("button, input, select, a")) return;
   if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
 
+  startEvent.preventDefault();
+  const captureEl = startEvent.currentTarget instanceof HTMLElement ? startEvent.currentTarget : null;
+  captureEl?.setPointerCapture?.(startEvent.pointerId);
+
   const panelRect = elements.panelSim.getBoundingClientRect();
   appState.controlsDockDrag = {
     pointerId: startEvent.pointerId,
     offsetX: startEvent.clientX - panelRect.left,
-    offsetY: startEvent.clientY - panelRect.top
+    offsetY: startEvent.clientY - panelRect.top,
+    captureEl
   };
   elements.panelSim.classList.add("panel-docked-dragging");
 }
@@ -1834,6 +1839,9 @@ function moveControlsDockDrag(moveEvent) {
 
 function endControlsDockDrag(endEvent) {
   if (!appState.controlsDockDrag || endEvent.pointerId !== appState.controlsDockDrag.pointerId || !elements.panelSim) return;
+  if (appState.controlsDockDrag.captureEl?.hasPointerCapture?.(endEvent.pointerId)) {
+    appState.controlsDockDrag.captureEl.releasePointerCapture(endEvent.pointerId);
+  }
   elements.panelSim.classList.remove("panel-docked-dragging");
   persistControlsDockPosition();
   appState.controlsDockDrag = null;
