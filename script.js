@@ -43,6 +43,8 @@ const appState = {
   liveTimerId: null,
   statsTimerId: null,
   paused: false,
+  pauseStartedAtMs: null,
+  totalPausedMs: 0,
   savedFarms: []
 };
 
@@ -170,6 +172,11 @@ function removeSavedFarm(name) {
   if (!normalized) return;
 
   appState.savedFarms = appState.savedFarms.filter((farm) => farm.toLowerCase() !== normalized);
+
+  if (elements.farmInput && normalizeFarmName(elements.farmInput.value).toLowerCase() === normalized) {
+    elements.farmInput.value = "";
+  }
+
   persistSavedFarms();
   renderSavedFarms();
 }
@@ -277,6 +284,8 @@ function resetRunState() {
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
   appState.paused = false;
+  appState.pauseStartedAtMs = null;
+  appState.totalPausedMs = 0;
   calculateAverages();
 }
 
@@ -298,11 +307,14 @@ function startRun() {
   appState.target.sheep = Math.max(Number(elements.targetSheepInput.value) || 0, 0);
   appState.target.runLengthSeconds = getRunLengthSeconds();
   appState.currentMotorDisplay = "OFF";
+  appState.pauseStartedAtMs = null;
+  appState.totalPausedMs = 0;
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
 
   setPaused(false);
+  elements.runStatus.textContent = "Running";
 
   calculateAverages();
   updateStatsPanel();
@@ -317,6 +329,8 @@ function stopRun() {
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
+  appState.pauseStartedAtMs = null;
+  appState.totalPausedMs = 0;
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -413,7 +427,10 @@ function calculateAverages() {
     { shear: 0, catch: 0, cycle: 0 }
   );
 
-  const runElapsedSeconds = Math.max((Date.now() - appState.runStartTime) / 1000, 1);
+  const runElapsedSeconds = Math.max(
+    ((Date.now() - appState.runStartTime) - appState.totalPausedMs) / 1000,
+    1
+  );
   appState.currentStats = {
     avgShear: totals.shear / appState.sheep.length,
     avgCatch: totals.catch / appState.sheep.length,
@@ -425,7 +442,9 @@ function calculateAverages() {
 }
 
 function calculateTargetMetrics() {
-  const elapsedSeconds = appState.runStartTime ? (Date.now() - appState.runStartTime) / 1000 : 0;
+  const elapsedSeconds = appState.runStartTime
+    ? Math.max(((Date.now() - appState.runStartTime) - appState.totalPausedMs) / 1000, 0)
+    : 0;
   const runLengthSeconds = appState.target.runLengthSeconds || 0;
   const targetSheep = appState.target.sheep || 0;
 
@@ -752,9 +771,14 @@ function setPaused(paused) {
   appState.paused = Boolean(paused);
 
   if (appState.paused) {
+    appState.pauseStartedAtMs = Date.now();
     stopPollingLoop();
     stopLiveAndStatsLoops();
   } else if (isDashboardPage()) {
+    if (appState.pauseStartedAtMs !== null) {
+      appState.totalPausedMs += Math.max(Date.now() - appState.pauseStartedAtMs, 0);
+      appState.pauseStartedAtMs = null;
+    }
     startPollingLoop();
     startLiveLoop();
     startStatsLoop();
