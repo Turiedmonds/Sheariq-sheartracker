@@ -4,6 +4,9 @@ const PANEL_ORDER_STORAGE_KEY = "sheariq.panelOrder";
 const PANEL_COLLAPSED_STORAGE_KEY = "sheariq.panelCollapsed";
 const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
 const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
+const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
+const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
+const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -75,7 +78,12 @@ const appState = {
   panelSizes: {},
   autosaveTimerId: null,
   trendGraphRenderPoints: [],
-  selectedTrendBucketKey: null
+  selectedTrendBucketKey: null,
+  autosaveEnabled: true,
+  controlsDockEnabled: false,
+  controlsDockPos: { x: 20, y: 90 },
+  pointerPanelDrag: null,
+  controlsDockDrag: null
 };
 
 const elements = {
@@ -136,11 +144,25 @@ const elements = {
   trendGraphTooltip: document.getElementById("trendGraphTooltip"),
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
-  trendFlags: document.getElementById("trendFlags")
+  trendFlags: document.getElementById("trendFlags"),
+  autosaveToggle: document.getElementById("autosaveToggle"),
+  autosaveStatus: document.getElementById("autosaveStatus"),
+  controlsDockToggle: document.getElementById("controlsDockToggle"),
+  controlsDockReset: document.getElementById("controlsDockReset"),
+  panelSim: document.getElementById("panel-sim")
 };
+
+function parseStoredBoolean(rawValue, fallback = true) {
+  if (rawValue === null) return fallback;
+  return rawValue === "true";
+}
 
 function isDashboardPage() {
   return Boolean(elements.startRunBtn);
+}
+
+function shouldStartRealtimeLoops() {
+  return Boolean(elements.motorState);
 }
 
 function setText(element, value) {
@@ -1518,12 +1540,98 @@ function getAutosavePayload() {
 }
 
 function autosaveState() {
+  if (!appState.autosaveEnabled) return;
   localStorage.setItem(AUTOSAVE_STORAGE_KEY, JSON.stringify(getAutosavePayload()));
 }
 
+function updateAutosaveUI() {
+  if (elements.autosaveToggle) elements.autosaveToggle.checked = appState.autosaveEnabled;
+  if (elements.autosaveStatus) {
+    elements.autosaveStatus.textContent = appState.autosaveEnabled
+      ? "Autosave: ON (every 60s)"
+      : "Autosave: OFF";
+  }
+}
+
+function stopAutosaveLoop() {
+  if (appState.autosaveTimerId) {
+    clearInterval(appState.autosaveTimerId);
+    appState.autosaveTimerId = null;
+  }
+}
+
 function startAutosaveLoop() {
-  if (appState.autosaveTimerId) clearInterval(appState.autosaveTimerId);
+  if (!appState.autosaveEnabled) {
+    stopAutosaveLoop();
+    return;
+  }
+  stopAutosaveLoop();
   appState.autosaveTimerId = setInterval(autosaveState, 60000);
+}
+
+function setAutosaveEnabled(enabled) {
+  appState.autosaveEnabled = Boolean(enabled);
+  localStorage.setItem(AUTOSAVE_ENABLED_STORAGE_KEY, String(appState.autosaveEnabled));
+  updateAutosaveUI();
+  if (appState.autosaveEnabled) {
+    autosaveState();
+    startAutosaveLoop();
+  } else {
+    stopAutosaveLoop();
+  }
+}
+
+function loadAutosaveSettings() {
+  appState.autosaveEnabled = parseStoredBoolean(localStorage.getItem(AUTOSAVE_ENABLED_STORAGE_KEY), true);
+}
+
+function applyControlsDockPosition() {
+  if (!elements.panelSim || !appState.controlsDockEnabled) return;
+  elements.panelSim.style.left = `${Math.max(appState.controlsDockPos.x, 8)}px`;
+  elements.panelSim.style.top = `${Math.max(appState.controlsDockPos.y, 8)}px`;
+}
+
+function persistControlsDockPosition() {
+  localStorage.setItem(CONTROLS_DOCK_POS_STORAGE_KEY, JSON.stringify(appState.controlsDockPos));
+}
+
+function updateControlsDockUI() {
+  const docked = appState.controlsDockEnabled;
+  if (elements.panelSim) {
+    elements.panelSim.classList.toggle("panel-docked", docked);
+    if (!docked) {
+      elements.panelSim.style.left = "";
+      elements.panelSim.style.top = "";
+    } else {
+      applyControlsDockPosition();
+    }
+  }
+  if (elements.controlsDockToggle) elements.controlsDockToggle.textContent = docked ? "Undock" : "Dock";
+  if (elements.controlsDockReset) elements.controlsDockReset.hidden = !docked;
+}
+
+function setControlsDockEnabled(enabled) {
+  appState.controlsDockEnabled = Boolean(enabled);
+  localStorage.setItem(CONTROLS_DOCK_ENABLED_STORAGE_KEY, String(appState.controlsDockEnabled));
+  updateControlsDockUI();
+}
+
+function resetControlsDockPosition() {
+  appState.controlsDockPos = { x: 20, y: 90 };
+  persistControlsDockPosition();
+  applyControlsDockPosition();
+}
+
+function loadControlsDockSettings() {
+  appState.controlsDockEnabled = parseStoredBoolean(localStorage.getItem(CONTROLS_DOCK_ENABLED_STORAGE_KEY), false);
+  try {
+    const raw = JSON.parse(localStorage.getItem(CONTROLS_DOCK_POS_STORAGE_KEY) || "null");
+    if (raw && Number.isFinite(raw.x) && Number.isFinite(raw.y)) {
+      appState.controlsDockPos = { x: raw.x, y: raw.y };
+    }
+  } catch (error) {
+    console.debug("Failed to parse controls dock position", error);
+  }
 }
 
 function loadLastSave() {
@@ -1594,6 +1702,105 @@ function movePanel(panelId, direction) {
   }
 
   persistPanelOrder();
+}
+
+function getPanelDropTarget(clientY, draggingPanel, placeholder) {
+  const panels = getPanelElements().filter((panel) => panel !== draggingPanel && panel !== placeholder && !panel.classList.contains("panel-docked"));
+  let closest = null;
+  let closestOffset = Number.NEGATIVE_INFINITY;
+
+  panels.forEach((panel) => {
+    const rect = panel.getBoundingClientRect();
+    const offset = clientY - (rect.top + (rect.height / 2));
+    if (offset < 0 && offset > closestOffset) {
+      closestOffset = offset;
+      closest = panel;
+    }
+  });
+
+  return closest;
+}
+
+function startPanelReorderDrag(panel, header, startEvent) {
+  if (!elements.dashboardPanels || panel.id === "panel-sim" && appState.controlsDockEnabled) return;
+  if (!(startEvent.target instanceof HTMLElement)) return;
+  if (startEvent.target.closest("button, input, select, label, a")) return;
+  if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "panel-drop-placeholder";
+  placeholder.style.height = `${panel.offsetHeight}px`;
+
+  appState.pointerPanelDrag = {
+    panel,
+    header,
+    pointerId: startEvent.pointerId,
+    placeholder
+  };
+
+  panel.classList.add("panel-dragging");
+  elements.dashboardPanels.insertBefore(placeholder, panel.nextSibling);
+  header.setPointerCapture(startEvent.pointerId);
+}
+
+function movePanelReorderDrag(moveEvent) {
+  const drag = appState.pointerPanelDrag;
+  if (!drag || moveEvent.pointerId !== drag.pointerId || !elements.dashboardPanels) return;
+  moveEvent.preventDefault();
+
+  const target = getPanelDropTarget(moveEvent.clientY, drag.panel, drag.placeholder);
+  if (!target) {
+    elements.dashboardPanels.appendChild(drag.placeholder);
+  } else {
+    elements.dashboardPanels.insertBefore(drag.placeholder, target);
+  }
+}
+
+function endPanelReorderDrag(endEvent) {
+  const drag = appState.pointerPanelDrag;
+  if (!drag || endEvent.pointerId !== drag.pointerId || !elements.dashboardPanels) return;
+
+  drag.panel.classList.remove("panel-dragging");
+  elements.dashboardPanels.insertBefore(drag.panel, drag.placeholder);
+  drag.placeholder.remove();
+  if (drag.header.hasPointerCapture?.(drag.pointerId)) {
+    drag.header.releasePointerCapture(drag.pointerId);
+  }
+  appState.pointerPanelDrag = null;
+  persistPanelOrder();
+}
+
+function startControlsDockDrag(startEvent) {
+  if (!elements.panelSim || !appState.controlsDockEnabled || !(startEvent.target instanceof HTMLElement)) return;
+  if (startEvent.target.closest("button, input, select, a")) return;
+  if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
+
+  const panelRect = elements.panelSim.getBoundingClientRect();
+  appState.controlsDockDrag = {
+    pointerId: startEvent.pointerId,
+    offsetX: startEvent.clientX - panelRect.left,
+    offsetY: startEvent.clientY - panelRect.top
+  };
+  elements.panelSim.classList.add("panel-docked-dragging");
+}
+
+function moveControlsDockDrag(moveEvent) {
+  if (!appState.controlsDockDrag || moveEvent.pointerId !== appState.controlsDockDrag.pointerId || !elements.panelSim) return;
+  moveEvent.preventDefault();
+  const maxX = Math.max(window.innerWidth - elements.panelSim.offsetWidth - 8, 8);
+  const maxY = Math.max(window.innerHeight - elements.panelSim.offsetHeight - 8, 8);
+  appState.controlsDockPos = {
+    x: Math.min(Math.max(moveEvent.clientX - appState.controlsDockDrag.offsetX, 8), maxX),
+    y: Math.min(Math.max(moveEvent.clientY - appState.controlsDockDrag.offsetY, 8), maxY)
+  };
+  applyControlsDockPosition();
+}
+
+function endControlsDockDrag(endEvent) {
+  if (!appState.controlsDockDrag || endEvent.pointerId !== appState.controlsDockDrag.pointerId || !elements.panelSim) return;
+  elements.panelSim.classList.remove("panel-docked-dragging");
+  persistControlsDockPosition();
+  appState.controlsDockDrag = null;
 }
 
 function openResetModal(triggerEl) {
@@ -1814,6 +2021,19 @@ function bindEvents() {
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
+  if (elements.autosaveToggle) {
+    elements.autosaveToggle.addEventListener("change", () => {
+      setAutosaveEnabled(elements.autosaveToggle.checked);
+    });
+  }
+  if (elements.controlsDockToggle) {
+    elements.controlsDockToggle.addEventListener("click", () => {
+      setControlsDockEnabled(!appState.controlsDockEnabled);
+    });
+  }
+  if (elements.controlsDockReset) {
+    elements.controlsDockReset.addEventListener("click", resetControlsDockPosition);
+  }
 
   getPanelElements().forEach((panel) => {
     attachResizeHandle(panel);
@@ -1836,40 +2056,40 @@ function bindEvents() {
     if (moveDownBtn) moveDownBtn.addEventListener("click", () => movePanel(panel.id, 1));
 
     if (header) {
-      header.addEventListener("dragstart", () => {
-        appState.draggedPanelId = panel.id;
+      panel.draggable = false;
+      header.draggable = false;
+      header.addEventListener("pointerdown", (event) => {
+        if (panel.id === "panel-sim" && appState.controlsDockEnabled) {
+          startControlsDockDrag(event);
+          return;
+        }
+        startPanelReorderDrag(panel, header, event);
+      });
+      header.addEventListener("pointermove", (event) => {
+        movePanelReorderDrag(event);
+        moveControlsDockDrag(event);
+      });
+      header.addEventListener("pointerup", (event) => {
+        endPanelReorderDrag(event);
+        endControlsDockDrag(event);
+      });
+      header.addEventListener("pointercancel", (event) => {
+        endPanelReorderDrag(event);
+        endControlsDockDrag(event);
       });
     }
-
-    panel.addEventListener("dragover", (event) => {
-      event.preventDefault();
-      panel.classList.add("drag-over");
-    });
-
-    panel.addEventListener("dragleave", () => {
-      panel.classList.remove("drag-over");
-    });
-
-    panel.addEventListener("drop", (event) => {
-      event.preventDefault();
-      panel.classList.remove("drag-over");
-      const dragged = appState.draggedPanelId ? document.getElementById(appState.draggedPanelId) : null;
-      if (!dragged || dragged === panel || !elements.dashboardPanels) return;
-      const panels = getPanelElements();
-      const draggedIdx = panels.findIndex((item) => item === dragged);
-      const dropIdx = panels.findIndex((item) => item === panel);
-      if (draggedIdx < dropIdx) {
-        elements.dashboardPanels.insertBefore(dragged, panel.nextElementSibling);
-      } else {
-        elements.dashboardPanels.insertBefore(dragged, panel);
-      }
-      persistPanelOrder();
-    });
   });
 
-  document.addEventListener("dragend", () => {
-    appState.draggedPanelId = null;
-    getPanelElements().forEach((panel) => panel.classList.remove("drag-over"));
+  window.addEventListener("resize", () => {
+    if (!appState.controlsDockEnabled) return;
+    const maxX = Math.max(window.innerWidth - (elements.panelSim?.offsetWidth || 0) - 8, 8);
+    const maxY = Math.max(window.innerHeight - (elements.panelSim?.offsetHeight || 0) - 8, 8);
+    appState.controlsDockPos = {
+      x: Math.min(appState.controlsDockPos.x, maxX),
+      y: Math.min(appState.controlsDockPos.y, maxY)
+    };
+    applyControlsDockPosition();
+    persistControlsDockPosition();
   });
 }
 
@@ -1884,6 +2104,8 @@ function initialize() {
   loadSavedFarms();
   loadPanelState();
   loadPanelSizes();
+  loadAutosaveSettings();
+  loadControlsDockSettings();
   updateConnectionInputs();
   bindEvents();
   applyPanelState();
@@ -1917,10 +2139,12 @@ function initialize() {
   updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
   drawTrendGraph();
   updateTrendFlags();
+  updateAutosaveUI();
+  updateControlsDockUI();
   startDayClockLoop();
   startAutosaveLoop();
 
-  if (isDashboardPage()) {
+  if (shouldStartRealtimeLoops()) {
     startRealtimeLoops();
   }
 }

@@ -89,19 +89,42 @@ body {
 
 .panel-resize-handle {
   position: absolute;
-  width: 14px;
-  height: 14px;
-  right: 3px;
-  bottom: 3px;
+  width: 18px;
+  height: 18px;
+  right: 4px;
+  bottom: 4px;
   cursor: nwse-resize;
-  border-right: 2px solid #9ca3af;
-  border-bottom: 2px solid #9ca3af;
-  border-radius: 1px;
+  border-right: 3px solid #111827;
+  border-bottom: 3px solid #111827;
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(135deg, rgba(17, 24, 39, 0.95), rgba(17, 24, 39, 0.95) 2px, transparent 2px, transparent 5px);
   touch-action: none;
+  opacity: 0.82;
 }
 
 .panel.collapsed .panel-resize-handle {
   display: none;
+}
+
+
+.panel-resize-handle:hover,
+.panel-resize-handle:active {
+  opacity: 1;
+  border-right-color: #000;
+  border-bottom-color: #000;
+}
+
+.panel-dragging {
+  opacity: 0.5;
+  outline: 2px solid #2563eb;
+}
+
+.panel-drop-placeholder {
+  border: 2px dashed #2563eb;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.08);
+  min-height: 130px;
 }
 
 .panel.drag-over {
@@ -479,4 +502,73 @@ td.pace-neutral {
   background: #f9fafb;
   font-size: 0.8rem;
   white-space: pre-wrap;
+}
+
+
+.sim-setting-row {
+  margin-top: 0.5rem;
+}
+
+.btn-inline-small {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+#panel-sim.panel-docked {
+  position: fixed;
+  width: min(680px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  z-index: 45;
+  box-shadow: 0 16px 28px rgba(0, 0, 0, 0.25);
+}
+
+#panel-sim.panel-docked .panel-header {
+  cursor: move;
+}
+
+#panel-sim.panel-docked-dragging {
+  opacity: 0.92;
+}
+
+.live-view-page {
+  background: #eef2f7;
+}
+
+.live-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.live-view-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.live-panel {
+  min-height: 180px;
+  border-width: 2px;
+}
+
+.live-panel .panel-header {
+  cursor: default;
+}
+
+.live-panel .panel-header h2 {
+  font-size: 1.2rem;
+}
+
+.live-panel .panel-body {
+  font-size: 1.08rem;
+}
+
+.live-panel strong {
+  font-size: 1.22rem;
+}
+
+.live-log-wrap {
+  max-height: 50vh;
 }

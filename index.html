@@ -12,7 +12,7 @@
   <header class="app-header">
     <h1>SHEARiQ Shear Tracker</h1>
     <p>Run Status: <strong id="runStatus">Idle</strong></p>
-    <p><a class="nav-link" href="connection.html">Connection Settings</a></p>
+    <p><a class="nav-link" href="connection.html">Connection Settings</a> • <a class="nav-link" href="live.html">Live View</a></p>
   </header>
 
   <main id="dashboardPanels" class="dashboard">
@@ -22,6 +22,7 @@
         <div class="panel-header-actions">
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button id="controlsDockToggle" type="button" aria-label="Toggle controls dock">Dock</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
       </div>
@@ -37,12 +38,18 @@
           <button id="simMotorOnBtn" type="button">Motor ON</button>
           <button id="simMotorOffBtn" type="button">Motor OFF</button>
         </div>
+        <div class="form-grid single-row sim-setting-row">
+          <label for="autosaveToggle">Autosave</label>
+          <input id="autosaveToggle" type="checkbox" checked />
+        </div>
+        <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
         <div class="button-row">
           <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
           <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
           <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
           <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
           <button id="loadLastSaveBtn" type="button">Load Last Save</button>
+          <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
         </div>
         <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
       </div>
