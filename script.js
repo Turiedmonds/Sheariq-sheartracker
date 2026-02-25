@@ -73,7 +73,9 @@ const appState = {
   runReviewText: "Run review will be generated when you stop a run.",
   trendFlags: ["Set a target to enable trend flags."],
   panelSizes: {},
-  autosaveTimerId: null
+  autosaveTimerId: null,
+  trendGraphRenderPoints: [],
+  selectedTrendBucketKey: null
 };
 
 const elements = {
@@ -130,6 +132,8 @@ const elements = {
   trendBucketSize: document.getElementById("trendBucketSize"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
   trendGraphMessage: document.getElementById("trendGraphMessage"),
+  trendLatestSummary: document.getElementById("trendLatestSummary"),
+  trendGraphTooltip: document.getElementById("trendGraphTooltip"),
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   trendFlags: document.getElementById("trendFlags")
@@ -797,6 +801,78 @@ function generateRunReview() {
   elements.runReviewText.textContent = appState.runReviewText;
 }
 
+function formatDeltaPlain(delta) {
+  if (!Number.isFinite(delta)) return "0.000s";
+  const sign = delta > 0 ? "+" : (delta < 0 ? "−" : "");
+  return `${sign}${Math.abs(delta).toFixed(3)}s`;
+}
+
+function describeAheadBehind(delta) {
+  if (delta > 0.05) return `behind by ${formatDeltaPlain(delta)} per sheep`;
+  if (delta < -0.05) return `ahead by ${formatDeltaPlain(delta)} per sheep`;
+  return "on target pace";
+}
+
+function updateTrendLatestSummary(points, requiredCycle) {
+  if (!elements.trendLatestSummary) return;
+  const bucketMinutes = appState.trendBucketMinutes;
+  const latest = points.length ? points[points.length - 1] : null;
+  if (!latest) {
+    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg cycle 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
+    return;
+  }
+  const delta = latest.avgCycle - requiredCycle;
+  const meaning = describeAheadBehind(delta);
+  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg cycle ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
+}
+
+function updateTrendGraphTooltip(point) {
+  if (!elements.trendGraphTooltip) return;
+  if (!point) {
+    elements.trendGraphTooltip.hidden = false;
+    elements.trendGraphTooltip.textContent = "Tap graph points to see bucket details.";
+    return;
+  }
+  const bucketEnd = point.startElapsed + appState.trendBucketMinutes * 60;
+  const delta = point.avgCycle - point.requiredCycle;
+  elements.trendGraphTooltip.hidden = false;
+  elements.trendGraphTooltip.innerHTML = [
+    `Bucket: ${buildRangeLabel(point.startElapsed, bucketEnd)}`,
+    `Count: ${point.count} sheep`,
+    `Avg cycle: ${formatSeconds(point.avgCycle)}`,
+    `Avg catch: ${formatSeconds(point.avgCatch)}`,
+    `Target cycle: ${formatSeconds(point.requiredCycle)}`,
+    `Delta: ${formatDeltaPlain(delta)} (${describeAheadBehind(delta)})`
+  ].map((line) => `<div>${line}</div>`).join("");
+}
+
+function handleTrendGraphPointSelection(event) {
+  if (!elements.trendGraphCanvas || !appState.trendGraphRenderPoints.length) return;
+  const canvas = elements.trendGraphCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const source = event.changedTouches && event.changedTouches.length ? event.changedTouches[0] : event;
+  if (!source || typeof source.clientX !== "number" || typeof source.clientY !== "number") return;
+  const clickX = source.clientX - rect.left;
+  const clickY = source.clientY - rect.top;
+
+  let closest = null;
+  let minDistSq = Infinity;
+  appState.trendGraphRenderPoints.forEach((point) => {
+    const dx = point.x - clickX;
+    const dy = point.cycleY - clickY;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      closest = point;
+    }
+  });
+
+  if (closest) {
+    appState.selectedTrendBucketKey = closest.key;
+    updateTrendGraphTooltip(closest);
+  }
+}
+
 function updateTrendFlags() {
   if (!elements.trendFlags) return;
   const { requiredCycle } = calculateTargetMetrics();
@@ -809,19 +885,39 @@ function updateTrendFlags() {
   const flags = [];
   if (cycles.length >= 5) {
     const last5 = cycles.slice(-5);
-    if (last5.every((v) => v > requiredCycle)) flags.push("Warning: 5 sheep over pace in a row.");
+    const avgLast5 = last5.reduce((a, b) => a + b, 0) / last5.length;
+    const deltaLast5 = avgLast5 - requiredCycle;
+    if (last5.every((v) => v > requiredCycle)) {
+      flags.push(`Sustained behind: last 5 sheep all over target (all > ${formatSeconds(requiredCycle)}). Last 5 avg cycle is ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(deltaLast5)} behind per sheep).`);
+    }
   }
   if (cycles.length >= 10) {
-    const first = cycles.slice(-10, -5).reduce((a, b) => a + b, 0) / 5;
-    const second = cycles.slice(-5).reduce((a, b) => a + b, 0) / 5;
-    if (second > first + 0.2) flags.push("Trend: pace slipping over last 10 sheep.");
+    const prev5 = cycles.slice(-10, -5);
+    const recent5 = cycles.slice(-5);
+    const prevAvg = prev5.reduce((a, b) => a + b, 0) / prev5.length;
+    const recentAvg = recent5.reduce((a, b) => a + b, 0) / recent5.length;
+    const recentDelta = recentAvg - requiredCycle;
+    if (recentAvg > prevAvg + 0.2) {
+      flags.push(`Pace slipping: last 5 avg cycle is ${formatSeconds(recentAvg)} vs target ${formatSeconds(requiredCycle)} (${formatDeltaPlain(recentDelta)} behind per sheep). Previous 5 avg was ${formatSeconds(prevAvg)}.`);
+    }
+    if (prevAvg > recentAvg + 0.2) {
+      const improve = prevAvg - recentAvg;
+      flags.push(`Recovery: avg improved from ${formatSeconds(prevAvg)} to ${formatSeconds(recentAvg)} over last 10 sheep (${formatDeltaPlain(-improve)} per sheep). Target is ${formatSeconds(requiredCycle)}, so recent pace is ${describeAheadBehind(recentDelta)}.`);
+    }
   }
-  if (cycles.length >= 10) {
-    const prev = cycles.slice(-10, -5);
-    const recent = cycles.slice(-5);
-    if (prev.every((v) => v > requiredCycle) && recent.every((v) => v <= requiredCycle)) flags.push("Recovery: pace improved over last 5 sheep.");
+
+  if (!flags.length && cycles.length >= 5) {
+    const last5 = cycles.slice(-5);
+    const avgLast5 = last5.reduce((a, b) => a + b, 0) / last5.length;
+    const delta = avgLast5 - requiredCycle;
+    flags.push(`No trend warnings. Last 5 avg ${formatSeconds(avgLast5)} vs target ${formatSeconds(requiredCycle)} (${describeAheadBehind(delta)}).`);
   }
-  appState.trendFlags = flags.length ? flags : ["No major trend flags right now."];
+
+  if (!flags.length) {
+    flags.push(`No trend warnings yet. Need at least 5 sheep to compare with target ${formatSeconds(requiredCycle)}.`);
+  }
+
+  appState.trendFlags = flags;
   elements.trendFlags.innerHTML = appState.trendFlags.map((f) => `<div>${f}</div>`).join("");
 }
 
@@ -835,14 +931,19 @@ function drawTrendGraph() {
     canvas.width = Math.round(rect.width);
   }
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  appState.trendGraphRenderPoints = [];
+
   const { requiredCycle } = calculateTargetMetrics();
+  const points = getSortedBucketSummaries(appState.trendBucketMinutes);
+  updateTrendLatestSummary(points, requiredCycle);
+
   if (requiredCycle <= 0) {
     if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = false;
+    updateTrendGraphTooltip(null);
     return;
   }
   if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = true;
 
-  const points = getSortedBucketSummaries(appState.trendBucketMinutes);
   const margins = { left: 42, right: 12, top: 12, bottom: 28 };
   const width = canvas.width - margins.left - margins.right;
   const height = canvas.height - margins.top - margins.bottom;
@@ -851,23 +952,91 @@ function drawTrendGraph() {
   const x = (minute) => margins.left + (minute / maxX) * width;
   const y = (sec) => margins.top + height - (sec / maxY) * height;
 
-  ctx.strokeStyle = "#94a3b8"; ctx.beginPath();
-  ctx.moveTo(margins.left, margins.top); ctx.lineTo(margins.left, margins.top + height); ctx.lineTo(margins.left + width, margins.top + height); ctx.stroke();
-  ctx.fillStyle = "#475569"; ctx.font = "12px Arial";
+  ctx.strokeStyle = "#e2e8f0";
+  ctx.lineWidth = 1;
+  const gridLines = 4;
+  for (let i = 1; i <= gridLines; i += 1) {
+    const yVal = margins.top + (height / (gridLines + 1)) * i;
+    ctx.beginPath();
+    ctx.moveTo(margins.left, yVal);
+    ctx.lineTo(margins.left + width, yVal);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "#94a3b8";
+  ctx.beginPath();
+  ctx.moveTo(margins.left, margins.top);
+  ctx.lineTo(margins.left, margins.top + height);
+  ctx.lineTo(margins.left + width, margins.top + height);
+  ctx.stroke();
+  ctx.fillStyle = "#475569";
+  ctx.font = "12px Arial";
   ctx.fillText("seconds", 4, margins.top + 10);
   ctx.fillText("minutes", canvas.width - 56, canvas.height - 6);
 
-  ctx.strokeStyle = "#f59e0b"; ctx.beginPath();
-  ctx.moveTo(x(0), y(requiredCycle)); ctx.lineTo(x(maxX), y(requiredCycle)); ctx.stroke();
+  ctx.strokeStyle = "#f59e0b";
+  ctx.beginPath();
+  ctx.moveTo(x(0), y(requiredCycle));
+  ctx.lineTo(x(maxX), y(requiredCycle));
+  ctx.stroke();
 
   if (points.length) {
-    ctx.strokeStyle = "#2563eb"; ctx.beginPath();
-    points.forEach((p, i) => { const px = x(p.startElapsed / 60); const py = y(p.avgCycle); if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+    ctx.strokeStyle = "#2563eb";
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const px = x(p.startElapsed / 60);
+      const py = y(p.avgCycle);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
     ctx.stroke();
 
-    ctx.strokeStyle = "#16a34a"; ctx.beginPath();
-    points.forEach((p, i) => { const px = x(p.startElapsed / 60); const py = y(p.avgCatch); if (i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); });
+    ctx.strokeStyle = "#16a34a";
+    ctx.beginPath();
+    points.forEach((p, i) => {
+      const px = x(p.startElapsed / 60);
+      const py = y(p.avgCatch);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
     ctx.stroke();
+
+    points.forEach((p) => {
+      const px = x(p.startElapsed / 60);
+      const cycleY = y(p.avgCycle);
+      const catchY = y(p.avgCatch);
+      ctx.fillStyle = "#2563eb";
+      ctx.beginPath();
+      ctx.arc(px, cycleY, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#16a34a";
+      ctx.beginPath();
+      ctx.arc(px, catchY, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#334155";
+      ctx.font = "11px Arial";
+      ctx.fillText(`n=${p.count}`, px + 4, cycleY - 6);
+
+      appState.trendGraphRenderPoints.push({
+        key: p.key,
+        x: px,
+        cycleY,
+        count: p.count,
+        avgCycle: p.avgCycle,
+        avgCatch: p.avgCatch,
+        requiredCycle,
+        startElapsed: p.startElapsed
+      });
+    });
+
+    const selected = appState.trendGraphRenderPoints.find((item) => item.key === appState.selectedTrendBucketKey);
+    if (selected) {
+      updateTrendGraphTooltip(selected);
+    } else {
+      updateTrendGraphTooltip(appState.trendGraphRenderPoints[appState.trendGraphRenderPoints.length - 1]);
+    }
+  } else {
+    updateTrendGraphTooltip(null);
   }
 }
 
@@ -1496,8 +1665,16 @@ function bindEvents() {
   if (elements.trendBucketSize) {
     elements.trendBucketSize.addEventListener("change", () => {
       appState.trendBucketMinutes = Number(elements.trendBucketSize.value) || 15;
+      appState.selectedTrendBucketKey = null;
       drawTrendGraph();
     });
+  }
+  if (elements.trendGraphCanvas) {
+    elements.trendGraphCanvas.addEventListener("click", handleTrendGraphPointSelection);
+    elements.trendGraphCanvas.addEventListener("touchend", (event) => {
+      event.preventDefault();
+      handleTrendGraphPointSelection(event);
+    }, { passive: false });
   }
   if (elements.resetRunBtn) {
     elements.resetRunBtn.addEventListener("click", (event) => {

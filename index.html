@@ -221,6 +221,14 @@
             <option value="30">30 min</option>
           </select>
         </div>
+        <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
+          <div>Blue: Avg cycle (shear + catch)</div>
+          <div>Green: Avg catch</div>
+          <div>Orange: Target cycle</div>
+          <div>X-axis: minutes into run, Y-axis: seconds per sheep</div>
+        </div>
+        <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg cycle 0.000s • Target 0.000s • Set target for pace comparison.</div>
+        <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
         <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
         <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
       </div>
