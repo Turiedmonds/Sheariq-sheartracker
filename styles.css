@@ -30,7 +30,7 @@ body {
 
 .dashboard {
   display: grid;
-  gap: 0.8rem;
+  gap: 1.2rem;
   padding: 0.8rem;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
@@ -272,6 +272,16 @@ button:disabled {
 
 .table-wrap {
   overflow-x: auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  max-height: clamp(220px, 35vh, 520px);
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: #f9fafb;
+  z-index: 1;
 }
 
 table {
