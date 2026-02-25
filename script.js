@@ -1,5 +1,7 @@
 const CONNECTION_STORAGE_KEY = "sheariq.connectionSettings";
 const SAVED_FARMS_STORAGE_KEY = "sheariq.savedFarms";
+const PANEL_ORDER_STORAGE_KEY = "sheariq.panelOrder";
+const PANEL_COLLAPSED_STORAGE_KEY = "sheariq.panelCollapsed";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -45,7 +47,11 @@ const appState = {
   paused: false,
   pauseStartedAtMs: null,
   totalPausedMs: 0,
-  savedFarms: []
+  savedFarms: [],
+  panelCollapsed: {},
+  draggedPanelId: null,
+  resetModalOpen: false,
+  resetModalReturnFocusEl: null
 };
 
 const elements = {
@@ -85,8 +91,14 @@ const elements = {
   simulationControls: document.getElementById("simulationControls"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
-  farmOptions: document.getElementById("farmOptions"),
-  savedFarmsList: document.getElementById("savedFarmsList")
+  farmDropdown: document.getElementById("farmDropdown"),
+  farmDropdownToggle: document.getElementById("farmDropdownToggle"),
+  farmDropdownMenu: document.getElementById("farmDropdownMenu"),
+  dashboardPanels: document.getElementById("dashboardPanels"),
+  resetModalOverlay: document.getElementById("resetModalOverlay"),
+  resetModalDialog: document.querySelector("#resetModalOverlay .modal-dialog"),
+  confirmResetBtn: document.getElementById("confirmResetBtn"),
+  cancelResetBtn: document.getElementById("cancelResetBtn")
 };
 
 function isDashboardPage() {
@@ -178,47 +190,62 @@ function removeSavedFarm(name) {
   }
 
   persistSavedFarms();
-  renderSavedFarms();
+  renderFarmDropdown();
 }
 
-function renderSavedFarms() {
-  if (elements.farmOptions) {
-    elements.farmOptions.innerHTML = "";
-    appState.savedFarms.forEach((farm) => {
-      const option = document.createElement("option");
-      option.value = farm;
-      elements.farmOptions.appendChild(option);
-    });
-  }
+function getFilteredSavedFarms() {
+  if (!elements.farmInput) return appState.savedFarms;
+  const term = normalizeFarmName(elements.farmInput.value).toLowerCase();
+  if (!term) return appState.savedFarms;
+  return appState.savedFarms.filter((farm) => farm.toLowerCase().includes(term));
+}
 
-  if (!elements.savedFarmsList) return;
-  elements.savedFarmsList.innerHTML = "";
+function closeFarmDropdown() {
+  if (!elements.farmDropdownMenu || !elements.farmDropdownToggle) return;
+  elements.farmDropdownMenu.hidden = true;
+  elements.farmDropdownToggle.setAttribute("aria-expanded", "false");
+}
 
-  if (!appState.savedFarms.length) {
+function openFarmDropdown() {
+  if (!elements.farmDropdownMenu || !elements.farmDropdownToggle) return;
+  renderFarmDropdown();
+  elements.farmDropdownMenu.hidden = false;
+  elements.farmDropdownToggle.setAttribute("aria-expanded", "true");
+}
+
+function renderFarmDropdown() {
+  if (!elements.farmDropdownMenu) return;
+  elements.farmDropdownMenu.innerHTML = "";
+
+  const farms = getFilteredSavedFarms();
+  if (!farms.length) {
     const empty = document.createElement("div");
-    empty.className = "saved-farms-empty";
-    empty.textContent = "No saved farms yet.";
-    elements.savedFarmsList.appendChild(empty);
+    empty.className = "farm-dropdown-empty";
+    empty.textContent = "No saved farms.";
+    elements.farmDropdownMenu.appendChild(empty);
     return;
   }
 
-  appState.savedFarms.forEach((farm) => {
-    const item = document.createElement("span");
-    item.className = "saved-farm-pill";
+  farms.forEach((farm) => {
+    const row = document.createElement("div");
+    row.className = "farm-dropdown-item";
 
-    const name = document.createElement("span");
-    name.textContent = farm;
+    const selectBtn = document.createElement("button");
+    selectBtn.type = "button";
+    selectBtn.className = "farm-select-btn";
+    selectBtn.dataset.farmName = farm;
+    selectBtn.textContent = farm;
 
-    const removeBtn = document.createElement("button");
-    removeBtn.type = "button";
-    removeBtn.className = "saved-farm-delete";
-    removeBtn.dataset.farmName = farm;
-    removeBtn.setAttribute("aria-label", `Delete ${farm}`);
-    removeBtn.textContent = "✕";
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.className = "farm-delete-btn";
+    deleteBtn.dataset.farmName = farm;
+    deleteBtn.textContent = "✕";
+    deleteBtn.setAttribute("aria-label", `Delete ${farm}`);
 
-    item.appendChild(name);
-    item.appendChild(removeBtn);
-    elements.savedFarmsList.appendChild(item);
+    row.appendChild(selectBtn);
+    row.appendChild(deleteBtn);
+    elements.farmDropdownMenu.appendChild(row);
   });
 }
 
@@ -226,7 +253,7 @@ function saveFarmFromInput() {
   if (!elements.farmInput) return;
   const changed = addSavedFarm(elements.farmInput.value);
   if (changed) {
-    renderSavedFarms();
+    renderFarmDropdown();
   }
 }
 
@@ -344,9 +371,6 @@ function stopRun() {
 
 function resetRun() {
   if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus || !elements.blockMinutes) return;
-  const ok = window.confirm("Reset run data? This will clear sheep log and timers.");
-  if (!ok) return;
-
   resetRunState();
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -784,7 +808,14 @@ function setPaused(paused) {
     stopLiveAndStatsLoops();
   } else if (isDashboardPage()) {
     if (appState.pauseStartedAtMs !== null) {
-      appState.totalPausedMs += Math.max(Date.now() - appState.pauseStartedAtMs, 0);
+      const pauseDurationMs = Math.max(Date.now() - appState.pauseStartedAtMs, 0);
+      appState.totalPausedMs += pauseDurationMs;
+      if (appState.currentCycle.shearStart) {
+        appState.currentCycle.shearStart += pauseDurationMs;
+      }
+      if (appState.currentCycle.catchStart) {
+        appState.currentCycle.catchStart += pauseDurationMs;
+      }
       appState.pauseStartedAtMs = null;
     }
     startPollingLoop();
@@ -802,6 +833,91 @@ function setPaused(paused) {
 function togglePauseRun() {
   if (!appState.runActive) return;
   setPaused(!appState.paused);
+}
+
+function getPanelElements() {
+  if (!elements.dashboardPanels) return [];
+  return Array.from(elements.dashboardPanels.querySelectorAll(".panel[id]"));
+}
+
+function persistPanelOrder() {
+  const order = getPanelElements().map((panel) => panel.id);
+  localStorage.setItem(PANEL_ORDER_STORAGE_KEY, JSON.stringify(order));
+}
+
+function loadPanelState() {
+  try {
+    const storedOrder = JSON.parse(localStorage.getItem(PANEL_ORDER_STORAGE_KEY) || "[]");
+    if (Array.isArray(storedOrder) && elements.dashboardPanels) {
+      const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
+      storedOrder.forEach((id) => {
+        const panel = byId.get(id);
+        if (panel) elements.dashboardPanels.appendChild(panel);
+      });
+    }
+  } catch (error) {
+    console.debug("Failed to load panel order", error);
+  }
+
+  try {
+    const collapsed = JSON.parse(localStorage.getItem(PANEL_COLLAPSED_STORAGE_KEY) || "{}");
+    appState.panelCollapsed = collapsed && typeof collapsed === "object" ? collapsed : {};
+  } catch (error) {
+    appState.panelCollapsed = {};
+    console.debug("Failed to load panel collapsed state", error);
+  }
+}
+
+function persistPanelCollapsed() {
+  localStorage.setItem(PANEL_COLLAPSED_STORAGE_KEY, JSON.stringify(appState.panelCollapsed));
+}
+
+function applyPanelState() {
+  getPanelElements().forEach((panel) => {
+    const collapsed = Boolean(appState.panelCollapsed[panel.id]);
+    panel.classList.toggle("collapsed", collapsed);
+    const collapseBtn = panel.querySelector(".panel-collapse");
+    if (collapseBtn) {
+      collapseBtn.setAttribute("aria-expanded", String(!collapsed));
+      collapseBtn.textContent = collapsed ? "+" : "−";
+    }
+  });
+}
+
+function movePanel(panelId, direction) {
+  const panels = getPanelElements();
+  const index = panels.findIndex((panel) => panel.id === panelId);
+  if (index < 0) return;
+  const nextIndex = index + direction;
+  if (nextIndex < 0 || nextIndex >= panels.length || !elements.dashboardPanels) return;
+  const target = panels[nextIndex];
+  const current = panels[index];
+
+  if (direction < 0) {
+    elements.dashboardPanels.insertBefore(current, target);
+  } else {
+    elements.dashboardPanels.insertBefore(target, current);
+  }
+
+  persistPanelOrder();
+}
+
+function openResetModal(triggerEl) {
+  if (!elements.resetModalOverlay || !elements.resetModalDialog || !elements.confirmResetBtn) return;
+  appState.resetModalOpen = true;
+  appState.resetModalReturnFocusEl = triggerEl || null;
+  elements.resetModalOverlay.hidden = false;
+  elements.resetModalDialog.focus();
+}
+
+function closeResetModal() {
+  if (!elements.resetModalOverlay) return;
+  appState.resetModalOpen = false;
+  elements.resetModalOverlay.hidden = true;
+  if (appState.resetModalReturnFocusEl instanceof HTMLElement) {
+    appState.resetModalReturnFocusEl.focus();
+  }
+  appState.resetModalReturnFocusEl = null;
 }
 
 function applyConnectionSettingsFromUI() {
@@ -851,25 +967,89 @@ function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
-  if (elements.resetRunBtn) elements.resetRunBtn.addEventListener("click", resetRun);
+  if (elements.resetRunBtn) {
+    elements.resetRunBtn.addEventListener("click", (event) => {
+      openResetModal(event.currentTarget);
+    });
+  }
 
+  if (elements.confirmResetBtn) {
+    elements.confirmResetBtn.addEventListener("click", () => {
+      resetRun();
+      closeResetModal();
+    });
+  }
 
-  if (elements.farmInput) {
-    elements.farmInput.addEventListener("blur", saveFarmFromInput);
-    elements.farmInput.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        saveFarmFromInput();
+  if (elements.cancelResetBtn) {
+    elements.cancelResetBtn.addEventListener("click", closeResetModal);
+  }
+
+  if (elements.resetModalOverlay) {
+    elements.resetModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.resetModalOverlay) {
+        closeResetModal();
       }
     });
   }
 
-  if (elements.savedFarmsList) {
-    elements.savedFarmsList.addEventListener("click", (event) => {
-      const target = event.target;
-      if (!(target instanceof HTMLElement) || !target.classList.contains("saved-farm-delete")) return;
-      removeSavedFarm(target.dataset.farmName || "");
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && appState.resetModalOpen) {
+      closeResetModal();
+    }
+  });
+
+  if (elements.farmInput) {
+    elements.farmInput.addEventListener("focus", openFarmDropdown);
+    elements.farmInput.addEventListener("input", () => {
+      renderFarmDropdown();
+      if (elements.farmDropdownMenu?.hidden) openFarmDropdown();
+    });
+    elements.farmInput.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        saveFarmFromInput();
+      }, 80);
+    });
+    elements.farmInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        saveFarmFromInput();
+        closeFarmDropdown();
+      }
     });
   }
+
+  if (elements.farmDropdownToggle) {
+    elements.farmDropdownToggle.addEventListener("click", () => {
+      if (elements.farmDropdownMenu?.hidden) {
+        openFarmDropdown();
+      } else {
+        closeFarmDropdown();
+      }
+    });
+  }
+
+  if (elements.farmDropdownMenu) {
+    elements.farmDropdownMenu.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const farmName = target.dataset.farmName || "";
+      if (target.classList.contains("farm-select-btn")) {
+        if (elements.farmInput) elements.farmInput.value = farmName;
+        saveFarmFromInput();
+        closeFarmDropdown();
+      } else if (target.classList.contains("farm-delete-btn")) {
+        removeSavedFarm(farmName);
+      }
+    });
+  }
+
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Node) || !elements.farmDropdown) return;
+    if (!elements.farmDropdown.contains(target)) {
+      closeFarmDropdown();
+    }
+  });
 
   if (elements.runType && elements.customHours) {
     elements.runType.addEventListener("change", () => {
@@ -915,6 +1095,62 @@ function bindEvents() {
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
+
+  getPanelElements().forEach((panel) => {
+    const header = panel.querySelector(".panel-header");
+    const collapseBtn = panel.querySelector(".panel-collapse");
+    const moveUpBtn = panel.querySelector(".panel-move-up");
+    const moveDownBtn = panel.querySelector(".panel-move-down");
+
+    if (collapseBtn) {
+      collapseBtn.addEventListener("click", () => {
+        const next = !panel.classList.contains("collapsed");
+        panel.classList.toggle("collapsed", next);
+        appState.panelCollapsed[panel.id] = next;
+        persistPanelCollapsed();
+        applyPanelState();
+      });
+    }
+
+    if (moveUpBtn) moveUpBtn.addEventListener("click", () => movePanel(panel.id, -1));
+    if (moveDownBtn) moveDownBtn.addEventListener("click", () => movePanel(panel.id, 1));
+
+    if (header) {
+      header.addEventListener("dragstart", () => {
+        appState.draggedPanelId = panel.id;
+      });
+    }
+
+    panel.addEventListener("dragover", (event) => {
+      event.preventDefault();
+      panel.classList.add("drag-over");
+    });
+
+    panel.addEventListener("dragleave", () => {
+      panel.classList.remove("drag-over");
+    });
+
+    panel.addEventListener("drop", (event) => {
+      event.preventDefault();
+      panel.classList.remove("drag-over");
+      const dragged = appState.draggedPanelId ? document.getElementById(appState.draggedPanelId) : null;
+      if (!dragged || dragged === panel || !elements.dashboardPanels) return;
+      const panels = getPanelElements();
+      const draggedIdx = panels.findIndex((item) => item === dragged);
+      const dropIdx = panels.findIndex((item) => item === panel);
+      if (draggedIdx < dropIdx) {
+        elements.dashboardPanels.insertBefore(dragged, panel.nextElementSibling);
+      } else {
+        elements.dashboardPanels.insertBefore(dragged, panel);
+      }
+      persistPanelOrder();
+    });
+  });
+
+  document.addEventListener("dragend", () => {
+    appState.draggedPanelId = null;
+    getPanelElements().forEach((panel) => panel.classList.remove("drag-over"));
+  });
 }
 
 function startRealtimeLoops() {
@@ -926,9 +1162,11 @@ function startRealtimeLoops() {
 function initialize() {
   loadConnectionSettings();
   loadSavedFarms();
+  loadPanelState();
   updateConnectionInputs();
   bindEvents();
-  renderSavedFarms();
+  applyPanelState();
+  renderFarmDropdown();
 
   if (elements.customHours && elements.runType) {
     elements.customHours.disabled = elements.runType.value !== "custom";
