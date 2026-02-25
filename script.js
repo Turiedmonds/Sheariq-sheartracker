@@ -912,6 +912,13 @@ function formatDeltaPlain(delta) {
   return `${sign}${Math.abs(delta).toFixed(3)}s`;
 }
 
+function formatTrendDelta(delta) {
+  const absDelta = Math.abs(Number.isFinite(delta) ? delta : 0).toFixed(3);
+  if (delta > 0) return `${absDelta}s slower per sheep`;
+  if (delta < 0) return `${absDelta}s faster per sheep`;
+  return `${absDelta}s on pace per sheep`;
+}
+
 function formatClockHHMM(timestamp) {
   if (!Number.isFinite(timestamp)) return "--:--";
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
@@ -1040,8 +1047,8 @@ function updateTrendFlags() {
         <div class="trend-flag-title">${title}</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${meta.windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">(Δ ${formatDeltaPlain(cycleDelta)}/sheep)</span></div>
-          <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">(Δ ${formatDeltaPlain(catchDelta)})</span></div>
+          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
+          <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">${formatTrendDelta(catchDelta)}</span></div>
         </div>
       </div>
     `;
@@ -1059,7 +1066,7 @@ function updateTrendFlags() {
           <div class="trend-flag-title">Sustained behind</div>
           <div class="trend-flag-meta">Sheep ${lastMeta.sheepStart}–${lastMeta.sheepEnd} • ${lastMeta.timeStart}–${lastMeta.timeEnd} • Window: last ${windowSize}</div>
           <div class="trend-flag-lines">
-            <div><span class="k">Catch-to-release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">(Δ ${formatDeltaPlain(avgLast5Cycle - requiredCycle)}/sheep)</span></div>
+            <div><span class="k">Catch-to-release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
             <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgLast5Catch)}</span> <span class="d neutral">(all 5 above target cycle)</span></div>
           </div>
         </div>
@@ -1114,7 +1121,7 @@ function updateTrendFlags() {
         <div class="trend-flag-title">No trend warnings</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">(Δ ${formatDeltaPlain(delta)}/sheep)</span></div>
+          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
           <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgCatch)}</span></div>
         </div>
       </div>
