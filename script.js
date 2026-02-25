@@ -9,6 +9,9 @@ const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
 const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
 const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
 const PANEL_LAYOUT_STORAGE_KEY = "sheariq.panelLayout";
+const SNAP_TO_GRID_ENABLED_STORAGE_KEY = "sheariq.snapToGridEnabled";
+const SNAP_GRID_SIZE_STORAGE_KEY = "sheariq.snapGridSize";
+const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -90,6 +93,9 @@ const appState = {
   panelResize: null,
   layoutEditMode: false,
   panelLayout: { mode: "absolute", panels: {}, nextZ: 1 },
+  snapToGridEnabled: false,
+  snapGridSize: 10,
+  panelLocks: {},
   scrollLockCount: 0,
   sessionDate: ""
 };
@@ -159,7 +165,9 @@ const elements = {
   controlsDockToggle: document.getElementById("controlsDockToggle"),
   controlsDockReset: document.getElementById("controlsDockReset"),
   panelSim: document.getElementById("panel-sim"),
-  layoutEditModeToggle: document.getElementById("layoutEditModeToggle")
+  layoutEditModeToggle: document.getElementById("layoutEditModeToggle"),
+  snapToGridToggle: document.getElementById("snapToGridToggle"),
+  gridSizeSelect: document.getElementById("gridSizeSelect")
 };
 
 function parseStoredBoolean(rawValue, fallback = true) {
@@ -1526,6 +1534,49 @@ function loadPanelLayout() {
   }
 }
 
+function loadLayoutEditorSettings() {
+  appState.snapToGridEnabled = parseStoredBoolean(localStorage.getItem(SNAP_TO_GRID_ENABLED_STORAGE_KEY), false);
+  const storedGridSize = Number(localStorage.getItem(SNAP_GRID_SIZE_STORAGE_KEY));
+  appState.snapGridSize = [5, 10, 20].includes(storedGridSize) ? storedGridSize : 10;
+
+  try {
+    const storedLocks = JSON.parse(localStorage.getItem(PANEL_LOCKS_STORAGE_KEY) || "{}");
+    appState.panelLocks = storedLocks && typeof storedLocks === "object" ? storedLocks : {};
+  } catch (error) {
+    appState.panelLocks = {};
+    console.debug("Failed to load panel locks", error);
+  }
+}
+
+function persistPanelLocks() {
+  localStorage.setItem(PANEL_LOCKS_STORAGE_KEY, JSON.stringify(appState.panelLocks));
+}
+
+function isPanelLocked(panelId) {
+  return Boolean(appState.panelLocks[panelId]);
+}
+
+function setPanelLocked(panelId, locked) {
+  appState.panelLocks[panelId] = Boolean(locked);
+  persistPanelLocks();
+  applyPanelLayout();
+}
+
+function snapValue(value) {
+  if (!appState.snapToGridEnabled) return value;
+  const grid = Math.max(Number(appState.snapGridSize) || 10, 1);
+  return Math.round(value / grid) * grid;
+}
+
+function snapLayoutItem(layoutItem) {
+  if (!appState.snapToGridEnabled || !layoutItem) return layoutItem;
+  if (Number.isFinite(layoutItem.x)) layoutItem.x = snapValue(layoutItem.x);
+  if (Number.isFinite(layoutItem.y)) layoutItem.y = snapValue(layoutItem.y);
+  if (Number.isFinite(layoutItem.width)) layoutItem.width = Math.max(snapValue(layoutItem.width), 260);
+  if (Number.isFinite(layoutItem.height)) layoutItem.height = Math.max(snapValue(layoutItem.height), 130);
+  return layoutItem;
+}
+
 function persistPanelLayout() {
   localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify({
     mode: "absolute",
@@ -1610,8 +1661,11 @@ function updateDashboardCanvasSize() {
 
 function applyPanelLayout() {
   document.body.classList.toggle("layout-edit-on", appState.layoutEditMode);
+  if (elements.snapToGridToggle) elements.snapToGridToggle.checked = appState.snapToGridEnabled;
+  if (elements.gridSizeSelect) elements.gridSizeSelect.value = String(appState.snapGridSize);
 
   getPanelElements().forEach((panel) => {
+    updatePanelLockUI(panel);
     const item = appState.panelLayout.panels[panel.id];
     if (appState.layoutEditMode && item) {
       const layout = normalizePanelLayoutItem(item);
@@ -1662,6 +1716,7 @@ function setLayoutEditMode(enabled) {
 
 function startAbsolutePanelDrag(panel, header, startEvent) {
   if (!appState.layoutEditMode || !elements.dashboardPanels) return;
+  if (isPanelLocked(panel.id)) return;
   if (!(startEvent.target instanceof HTMLElement)) return;
   if (startEvent.target.closest("button, input, select, label, a, .resize-handle")) return;
   if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
@@ -1693,6 +1748,9 @@ function moveAbsolutePanelDrag(moveEvent) {
 
   panelLayout.x = drag.startLeft + (moveEvent.clientX - drag.startX);
   panelLayout.y = drag.startTop + (moveEvent.clientY - drag.startY);
+  const snappedPosition = snapLayoutItem({ x: panelLayout.x, y: panelLayout.y });
+  panelLayout.x = snappedPosition.x;
+  panelLayout.y = snappedPosition.y;
   clampLayoutItem(panelLayout);
 
   drag.panel.style.left = `${panelLayout.x}px`;
@@ -1714,6 +1772,7 @@ function endAbsolutePanelDrag(endEvent) {
 
 function startPanelResize(panel, handle, startEvent) {
   if (!appState.layoutEditMode) return;
+  if (isPanelLocked(panel.id)) return;
   if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
   const panelLayout = appState.panelLayout.panels[panel.id];
   if (!panelLayout) return;
@@ -1762,6 +1821,20 @@ function movePanelResize(moveEvent) {
   if (resize.dir.includes("n")) {
     height = resize.startHeight - dy;
     y = resize.startTop + dy;
+  }
+
+  if (appState.snapToGridEnabled) {
+    const snappedSize = snapLayoutItem({ width, height });
+    width = snappedSize.width;
+    height = snappedSize.height;
+    if (resize.dir.includes("w")) {
+      x = snapLayoutItem({ x: resize.startLeft + (resize.startWidth - width) }).x;
+      width = resize.startWidth + (resize.startLeft - x);
+    }
+    if (resize.dir.includes("n")) {
+      y = snapLayoutItem({ y: resize.startTop + (resize.startHeight - height) }).y;
+      height = resize.startHeight + (resize.startTop - y);
+    }
   }
 
   width = Math.max(width, 260);
@@ -2011,7 +2084,33 @@ function applyPanelState() {
   });
 }
 
+function ensurePanelLockButtons() {
+  getPanelElements().forEach((panel) => {
+    const actions = panel.querySelector(".panel-header-actions");
+    const collapseBtn = panel.querySelector(".panel-collapse");
+    if (!actions || !collapseBtn || actions.querySelector(".panel-lock-toggle")) return;
+    const lockBtn = document.createElement("button");
+    lockBtn.className = "panel-lock-toggle";
+    lockBtn.type = "button";
+    lockBtn.setAttribute("aria-label", "Toggle panel lock");
+    actions.insertBefore(lockBtn, collapseBtn);
+  });
+}
+
+function updatePanelLockUI(panel) {
+  const locked = isPanelLocked(panel.id);
+  panel.classList.toggle("panel-locked", locked);
+  const lockBtn = panel.querySelector(".panel-lock-toggle");
+  if (lockBtn) {
+    lockBtn.textContent = locked ? "🔒" : "🔓";
+    lockBtn.setAttribute("aria-pressed", String(locked));
+    lockBtn.setAttribute("aria-label", locked ? "Unlock panel" : "Lock panel");
+    lockBtn.title = locked ? "Unlock panel" : "Lock panel";
+  }
+}
+
 function movePanel(panelId, direction) {
+  if (isPanelLocked(panelId)) return;
   const panels = getPanelElements();
   const index = panels.findIndex((panel) => panel.id === panelId);
   if (index < 0) return;
@@ -2048,6 +2147,7 @@ function getPanelDropTarget(clientY, draggingPanel, placeholder) {
 
 function startPanelReorderDrag(panel, header, startEvent) {
   if (appState.layoutEditMode) return;
+  if (isPanelLocked(panel.id)) return;
   if (!elements.dashboardPanels || panel.id === "panel-sim" && appState.controlsDockEnabled) return;
   if (!(startEvent.target instanceof HTMLElement)) return;
   if (startEvent.target.closest("button, input, select, label, a")) return;
@@ -2100,6 +2200,7 @@ function endPanelReorderDrag(endEvent) {
 
 function startControlsDockDrag(startEvent) {
   if (!elements.panelSim || !appState.controlsDockEnabled || !(startEvent.target instanceof HTMLElement)) return;
+  if (isPanelLocked("panel-sim")) return;
   if (startEvent.target.closest("button, input, select, a")) return;
   if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
 
@@ -2115,6 +2216,7 @@ function startControlsDockDrag(startEvent) {
     captureEl
   };
   elements.panelSim.classList.add("panel-docked-dragging");
+  setLayoutScrollLock(true);
 }
 
 function moveControlsDockDrag(moveEvent) {
@@ -2137,6 +2239,7 @@ function endControlsDockDrag(endEvent) {
   elements.panelSim.classList.remove("panel-docked-dragging");
   persistControlsDockPosition();
   appState.controlsDockDrag = null;
+  setLayoutScrollLock(false);
 }
 
 function openResetModal(triggerEl) {
@@ -2381,6 +2484,23 @@ function bindEvents() {
       setLayoutEditMode(elements.layoutEditModeToggle.checked);
     });
   }
+  if (elements.snapToGridToggle) {
+    elements.snapToGridToggle.addEventListener("change", () => {
+      appState.snapToGridEnabled = elements.snapToGridToggle.checked;
+      localStorage.setItem(SNAP_TO_GRID_ENABLED_STORAGE_KEY, String(appState.snapToGridEnabled));
+      applyPanelLayout();
+      persistPanelLayout();
+    });
+  }
+  if (elements.gridSizeSelect) {
+    elements.gridSizeSelect.addEventListener("change", () => {
+      const nextGridSize = Number(elements.gridSizeSelect.value);
+      appState.snapGridSize = [5, 10, 20].includes(nextGridSize) ? nextGridSize : 10;
+      localStorage.setItem(SNAP_GRID_SIZE_STORAGE_KEY, String(appState.snapGridSize));
+      applyPanelLayout();
+      persistPanelLayout();
+    });
+  }
 
   getPanelElements().forEach((panel) => {
     attachResizeHandles(panel);
@@ -2388,6 +2508,7 @@ function bindEvents() {
     const collapseBtn = panel.querySelector(".panel-collapse");
     const moveUpBtn = panel.querySelector(".panel-move-up");
     const moveDownBtn = panel.querySelector(".panel-move-down");
+    const lockBtn = panel.querySelector(".panel-lock-toggle");
 
     if (collapseBtn) {
       collapseBtn.addEventListener("click", () => {
@@ -2401,6 +2522,11 @@ function bindEvents() {
 
     if (moveUpBtn) moveUpBtn.addEventListener("click", () => movePanel(panel.id, -1));
     if (moveDownBtn) moveDownBtn.addEventListener("click", () => movePanel(panel.id, 1));
+    if (lockBtn) {
+      lockBtn.addEventListener("click", () => {
+        setPanelLocked(panel.id, !isPanelLocked(panel.id));
+      });
+    }
 
     if (header) {
       panel.draggable = false;
@@ -2464,10 +2590,12 @@ function initialize() {
   loadPanelState();
   loadPanelSizes();
   loadPanelLayout();
+  loadLayoutEditorSettings();
   loadAutosaveSettings();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
+  ensurePanelLockButtons();
   bindEvents();
   applyPanelState();
   applyPanelSizes();
