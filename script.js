@@ -8,6 +8,7 @@ const SESSION_DATE_STORAGE_KEY = "sheariq.sessionDate";
 const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
 const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
 const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
+const PANEL_LAYOUT_STORAGE_KEY = "sheariq.panelLayout";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -85,6 +86,11 @@ const appState = {
   controlsDockPos: { x: 20, y: 90 },
   pointerPanelDrag: null,
   controlsDockDrag: null,
+  absolutePanelDrag: null,
+  panelResize: null,
+  layoutEditMode: false,
+  panelLayout: { mode: "absolute", panels: {}, nextZ: 1 },
+  scrollLockCount: 0,
   sessionDate: ""
 };
 
@@ -152,7 +158,8 @@ const elements = {
   autosaveStatus: document.getElementById("autosaveStatus"),
   controlsDockToggle: document.getElementById("controlsDockToggle"),
   controlsDockReset: document.getElementById("controlsDockReset"),
-  panelSim: document.getElementById("panel-sim")
+  panelSim: document.getElementById("panel-sim"),
+  layoutEditModeToggle: document.getElementById("layoutEditModeToggle")
 };
 
 function parseStoredBoolean(rawValue, fallback = true) {
@@ -1504,43 +1511,310 @@ function applyPanelSizes() {
   });
 }
 
-function attachResizeHandle(panel) {
-  if (panel.querySelector('.panel-resize-handle')) return;
-  const handle = document.createElement('div');
-  handle.className = 'panel-resize-handle';
-  panel.appendChild(handle);
+function loadPanelLayout() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PANEL_LAYOUT_STORAGE_KEY) || "null");
+    if (!stored || typeof stored !== "object") return;
+    appState.panelLayout = {
+      mode: stored.mode === "absolute" ? "absolute" : "absolute",
+      panels: stored.panels && typeof stored.panels === "object" ? stored.panels : {},
+      nextZ: Number.isFinite(stored.nextZ) ? stored.nextZ : 1
+    };
+    appState.layoutEditMode = stored.layoutEditMode === true;
+  } catch (error) {
+    console.debug("Failed to load panel layout", error);
+  }
+}
 
-  const startResize = (event) => {
-    event.preventDefault();
-    const isTouch = event.type.startsWith('touch');
-    const point = isTouch ? event.touches[0] : event;
-    const startX = point.clientX;
-    const startY = point.clientY;
-    const startW = panel.offsetWidth;
-    const startH = panel.offsetHeight;
-    const onMove = (moveEvent) => {
-      const movePoint = moveEvent.type.startsWith('touch') ? moveEvent.touches[0] : moveEvent;
-      const w = Math.max(startW + (movePoint.clientX - startX), 260);
-      const h = Math.max(startH + (movePoint.clientY - startY), 130);
-      panel.style.width = `${w}px`;
-      panel.style.height = `${h}px`;
-    };
-    const onEnd = () => {
-      appState.panelSizes[panel.id] = { width: panel.offsetWidth, height: panel.offsetHeight };
-      persistPanelSizes();
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onEnd);
-      window.removeEventListener('touchmove', onMove);
-      window.removeEventListener('touchend', onEnd);
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onEnd);
-    window.addEventListener('touchmove', onMove, { passive: false });
-    window.addEventListener('touchend', onEnd);
+function persistPanelLayout() {
+  localStorage.setItem(PANEL_LAYOUT_STORAGE_KEY, JSON.stringify({
+    mode: "absolute",
+    layoutEditMode: appState.layoutEditMode,
+    nextZ: appState.panelLayout.nextZ,
+    panels: appState.panelLayout.panels
+  }));
+}
+
+function getDashboardRect() {
+  if (!elements.dashboardPanels) {
+    return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+  }
+  const rect = elements.dashboardPanels.getBoundingClientRect();
+  return {
+    left: rect.left,
+    top: rect.top,
+    width: Math.max(rect.width, window.innerWidth - rect.left),
+    height: Math.max(rect.height, window.innerHeight - rect.top)
   };
+}
 
-  handle.addEventListener('mousedown', startResize);
-  handle.addEventListener('touchstart', startResize, { passive: false });
+function normalizePanelLayoutItem(layoutItem, fallbackX = 8, fallbackY = 8, fallbackW = 280, fallbackH = 130) {
+  return {
+    x: Number.isFinite(layoutItem?.x) ? layoutItem.x : fallbackX,
+    y: Number.isFinite(layoutItem?.y) ? layoutItem.y : fallbackY,
+    width: Math.max(Number.isFinite(layoutItem?.width) ? layoutItem.width : fallbackW, 260),
+    height: Math.max(Number.isFinite(layoutItem?.height) ? layoutItem.height : fallbackH, 130),
+    z: Number.isFinite(layoutItem?.z) ? layoutItem.z : 1
+  };
+}
+
+function clampLayoutItem(layoutItem) {
+  const dashboardRect = getDashboardRect();
+  const maxX = Math.max(dashboardRect.width - layoutItem.width - 4, 4);
+  const maxY = Math.max(dashboardRect.height - layoutItem.height - 4, 4);
+  layoutItem.x = Math.min(Math.max(layoutItem.x, 4), maxX);
+  layoutItem.y = Math.min(Math.max(layoutItem.y, 4), maxY);
+}
+
+function ensureInitialPanelLayout() {
+  const panelIds = getPanelElements().map((panel) => panel.id);
+  const hasAllPanels = panelIds.every((id) => appState.panelLayout.panels[id]);
+  if (hasAllPanels) return;
+
+  const dashboardRect = getDashboardRect();
+  let nextZ = appState.panelLayout.nextZ || 1;
+  getPanelElements().forEach((panel, index) => {
+    if (appState.panelLayout.panels[panel.id]) {
+      nextZ = Math.max(nextZ, Number(appState.panelLayout.panels[panel.id].z) || 1);
+      return;
+    }
+    const rect = panel.getBoundingClientRect();
+    const item = normalizePanelLayoutItem({
+      x: rect.left - dashboardRect.left,
+      y: rect.top - dashboardRect.top,
+      width: rect.width || panel.offsetWidth,
+      height: rect.height || panel.offsetHeight,
+      z: nextZ + index
+    });
+    clampLayoutItem(item);
+    appState.panelLayout.panels[panel.id] = item;
+  });
+  appState.panelLayout.nextZ = nextZ + panelIds.length + 1;
+  persistPanelLayout();
+}
+
+function updateDashboardCanvasSize() {
+  if (!elements.dashboardPanels || !appState.layoutEditMode) return;
+  let maxRight = 0;
+  let maxBottom = 0;
+  getPanelElements().forEach((panel) => {
+    if (panel.id === "panel-sim" && appState.controlsDockEnabled) return;
+    const layout = appState.panelLayout.panels[panel.id];
+    if (!layout) return;
+    maxRight = Math.max(maxRight, layout.x + layout.width);
+    maxBottom = Math.max(maxBottom, layout.y + layout.height);
+  });
+  elements.dashboardPanels.style.minHeight = `${Math.max(window.innerHeight, maxBottom + 20)}px`;
+  elements.dashboardPanels.style.minWidth = `${Math.max(window.innerWidth - 16, maxRight + 20)}px`;
+}
+
+function applyPanelLayout() {
+  document.body.classList.toggle("layout-edit-on", appState.layoutEditMode);
+
+  getPanelElements().forEach((panel) => {
+    const item = appState.panelLayout.panels[panel.id];
+    if (appState.layoutEditMode && item) {
+      const layout = normalizePanelLayoutItem(item);
+      appState.panelLayout.panels[panel.id] = layout;
+      panel.style.left = `${layout.x}px`;
+      panel.style.top = `${layout.y}px`;
+      panel.style.width = `${layout.width}px`;
+      panel.style.height = `${layout.height}px`;
+      panel.style.zIndex = String(layout.z || 1);
+    } else {
+      if (!(panel.id === "panel-sim" && appState.controlsDockEnabled)) {
+        panel.style.left = "";
+        panel.style.top = "";
+      }
+      panel.style.zIndex = "";
+    }
+  });
+
+  if (!appState.layoutEditMode && elements.dashboardPanels) {
+    elements.dashboardPanels.style.minHeight = "";
+    elements.dashboardPanels.style.minWidth = "";
+  }
+
+  updateDashboardCanvasSize();
+}
+
+function setLayoutScrollLock(locked) {
+  appState.scrollLockCount += locked ? 1 : -1;
+  appState.scrollLockCount = Math.max(appState.scrollLockCount, 0);
+  document.body.classList.toggle("layout-scroll-lock", appState.scrollLockCount > 0);
+}
+
+function bringPanelToFront(panel) {
+  const panelLayout = appState.panelLayout.panels[panel.id];
+  if (!panelLayout) return;
+  appState.panelLayout.nextZ = Math.max(appState.panelLayout.nextZ + 1, (panelLayout.z || 1) + 1);
+  panelLayout.z = appState.panelLayout.nextZ;
+  panel.style.zIndex = String(panelLayout.z);
+}
+
+function setLayoutEditMode(enabled) {
+  appState.layoutEditMode = Boolean(enabled);
+  if (appState.layoutEditMode) ensureInitialPanelLayout();
+  applyPanelLayout();
+  if (elements.layoutEditModeToggle) elements.layoutEditModeToggle.checked = appState.layoutEditMode;
+  persistPanelLayout();
+}
+
+function startAbsolutePanelDrag(panel, header, startEvent) {
+  if (!appState.layoutEditMode || !elements.dashboardPanels) return;
+  if (!(startEvent.target instanceof HTMLElement)) return;
+  if (startEvent.target.closest("button, input, select, label, a, .resize-handle")) return;
+  if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
+
+  startEvent.preventDefault();
+  const panelLayout = appState.panelLayout.panels[panel.id];
+  if (!panelLayout) return;
+  bringPanelToFront(panel);
+  header.setPointerCapture(startEvent.pointerId);
+  setLayoutScrollLock(true);
+  appState.absolutePanelDrag = {
+    panel,
+    header,
+    pointerId: startEvent.pointerId,
+    startX: startEvent.clientX,
+    startY: startEvent.clientY,
+    startLeft: panelLayout.x,
+    startTop: panelLayout.y
+  };
+  panel.classList.add("panel-dragging");
+}
+
+function moveAbsolutePanelDrag(moveEvent) {
+  const drag = appState.absolutePanelDrag;
+  if (!drag || moveEvent.pointerId !== drag.pointerId) return;
+  moveEvent.preventDefault();
+  const panelLayout = appState.panelLayout.panels[drag.panel.id];
+  if (!panelLayout) return;
+
+  panelLayout.x = drag.startLeft + (moveEvent.clientX - drag.startX);
+  panelLayout.y = drag.startTop + (moveEvent.clientY - drag.startY);
+  clampLayoutItem(panelLayout);
+
+  drag.panel.style.left = `${panelLayout.x}px`;
+  drag.panel.style.top = `${panelLayout.y}px`;
+  updateDashboardCanvasSize();
+}
+
+function endAbsolutePanelDrag(endEvent) {
+  const drag = appState.absolutePanelDrag;
+  if (!drag || endEvent.pointerId !== drag.pointerId) return;
+  if (drag.header.hasPointerCapture?.(drag.pointerId)) {
+    drag.header.releasePointerCapture(drag.pointerId);
+  }
+  drag.panel.classList.remove("panel-dragging");
+  appState.absolutePanelDrag = null;
+  setLayoutScrollLock(false);
+  persistPanelLayout();
+}
+
+function startPanelResize(panel, handle, startEvent) {
+  if (!appState.layoutEditMode) return;
+  if (startEvent.pointerType === "mouse" && startEvent.button !== 0) return;
+  const panelLayout = appState.panelLayout.panels[panel.id];
+  if (!panelLayout) return;
+
+  startEvent.preventDefault();
+  handle.setPointerCapture(startEvent.pointerId);
+  setLayoutScrollLock(true);
+  bringPanelToFront(panel);
+
+  appState.panelResize = {
+    panel,
+    handle,
+    pointerId: startEvent.pointerId,
+    dir: handle.dataset.dir || "se",
+    startX: startEvent.clientX,
+    startY: startEvent.clientY,
+    startLeft: panelLayout.x,
+    startTop: panelLayout.y,
+    startWidth: panelLayout.width,
+    startHeight: panelLayout.height
+  };
+}
+
+function movePanelResize(moveEvent) {
+  const resize = appState.panelResize;
+  if (!resize || moveEvent.pointerId !== resize.pointerId) return;
+  moveEvent.preventDefault();
+
+  const item = appState.panelLayout.panels[resize.panel.id];
+  if (!item) return;
+
+  const dx = moveEvent.clientX - resize.startX;
+  const dy = moveEvent.clientY - resize.startY;
+
+  let x = resize.startLeft;
+  let y = resize.startTop;
+  let width = resize.startWidth;
+  let height = resize.startHeight;
+
+  if (resize.dir.includes("e")) width = resize.startWidth + dx;
+  if (resize.dir.includes("s")) height = resize.startHeight + dy;
+  if (resize.dir.includes("w")) {
+    width = resize.startWidth - dx;
+    x = resize.startLeft + dx;
+  }
+  if (resize.dir.includes("n")) {
+    height = resize.startHeight - dy;
+    y = resize.startTop + dy;
+  }
+
+  width = Math.max(width, 260);
+  height = Math.max(height, 130);
+
+  if (resize.dir.includes("w")) {
+    x = resize.startLeft + (resize.startWidth - width);
+  }
+  if (resize.dir.includes("n")) {
+    y = resize.startTop + (resize.startHeight - height);
+  }
+
+  const dashboardRect = getDashboardRect();
+  x = Math.max(4, Math.min(x, Math.max(dashboardRect.width - width - 4, 4)));
+  y = Math.max(4, Math.min(y, Math.max(dashboardRect.height - height - 4, 4)));
+
+  item.x = x;
+  item.y = y;
+  item.width = width;
+  item.height = height;
+
+  resize.panel.style.left = `${x}px`;
+  resize.panel.style.top = `${y}px`;
+  resize.panel.style.width = `${width}px`;
+  resize.panel.style.height = `${height}px`;
+  updateDashboardCanvasSize();
+}
+
+function endPanelResize(endEvent) {
+  const resize = appState.panelResize;
+  if (!resize || endEvent.pointerId !== resize.pointerId) return;
+  if (resize.handle.hasPointerCapture?.(resize.pointerId)) {
+    resize.handle.releasePointerCapture(resize.pointerId);
+  }
+  appState.panelResize = null;
+  setLayoutScrollLock(false);
+  persistPanelLayout();
+}
+
+function attachResizeHandles(panel) {
+  const dirs = ["nw", "ne", "sw", "se"];
+  dirs.forEach((dir) => {
+    if (panel.querySelector(`.resize-handle[data-dir="${dir}"]`)) return;
+    const handle = document.createElement("div");
+    handle.className = "resize-handle";
+    handle.dataset.dir = dir;
+    panel.appendChild(handle);
+
+    handle.addEventListener("pointerdown", (event) => startPanelResize(panel, handle, event));
+    handle.addEventListener("pointermove", movePanelResize);
+    handle.addEventListener("pointerup", endPanelResize);
+    handle.addEventListener("pointercancel", endPanelResize);
+  });
 }
 
 function getAutosavePayload() {
@@ -1570,6 +1844,8 @@ function getAutosavePayload() {
     },
     panelOrder: getPanelElements().map((panel) => panel.id),
     panelSizes: appState.panelSizes,
+    panelLayout: appState.panelLayout,
+    layoutEditMode: appState.layoutEditMode,
     savedAt: Date.now()
   };
 }
@@ -1649,6 +1925,7 @@ function setControlsDockEnabled(enabled) {
   appState.controlsDockEnabled = Boolean(enabled);
   localStorage.setItem(CONTROLS_DOCK_ENABLED_STORAGE_KEY, String(appState.controlsDockEnabled));
   updateControlsDockUI();
+  applyPanelLayout();
 }
 
 function resetControlsDockPosition() {
@@ -1683,9 +1960,21 @@ function loadLastSave() {
       });
     }
     appState.panelSizes = raw.panelSizes || appState.panelSizes;
+    if (raw.panelLayout && typeof raw.panelLayout === "object") {
+      appState.panelLayout = {
+        mode: raw.panelLayout.mode === "absolute" ? "absolute" : "absolute",
+        panels: raw.panelLayout.panels && typeof raw.panelLayout.panels === "object" ? raw.panelLayout.panels : appState.panelLayout.panels,
+        nextZ: Number.isFinite(raw.panelLayout.nextZ) ? raw.panelLayout.nextZ : appState.panelLayout.nextZ
+      };
+    }
+    if (raw.layoutEditMode === true || raw.layoutEditMode === false) {
+      appState.layoutEditMode = raw.layoutEditMode;
+    }
     if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
     applyPanelState();
     applyPanelSizes();
+    if (appState.layoutEditMode) ensureInitialPanelLayout();
+    applyPanelLayout();
     if (elements.runStatus) elements.runStatus.textContent = appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped';
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
@@ -1758,6 +2047,7 @@ function getPanelDropTarget(clientY, draggingPanel, placeholder) {
 }
 
 function startPanelReorderDrag(panel, header, startEvent) {
+  if (appState.layoutEditMode) return;
   if (!elements.dashboardPanels || panel.id === "panel-sim" && appState.controlsDockEnabled) return;
   if (!(startEvent.target instanceof HTMLElement)) return;
   if (startEvent.target.closest("button, input, select, label, a")) return;
@@ -1780,6 +2070,7 @@ function startPanelReorderDrag(panel, header, startEvent) {
 }
 
 function movePanelReorderDrag(moveEvent) {
+  if (appState.layoutEditMode) return;
   const drag = appState.pointerPanelDrag;
   if (!drag || moveEvent.pointerId !== drag.pointerId || !elements.dashboardPanels) return;
   moveEvent.preventDefault();
@@ -1793,6 +2084,7 @@ function movePanelReorderDrag(moveEvent) {
 }
 
 function endPanelReorderDrag(endEvent) {
+  if (appState.layoutEditMode) return;
   const drag = appState.pointerPanelDrag;
   if (!drag || endEvent.pointerId !== drag.pointerId || !elements.dashboardPanels) return;
 
@@ -2084,9 +2376,14 @@ function bindEvents() {
   if (elements.controlsDockReset) {
     elements.controlsDockReset.addEventListener("click", resetControlsDockPosition);
   }
+  if (elements.layoutEditModeToggle) {
+    elements.layoutEditModeToggle.addEventListener("change", () => {
+      setLayoutEditMode(elements.layoutEditModeToggle.checked);
+    });
+  }
 
   getPanelElements().forEach((panel) => {
-    attachResizeHandle(panel);
+    attachResizeHandles(panel);
     const header = panel.querySelector(".panel-header");
     const collapseBtn = panel.querySelector(".panel-collapse");
     const moveUpBtn = panel.querySelector(".panel-move-up");
@@ -2113,33 +2410,45 @@ function bindEvents() {
           startControlsDockDrag(event);
           return;
         }
+        if (appState.layoutEditMode) {
+          startAbsolutePanelDrag(panel, header, event);
+          return;
+        }
         startPanelReorderDrag(panel, header, event);
       });
       header.addEventListener("pointermove", (event) => {
         movePanelReorderDrag(event);
         moveControlsDockDrag(event);
+        moveAbsolutePanelDrag(event);
       });
       header.addEventListener("pointerup", (event) => {
         endPanelReorderDrag(event);
         endControlsDockDrag(event);
+        endAbsolutePanelDrag(event);
       });
       header.addEventListener("pointercancel", (event) => {
         endPanelReorderDrag(event);
         endControlsDockDrag(event);
+        endAbsolutePanelDrag(event);
       });
     }
   });
 
   window.addEventListener("resize", () => {
-    if (!appState.controlsDockEnabled) return;
-    const maxX = Math.max(window.innerWidth - (elements.panelSim?.offsetWidth || 0) - 8, 8);
-    const maxY = Math.max(window.innerHeight - (elements.panelSim?.offsetHeight || 0) - 8, 8);
-    appState.controlsDockPos = {
-      x: Math.min(appState.controlsDockPos.x, maxX),
-      y: Math.min(appState.controlsDockPos.y, maxY)
-    };
-    applyControlsDockPosition();
-    persistControlsDockPosition();
+    if (appState.controlsDockEnabled) {
+      const maxX = Math.max(window.innerWidth - (elements.panelSim?.offsetWidth || 0) - 8, 8);
+      const maxY = Math.max(window.innerHeight - (elements.panelSim?.offsetHeight || 0) - 8, 8);
+      appState.controlsDockPos = {
+        x: Math.min(appState.controlsDockPos.x, maxX),
+        y: Math.min(appState.controlsDockPos.y, maxY)
+      };
+      applyControlsDockPosition();
+      persistControlsDockPosition();
+    }
+    if (appState.layoutEditMode) {
+      updateDashboardCanvasSize();
+      persistPanelLayout();
+    }
   });
 }
 
@@ -2154,6 +2463,7 @@ function initialize() {
   loadSavedFarms();
   loadPanelState();
   loadPanelSizes();
+  loadPanelLayout();
   loadAutosaveSettings();
   initializeSessionDate();
   loadControlsDockSettings();
@@ -2161,6 +2471,8 @@ function initialize() {
   bindEvents();
   applyPanelState();
   applyPanelSizes();
+  ensureInitialPanelLayout();
+  applyPanelLayout();
   renderFarmDropdown();
 
   if (elements.customHours && elements.runType) {
@@ -2192,6 +2504,8 @@ function initialize() {
   updateTrendFlags();
   updateAutosaveUI();
   updateControlsDockUI();
+  if (elements.layoutEditModeToggle) elements.layoutEditModeToggle.checked = appState.layoutEditMode;
+  if (appState.layoutEditMode) applyPanelLayout();
   startDayClockLoop();
   startAutosaveLoop();
 
