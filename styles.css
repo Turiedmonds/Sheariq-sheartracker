@@ -311,6 +311,36 @@ td {
   border: 1px solid #d1d5db;
   background: #fff;
   margin-top: 0.6rem;
+  touch-action: manipulation;
+}
+
+.trend-legend {
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #dbe3ef;
+  background: #f8fbff;
+  color: #1f2937;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.trend-latest-summary {
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.trend-graph-tooltip {
+  margin-top: 0.5rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #94a3b8;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 0.88rem;
+  line-height: 1.45;
 }
 
 .scroll-list {
