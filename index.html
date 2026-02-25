@@ -36,9 +36,13 @@
       <h2 id="run-config-title">Run Configuration Panel</h2>
       <div class="form-grid">
         <label for="farmInput">Farm</label>
-        <input id="farmInput" type="text" placeholder="Enter farm name" />
+        <div>
+          <input id="farmInput" type="text" placeholder="Enter or select farm name" list="farmOptions" />
+          <datalist id="farmOptions"></datalist>
+          <div id="savedFarmsList" class="saved-items" aria-live="polite"></div>
+        </div>
 
-        <label for="runType">Run Type</label>
+        <label for="runType">Time System</label>
         <select id="runType">
           <option value="8">8hr</option>
           <option value="9">9hr</option>
@@ -51,10 +55,11 @@
         <label for="targetSheepInput">Target Sheep</label>
         <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
       </div>
-      <div class="button-row">
-        <button id="startRunBtn" type="button">Start Run</button>
-        <button id="stopRunBtn" type="button" disabled>Stop Run</button>
-        <button id="resetRunBtn" type="button">Reset Run</button>
+      <div class="button-row run-config-actions">
+        <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
+        <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
+        <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
+        <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
       </div>
     </section>
 

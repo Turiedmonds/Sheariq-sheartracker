@@ -95,6 +95,65 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.run-config-actions button {
+  color: #000000;
+}
+
+.btn-start {
+  background: #16a34a;
+  color: #ffffff !important;
+}
+
+.btn-stop {
+  background: #dc2626;
+  color: #ffffff !important;
+}
+
+.btn-pause {
+  background: #facc15;
+  color: #000000 !important;
+}
+
+.btn-reset {
+  background: #ffffff;
+  color: #000000 !important;
+  border: 1px solid #9ca3af;
+}
+
+.saved-items {
+  margin-top: 0.4rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.saved-farm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.85rem;
+}
+
+.saved-farm-delete {
+  width: auto;
+  border: 0;
+  background: transparent;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0;
+  line-height: 1;
+}
+
+.saved-farms-empty {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
 .status-box {
   margin-top: 0.6rem;
   padding: 0.6rem;

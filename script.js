@@ -1,4 +1,5 @@
 const CONNECTION_STORAGE_KEY = "sheariq.connectionSettings";
+const SAVED_FARMS_STORAGE_KEY = "sheariq.savedFarms";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -40,7 +41,9 @@ const appState = {
   lastResponseTimeMs: null,
   pollTimerId: null,
   liveTimerId: null,
-  statsTimerId: null
+  statsTimerId: null,
+  paused: false,
+  savedFarms: []
 };
 
 const elements = {
@@ -51,6 +54,7 @@ const elements = {
   targetSheepInput: document.getElementById("targetSheepInput"),
   startRunBtn: document.getElementById("startRunBtn"),
   stopRunBtn: document.getElementById("stopRunBtn"),
+  pauseRunBtn: document.getElementById("pauseRunBtn"),
   resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
   avgShear: document.getElementById("avgShear"),
@@ -78,7 +82,9 @@ const elements = {
   simulationBanner: document.getElementById("simulationBanner"),
   simulationControls: document.getElementById("simulationControls"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
-  simMotorOffBtn: document.getElementById("simMotorOffBtn")
+  simMotorOffBtn: document.getElementById("simMotorOffBtn"),
+  farmOptions: document.getElementById("farmOptions"),
+  savedFarmsList: document.getElementById("savedFarmsList")
 };
 
 function isDashboardPage() {
@@ -110,6 +116,111 @@ function sanitizePollInterval(value) {
   const ms = Number(value);
   if (!Number.isFinite(ms)) return DEFAULT_CONNECTION_SETTINGS.pollInterval;
   return Math.min(Math.max(Math.round(ms), 100), 5000);
+}
+
+function normalizeFarmName(value) {
+  return (value || "").trim();
+}
+
+function parseSavedFarmList(rawValue) {
+  if (!Array.isArray(rawValue)) return [];
+  const unique = [];
+  const seen = new Set();
+
+  rawValue.forEach((item) => {
+    const normalized = normalizeFarmName(typeof item === "string" ? item : "");
+    if (!normalized) return;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    unique.push(normalized);
+  });
+
+  return unique;
+}
+
+function loadSavedFarms() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SAVED_FARMS_STORAGE_KEY) || "[]");
+    appState.savedFarms = parseSavedFarmList(parsed);
+  } catch (error) {
+    appState.savedFarms = [];
+    console.debug("Failed to load saved farms", error);
+  }
+}
+
+function persistSavedFarms() {
+  localStorage.setItem(SAVED_FARMS_STORAGE_KEY, JSON.stringify(appState.savedFarms));
+}
+
+function addSavedFarm(name) {
+  const normalized = normalizeFarmName(name);
+  if (!normalized) return false;
+
+  const exists = appState.savedFarms.some((farm) => farm.toLowerCase() === normalized.toLowerCase());
+  if (exists) return false;
+
+  appState.savedFarms.push(normalized);
+  persistSavedFarms();
+  return true;
+}
+
+function removeSavedFarm(name) {
+  const normalized = normalizeFarmName(name).toLowerCase();
+  if (!normalized) return;
+
+  appState.savedFarms = appState.savedFarms.filter((farm) => farm.toLowerCase() !== normalized);
+  persistSavedFarms();
+  renderSavedFarms();
+}
+
+function renderSavedFarms() {
+  if (elements.farmOptions) {
+    elements.farmOptions.innerHTML = "";
+    appState.savedFarms.forEach((farm) => {
+      const option = document.createElement("option");
+      option.value = farm;
+      elements.farmOptions.appendChild(option);
+    });
+  }
+
+  if (!elements.savedFarmsList) return;
+  elements.savedFarmsList.innerHTML = "";
+
+  if (!appState.savedFarms.length) {
+    const empty = document.createElement("div");
+    empty.className = "saved-farms-empty";
+    empty.textContent = "No saved farms yet.";
+    elements.savedFarmsList.appendChild(empty);
+    return;
+  }
+
+  appState.savedFarms.forEach((farm) => {
+    const item = document.createElement("span");
+    item.className = "saved-farm-pill";
+
+    const name = document.createElement("span");
+    name.textContent = farm;
+
+    const removeBtn = document.createElement("button");
+    removeBtn.type = "button";
+    removeBtn.className = "saved-farm-delete";
+    removeBtn.dataset.farmName = farm;
+    removeBtn.setAttribute("aria-label", `Delete ${farm}`);
+    removeBtn.textContent = "✕";
+
+    item.appendChild(name);
+    item.appendChild(removeBtn);
+    elements.savedFarmsList.appendChild(item);
+  });
+}
+
+function saveFarmFromInput() {
+  if (!elements.farmInput) return;
+  const changed = addSavedFarm(elements.farmInput.value);
+  if (changed) {
+    renderSavedFarms();
+  }
 }
 
 function loadConnectionSettings() {
@@ -165,6 +276,7 @@ function resetRunState() {
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
+  appState.paused = false;
   calculateAverages();
 }
 
@@ -172,20 +284,25 @@ function startRun() {
   if (!elements.farmInput || !elements.targetSheepInput || !elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) {
     return;
   }
+
+  saveFarmFromInput();
+
   appState.runActive = true;
   appState.runStartTime = Date.now();
   appState.sheep = [];
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = appState.runStartTime;
-  appState.farm = elements.farmInput.value.trim();
+  appState.lastMotorState = null;
+  appState.farm = normalizeFarmName(elements.farmInput.value);
   appState.target.sheep = Math.max(Number(elements.targetSheepInput.value) || 0, 0);
   appState.target.runLengthSeconds = getRunLengthSeconds();
   appState.currentMotorDisplay = "OFF";
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
-  elements.runStatus.textContent = "Running";
+
+  setPaused(false);
 
   calculateAverages();
   updateStatsPanel();
@@ -203,8 +320,10 @@ function stopRun() {
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
-  elements.runStatus.textContent = "Stopped";
 
+  setPaused(false);
+  elements.runStatus.textContent = "Stopped";
+  updatePauseButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -217,7 +336,10 @@ function resetRun() {
   resetRunState();
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
+
+  setPaused(false);
   elements.runStatus.textContent = "Idle";
+  updatePauseButtonUI();
   renderLogTable();
   renderBlock(Number(elements.blockMinutes.value) || 15);
   updateLivePanel();
@@ -225,7 +347,7 @@ function resetRun() {
 }
 
 function handleMotorOn() {
-  if (!appState.runActive || appState.currentCycle.motorOn) return;
+  if (!appState.runActive || appState.paused || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
   appState.currentCycle.motorOn = true;
@@ -240,7 +362,9 @@ function handleMotorOn() {
 }
 
 function handleMotorOff() {
-  if (!appState.runActive || !appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
+  if (!appState.runActive || appState.paused) return;
+
+  if (!appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
     appState.currentCycle.motorOn = false;
     appState.currentMotorDisplay = "OFF";
     updateLivePanel();
@@ -512,7 +636,7 @@ async function fetchShellyState() {
 }
 
 async function pollShelly() {
-  if (!appState.runActive || appState.simulationMode) return;
+  if (!appState.runActive || appState.simulationMode || appState.paused) return;
 
   try {
     const result = await fetchShellyState();
@@ -579,6 +703,75 @@ function startPollingLoop() {
   appState.pollTimerId = setInterval(pollShelly, appState.connection.pollInterval);
 }
 
+function stopPollingLoop() {
+  if (!appState.pollTimerId) return;
+  clearInterval(appState.pollTimerId);
+  appState.pollTimerId = null;
+}
+
+function startLiveLoop() {
+  if (appState.liveTimerId) {
+    clearInterval(appState.liveTimerId);
+  }
+
+  appState.liveTimerId = setInterval(() => {
+    updateLivePanel();
+  }, 250);
+}
+
+function startStatsLoop() {
+  if (appState.statsTimerId) {
+    clearInterval(appState.statsTimerId);
+  }
+
+  appState.statsTimerId = setInterval(() => {
+    updateStatsPanel();
+  }, 1000);
+}
+
+function stopLiveAndStatsLoops() {
+  if (appState.liveTimerId) {
+    clearInterval(appState.liveTimerId);
+    appState.liveTimerId = null;
+  }
+
+  if (appState.statsTimerId) {
+    clearInterval(appState.statsTimerId);
+    appState.statsTimerId = null;
+  }
+}
+
+function updatePauseButtonUI() {
+  if (!elements.pauseRunBtn) return;
+
+  elements.pauseRunBtn.disabled = !appState.runActive;
+  elements.pauseRunBtn.textContent = appState.paused ? "Unpause" : "Pause";
+}
+
+function setPaused(paused) {
+  appState.paused = Boolean(paused);
+
+  if (appState.paused) {
+    stopPollingLoop();
+    stopLiveAndStatsLoops();
+  } else if (isDashboardPage()) {
+    startPollingLoop();
+    startLiveLoop();
+    startStatsLoop();
+  }
+
+  if (appState.runActive && elements.runStatus) {
+    elements.runStatus.textContent = appState.paused ? "Paused" : "Running";
+  }
+
+  updatePauseButtonUI();
+}
+
+function togglePauseRun() {
+  if (!appState.runActive) return;
+  setPaused(!appState.paused);
+}
+
 function applyConnectionSettingsFromUI() {
   if (!elements.shellyIpInput || !elements.endpointMode || !elements.pollIntervalInput) return;
   appState.connection.ip = normalizeIp(elements.shellyIpInput.value) || DEFAULT_CONNECTION_SETTINGS.ip;
@@ -587,7 +780,9 @@ function applyConnectionSettingsFromUI() {
 
   updateConnectionInputs();
   saveConnectionSettings();
-  startPollingLoop();
+  if (!appState.paused) {
+    startPollingLoop();
+  }
 }
 
 function setSimulationMode(enabled) {
@@ -623,7 +818,26 @@ function renderBlock(minutes) {
 function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
+  if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
   if (elements.resetRunBtn) elements.resetRunBtn.addEventListener("click", resetRun);
+
+
+  if (elements.farmInput) {
+    elements.farmInput.addEventListener("blur", saveFarmFromInput);
+    elements.farmInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        saveFarmFromInput();
+      }
+    });
+  }
+
+  if (elements.savedFarmsList) {
+    elements.savedFarmsList.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !target.classList.contains("saved-farm-delete")) return;
+      removeSavedFarm(target.dataset.farmName || "");
+    });
+  }
 
   if (elements.runType && elements.customHours) {
     elements.runType.addEventListener("change", () => {
@@ -673,20 +887,16 @@ function bindEvents() {
 
 function startRealtimeLoops() {
   startPollingLoop();
-
-  appState.liveTimerId = setInterval(() => {
-    updateLivePanel();
-  }, 250);
-
-  appState.statsTimerId = setInterval(() => {
-    updateStatsPanel();
-  }, 1000);
+  startLiveLoop();
+  startStatsLoop();
 }
 
 function initialize() {
   loadConnectionSettings();
+  loadSavedFarms();
   updateConnectionInputs();
   bindEvents();
+  renderSavedFarms();
 
   if (elements.customHours && elements.runType) {
     elements.customHours.disabled = elements.runType.value !== "custom";
@@ -699,6 +909,7 @@ function initialize() {
   }
 
   renderLogTable();
+  updatePauseButtonUI();
   updateLivePanel();
   updateStatsPanel();
   updateConnectionStatus({ ok: true, parsedState: null, responseTimeMs: null, debugText: "Waiting for connection test." });
