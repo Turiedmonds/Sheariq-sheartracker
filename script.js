@@ -883,7 +883,17 @@ function calculateTargetMetrics() {
       : `${formatCountdown(Math.abs(timeDifference))} short`;
   }
 
-  const maxCatchRunSeconds = Math.max(runLengthSeconds - 2, 0);
+  // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the bell.
+  let maxCatchRunSeconds = 0;
+  if (avgCycleSeconds > 0 && runLengthSeconds > 0) {
+    const maxExtraSheep = Math.floor(runRemainingSeconds / avgCycleSeconds);
+    const lastCatchStartRunSeconds = maxExtraSheep <= 0
+      ? elapsedRunSeconds
+      : elapsedRunSeconds + (maxExtraSheep - 1) * avgCycleSeconds;
+    const maxAllowed = Math.max(runLengthSeconds - 2, 0);
+    maxCatchRunSeconds = Math.min(lastCatchStartRunSeconds, maxAllowed);
+  }
+  maxCatchRunSeconds = Math.min(Math.max(maxCatchRunSeconds, 0), Math.max(runLengthSeconds, 0));
 
   const remainingSeconds = Math.max(runLengthSeconds - elapsedSeconds, 0);
   const remainingSheep = Math.max(requiredRunSheep - appState.sheep.length, 0);
