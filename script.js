@@ -13,6 +13,7 @@ const PANEL_LAYOUT_STORAGE_KEY = "sheariq.panelLayout";
 const SNAP_TO_GRID_ENABLED_STORAGE_KEY = "sheariq.snapToGridEnabled";
 const SNAP_GRID_SIZE_STORAGE_KEY = "sheariq.snapGridSize";
 const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -59,6 +60,9 @@ const appState = {
   connectionDebug: "",
   lastResponseTimeMs: null,
   pollTimerId: null,
+  pollInFlight: false,
+  pollLatencySamples: [],
+  autoAdjustedPollInterval: false,
   liveTimerId: null,
   statsTimerId: null,
   paused: false,
@@ -190,7 +194,10 @@ const elements = {
   panelSim: document.getElementById("panel-sim"),
   layoutEditModeToggle: document.getElementById("layoutEditModeToggle"),
   snapToGridToggle: document.getElementById("snapToGridToggle"),
-  gridSizeSelect: document.getElementById("gridSizeSelect")
+  gridSizeSelect: document.getElementById("gridSizeSelect"),
+  swInstalledStatus: document.getElementById("swInstalledStatus"),
+  offlineCachedStatus: document.getElementById("offlineCachedStatus"),
+  networkStatus: document.getElementById("networkStatus")
 };
 
 const METRIC_VALUE_IDS = new Set([
@@ -400,7 +407,7 @@ function normalizeIp(value) {
 function sanitizePollInterval(value) {
   const ms = Number(value);
   if (!Number.isFinite(ms)) return DEFAULT_CONNECTION_SETTINGS.pollInterval;
-  return Math.min(Math.max(Math.round(ms), 100), 5000);
+  return Math.min(Math.max(Math.round(ms), 20), 5000);
 }
 
 function normalizeFarmName(value) {
@@ -558,9 +565,21 @@ function updateConnectionInputs() {
   elements.pollIntervalInput.value = String(appState.connection.pollInterval);
 }
 
-function getShellyUrl() {
+function getShellyBaseUrl() {
   const ip = normalizeIp(appState.connection.ip) || DEFAULT_CONNECTION_SETTINGS.ip;
-  return `http://${ip}${ENDPOINT_PATHS[appState.connection.mode]}`;
+  return `http://${ip}`;
+}
+
+function getShellyUrl() {
+  return `${getShellyBaseUrl()}${ENDPOINT_PATHS[appState.connection.mode]}`;
+}
+
+function getMixedContentMessage() {
+  return "Safari blocks https apps from calling http devices like Shelly on 192.168.x.x. Fix: run the app as an installed PWA that's already cached, OR open the app from a non-https local host. Recommended workflow: open once on internet, install to home screen, then use on Shelly AP.";
+}
+
+function isMixedContentShellyBlocked() {
+  return location.protocol === "https:" && getShellyBaseUrl().startsWith("http://");
 }
 
 function getRunLengthSeconds() {
@@ -1594,21 +1613,31 @@ function updateStatsPanel() {
   }
 }
 
-function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText }) {
+function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText, blockingMessage, rawResponseOk }) {
   const stateLabel = parsedState === null ? "Unknown" : parsedState ? "ON" : "OFF";
   const outcome = ok ? "ok" : "fail";
   const responsePart = Number.isFinite(responseTimeMs) ? `${Math.round(responseTimeMs)}ms` : "n/a";
 
   if (elements.connectionStatus) {
-    elements.connectionStatus.innerHTML = `Connection: <strong>${outcome}</strong>, Motor: <strong>${stateLabel}</strong>, Response: <strong>${responsePart}</strong>`;
+    if (blockingMessage) {
+      elements.connectionStatus.innerHTML = `<strong>Load failed:</strong> ${blockingMessage}`;
+    } else {
+      const rawLine = rawResponseOk ? "<br><small>raw response ok</small>" : "";
+      const autoNote = appState.autoAdjustedPollInterval
+        ? "<br><small>auto adjusted to 50ms due to latency</small>"
+        : "";
+      elements.connectionStatus.innerHTML = `Connection: <strong>${outcome}</strong>, Motor: <strong>${stateLabel}</strong>, Response: <strong>${responsePart}</strong>${rawLine}${autoNote}`;
+    }
   }
 
   if (elements.connectionSummary) {
-    elements.connectionSummary.textContent = `Shelly: ${outcome} • Response: ${responsePart}`;
+    elements.connectionSummary.textContent = blockingMessage
+      ? "Shelly: mixed-content blocked"
+      : `Shelly: ${outcome} • Response: ${responsePart}`;
   }
 
   if (elements.connectionDebug) {
-    elements.connectionDebug.textContent = debugText || "No debug details.";
+    elements.connectionDebug.textContent = blockingMessage || debugText || "No debug details.";
   }
 }
 
@@ -1674,6 +1703,16 @@ function getMotorStateFromResponse(data, mode) {
 }
 
 async function fetchShellyState() {
+  if (isMixedContentShellyBlocked()) {
+    return {
+      ok: false,
+      parsedState: null,
+      responseTimeMs: null,
+      debugText: "mixed-content blocked",
+      blockingMessage: getMixedContentMessage()
+    };
+  }
+
   const url = getShellyUrl();
   const started = performance.now();
   const response = await fetch(url, { cache: "no-store" });
@@ -1683,22 +1722,49 @@ async function fetchShellyState() {
     return { ok: false, parsedState: null, responseTimeMs, debugText: `HTTP ${response.status}` };
   }
 
-  const data = await response.json();
+  const rawText = await response.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch (error) {
+    return { ok: false, parsedState: null, responseTimeMs, debugText: "invalid JSON response" };
+  }
+
   const parsedState = getMotorStateFromResponse(data, appState.connection.mode);
   const debugText = parsedState === null
-    ? `unable to parse for mode=${appState.connection.mode}; keys=[${getTopLevelKeys(data)}]`
-    : `mode=${appState.connection.mode}`;
+    ? `raw response ok; unable to parse for mode=${appState.connection.mode}; keys=[${getTopLevelKeys(data)}]`
+    : `mode=${appState.connection.mode}; raw response ok`;
 
-  return { ok: true, parsedState, responseTimeMs, debugText };
+  return { ok: true, parsedState, responseTimeMs, debugText, rawResponseOk: true };
+}
+
+function updatePollLatency(responseTimeMs) {
+  if (!Number.isFinite(responseTimeMs)) return;
+  appState.pollLatencySamples.push(responseTimeMs);
+  if (appState.pollLatencySamples.length > 10) {
+    appState.pollLatencySamples.shift();
+  }
+
+  if (appState.pollLatencySamples.length < 10) return;
+  const averageLatency = appState.pollLatencySamples.reduce((sum, value) => sum + value, 0) / appState.pollLatencySamples.length;
+  if (averageLatency > appState.connection.pollInterval && appState.connection.pollInterval < 50) {
+    appState.connection.pollInterval = 50;
+    appState.autoAdjustedPollInterval = true;
+    updateConnectionInputs();
+    saveConnectionSettings();
+    startPollingLoop();
+  }
 }
 
 async function pollShelly() {
-  if (!appState.runActive || appState.simulationMode || appState.paused) return;
+  if (!appState.runActive || appState.simulationMode || appState.paused || appState.pollInFlight) return;
 
+  appState.pollInFlight = true;
   try {
     const result = await fetchShellyState();
     appState.lastResponseTimeMs = result.responseTimeMs;
     appState.connectionDebug = result.debugText;
+    updatePollLatency(result.responseTimeMs);
 
     if (!result.ok) {
       updateConnectionStatus(result);
@@ -1735,6 +1801,8 @@ async function pollShelly() {
       responseTimeMs: null,
       debugText: error.message || "fetch failed"
     });
+  } finally {
+    appState.pollInFlight = false;
   }
 }
 
@@ -2836,6 +2904,8 @@ function applyConnectionSettingsFromUI() {
   appState.connection.ip = normalizeIp(elements.shellyIpInput.value) || DEFAULT_CONNECTION_SETTINGS.ip;
   appState.connection.mode = ENDPOINT_PATHS[elements.endpointMode.value] ? elements.endpointMode.value : DEFAULT_CONNECTION_SETTINGS.mode;
   appState.connection.pollInterval = sanitizePollInterval(elements.pollIntervalInput.value);
+  appState.pollLatencySamples = [];
+  appState.autoAdjustedPollInterval = false;
 
   updateConnectionInputs();
   saveConnectionSettings();
@@ -3152,6 +3222,42 @@ function startRealtimeLoops() {
   startStatsLoop();
 }
 
+async function updateOfflineStatusPanel() {
+  if (!elements.swInstalledStatus && !elements.offlineCachedStatus && !elements.networkStatus) return;
+
+  if (elements.networkStatus) {
+    elements.networkStatus.textContent = navigator.onLine ? "internet available" : "offline / local network only";
+  }
+
+  if (elements.swInstalledStatus) {
+    const registration = "serviceWorker" in navigator ? await navigator.serviceWorker.getRegistration() : null;
+    const installed = Boolean(registration?.active || navigator.serviceWorker?.controller);
+    elements.swInstalledStatus.textContent = installed ? "yes" : "no";
+  }
+
+  if (elements.offlineCachedStatus) {
+    try {
+      const cache = await caches.open(SW_CACHE_NAME);
+      const keys = await cache.keys();
+      elements.offlineCachedStatus.textContent = keys.length >= 5 ? "yes" : "no";
+    } catch (error) {
+      elements.offlineCachedStatus.textContent = "no";
+    }
+  }
+}
+
+function initializeOfflineStatusPanel() {
+  updateOfflineStatusPanel();
+  window.addEventListener("online", updateOfflineStatusPanel);
+  window.addEventListener("offline", updateOfflineStatusPanel);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateOfflineStatusPanel();
+  });
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", updateOfflineStatusPanel);
+  }
+}
+
 function initialize() {
   loadConnectionSettings();
   loadSavedFarms();
@@ -3164,6 +3270,7 @@ function initialize() {
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
+  initializeOfflineStatusPanel();
   ensurePanelLockButtons();
   initializeMetricValueStyling();
   bindEvents();

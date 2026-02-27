@@ -23,6 +23,13 @@
       </select>
     </p>
     <p><a class="nav-link" href="connection.html">Connection Settings</a> • <a class="nav-link" href="live.html">Live View</a></p>
+    <section class="status-box minimal-status" aria-live="polite">
+      <strong>Offline Ready / Install</strong>
+      <div>Service Worker installed: <span id="swInstalledStatus">Checking…</span></div>
+      <div>App cached for offline: <span id="offlineCachedStatus">Checking…</span></div>
+      <div>Current network: <span id="networkStatus">Checking…</span></div>
+      <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) At farm join Shelly Wi‑Fi, then open from Home Screen.</div>
+    </section>
   </header>
 
   <main id="dashboardPanels" class="dashboard">
