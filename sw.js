@@ -2,7 +2,6 @@ const CACHE_NAME = 'sheariq-shear-tracker-v2';
 const APP_SHELL = [
   './',
   './index.html',
-  './live.html',
   './connection.html',
   './script.js',
   './styles.css',

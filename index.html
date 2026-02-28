@@ -10,13 +10,46 @@
 </head>
 <body>
   <header class="app-header">
-    <div class="top-card-header-row">
-      <div>
-        <h1>SHEARiQ Shear Tracker</h1>
-        <p class="run-status-line">Run Status: <strong id="runStatus">Idle</strong></p>
-      </div>
-      <p class="top-nav-links"><a class="nav-link" href="connection.html">Connection Settings</a> • <a class="nav-link" href="live.html">Live View</a></p>
+    <div class="title-card">
+      <h1>SHEARiQ Shear Tracker</h1>
     </div>
+
+    <div class="app-tabs" role="tablist" aria-label="Main sections">
+      <button id="dashboardTab" class="app-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="dashboardPanels">Dashboard</button>
+      <button id="settingsTab" class="app-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsPanel">Settings</button>
+    </div>
+  </header>
+
+  <section id="settingsPanel" class="settings-panel" role="tabpanel" aria-labelledby="settingsTab" hidden>
+    <details class="top-card-group" open>
+      <summary>Connection Settings</summary>
+      <div class="top-card-group-body">
+        <div class="form-grid settings-form-grid">
+          <label for="shellyIpInput">Shelly IP</label>
+          <input id="shellyIpInput" type="text" value="192.168.33.1" />
+
+          <label for="endpointMode">Endpoint Mode</label>
+          <select id="endpointMode">
+            <option value="legacy">/status (legacy)</option>
+            <option value="rpcStatus">/rpc/Shelly.GetStatus (gen2+)</option>
+            <option value="rpcSwitch">/rpc/Switch.GetStatus?id=0 (gen2+)</option>
+          </select>
+
+          <label for="pollIntervalInput">Poll interval (ms)</label>
+          <input id="pollIntervalInput" type="number" min="20" step="10" value="200" />
+        </div>
+        <div class="button-row">
+          <button class="poll-quick-btn" data-ms="100" type="button">100</button>
+          <button class="poll-quick-btn" data-ms="200" type="button">200</button>
+          <button class="poll-quick-btn" data-ms="300" type="button">300</button>
+          <button class="poll-quick-btn" data-ms="500" type="button">500</button>
+          <button class="poll-quick-btn" data-ms="1000" type="button">1000</button>
+          <button id="testConnectionBtn" type="button">Test Connection</button>
+        </div>
+        <div id="connectionStatus" class="status-box">No connection test yet.</div>
+        <pre id="connectionDebug" class="debug-box">Debug output appears here after a test.</pre>
+      </div>
+    </details>
 
     <details class="top-card-group" id="layoutSettingsGroup">
       <summary>Layout & display settings</summary>
@@ -44,7 +77,7 @@
         <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) At farm join Shelly Wi‑Fi, then open from Home Screen.</div>
       </div>
     </details>
-  </header>
+  </section>
 
   <main id="dashboardPanels" class="dashboard">
     <section id="panel-sim" class="panel full-width" aria-labelledby="simulation-title" draggable="true">
@@ -82,7 +115,10 @@
           <button id="loadLastSaveBtn" type="button">Load Last Save</button>
           <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
         </div>
-        <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
+        <div class="sim-status-row">
+          <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
+          <div class="status-box minimal-status">Run Status: <strong id="runStatus">Idle</strong></div>
+        </div>
       </div>
     </section>
 
@@ -128,9 +164,9 @@
       </div>
     </section>
 
-    <section id="panel-live" class="panel" aria-labelledby="live-performance-title" draggable="true">
+    <section id="panel-performance" class="panel" aria-labelledby="performance-title" draggable="true">
       <div class="panel-header" draggable="true">
-        <h2 id="live-performance-title">Live Performance Panel</h2>
+        <h2 id="performance-title">Performance Panel</h2>
         <div class="panel-header-actions">
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
@@ -154,7 +190,7 @@
 
     <section id="panel-cycle" class="panel" aria-labelledby="current-cycle-title" draggable="true">
       <div class="panel-header" draggable="true">
-        <h2 id="current-cycle-title">Live Timing Panel</h2>
+        <h2 id="current-cycle-title">Timing Panel</h2>
         <div class="panel-header-actions">
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>

@@ -197,7 +197,10 @@ const elements = {
   gridSizeSelect: document.getElementById("gridSizeSelect"),
   swInstalledStatus: document.getElementById("swInstalledStatus"),
   offlineCachedStatus: document.getElementById("offlineCachedStatus"),
-  networkStatus: document.getElementById("networkStatus")
+  networkStatus: document.getElementById("networkStatus"),
+  dashboardTab: document.getElementById("dashboardTab"),
+  settingsTab: document.getElementById("settingsTab"),
+  settingsPanel: document.getElementById("settingsPanel")
 };
 
 const METRIC_VALUE_IDS = new Set([
@@ -2944,6 +2947,31 @@ function renderBlock(minutes) {
   `;
 }
 
+
+function setActiveTopTab(tabName) {
+  const showSettings = tabName === "settings";
+  if (elements.dashboardPanels) elements.dashboardPanels.hidden = showSettings;
+  if (elements.settingsPanel) elements.settingsPanel.hidden = !showSettings;
+  if (elements.dashboardTab) {
+    elements.dashboardTab.classList.toggle("is-active", !showSettings);
+    elements.dashboardTab.setAttribute("aria-selected", String(!showSettings));
+  }
+  if (elements.settingsTab) {
+    elements.settingsTab.classList.toggle("is-active", showSettings);
+    elements.settingsTab.setAttribute("aria-selected", String(showSettings));
+  }
+}
+
+function initializeTopTabs() {
+  setActiveTopTab("dashboard");
+  if (elements.dashboardTab) {
+    elements.dashboardTab.addEventListener("click", () => setActiveTopTab("dashboard"));
+  }
+  if (elements.settingsTab) {
+    elements.settingsTab.addEventListener("click", () => setActiveTopTab("settings"));
+  }
+}
+
 function bindEvents() {
   ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
@@ -3274,6 +3302,7 @@ function initialize() {
   ensurePanelLockButtons();
   initializeMetricValueStyling();
   bindEvents();
+  initializeTopTabs();
   applyPanelState();
   applyPanelSizes();
   ensureInitialPanelLayout();
