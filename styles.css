@@ -293,12 +293,12 @@ button:disabled {
 }
 
 .btn-stop {
-  background: #991b1b;
+  background: #d32f2f;
   color: #fff;
 }
 
 .btn-pause {
-  background: #facc15;
+  background: #fdd835;
   color: #000;
 }
 
