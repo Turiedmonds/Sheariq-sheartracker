@@ -856,20 +856,21 @@ td.pace-neutral {
 }
 
 .logo-header {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: row;
-    gap: 20px;
-    padding: 0;
+  display:flex;
+  flex-direction:row;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
 }
 
 .logo-ram {
-    height: 70px;
-    width: auto;
+  height:58px;
+  width:auto;
+  display:block;
 }
 
 .logo-text {
-    height: 60px;
-    width: auto;
+  height:58px;
+  width:auto;
+  display:block;
 }
