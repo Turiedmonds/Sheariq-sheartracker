@@ -27,23 +27,51 @@ body {
 
 .app-header h1 {
   margin: 0 0 0.25rem;
-  font-size: 1.3rem;
+  font-size: 2rem;
 }
 
-.top-card-header-row {
+.title-card {
+  border: 4px solid #000000;
+  border-radius: 8px;
+  text-align: center;
+  padding: 0.75rem 1rem;
+}
+
+.app-tabs {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.app-tab {
+  border: 1px solid #9ca3af;
+  background: #f3f4f6;
+  border-radius: 6px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.app-tab.is-active {
+  background: #1f2937;
+  color: #ffffff;
+}
+
+.settings-panel {
+  padding: 0.8rem;
+  display: grid;
   gap: 0.8rem;
-  flex-wrap: wrap;
+  border-bottom: 1px solid #d1d5db;
+  background: #ffffff;
 }
 
-.run-status-line {
-  margin: 0;
+.settings-form-grid {
+  max-width: 680px;
 }
 
-.top-nav-links {
-  margin: 0;
+.sim-status-row {
+  display: grid;
+  gap: 0.55rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .top-card-group {
@@ -822,46 +850,4 @@ td.pace-neutral {
 
 #panel-sim.panel-docked-dragging {
   opacity: 0.92;
-}
-
-.live-view-page {
-  background: #eef2f7;
-}
-
-.live-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.live-view-layout {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
-}
-
-.live-panel {
-  min-height: 180px;
-  border-width: 2px;
-}
-
-.live-panel .panel-header {
-  cursor: default;
-}
-
-.live-panel .panel-header h2 {
-  font-size: 1.2rem;
-}
-
-.live-panel .panel-body {
-  font-size: 1.08rem;
-}
-
-.live-panel strong {
-  font-size: 1.22rem;
-}
-
-.live-log-wrap {
-  max-height: 50vh;
 }
