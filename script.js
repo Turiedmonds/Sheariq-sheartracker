@@ -571,7 +571,7 @@ function getShellyBaseUrl() {
 }
 
 function getShellyUrl() {
-  return `${getShellyBaseUrl()}${ENDPOINT_PATHS[appState.connection.mode]}`;
+  return "http://localhost:5000/shelly";
 }
 
 function getMixedContentMessage() {
