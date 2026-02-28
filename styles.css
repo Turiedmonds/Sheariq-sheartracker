@@ -851,3 +851,21 @@ td.pace-neutral {
 #panel-sim.panel-docked-dragging {
   opacity: 0.92;
 }
+
+.app-header {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 10px 0;
+}
+
+.logo-ram {
+    height: 55px;
+    width: auto;
+}
+
+.logo-text {
+    height: 55px;
+    width: auto;
+}
