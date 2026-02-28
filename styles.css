@@ -856,16 +856,17 @@ td.pace-neutral {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
-    padding: 10px 0;
+    flex-direction: row;
+    gap: 20px;
+    padding: 0;
 }
 
 .logo-ram {
-    height: 55px;
+    height: 70px;
     width: auto;
 }
 
 .logo-text {
-    height: 55px;
+    height: 60px;
     width: auto;
 }
