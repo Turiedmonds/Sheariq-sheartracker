@@ -10,26 +10,40 @@
 </head>
 <body>
   <header class="app-header">
-    <h1>SHEARiQ Shear Tracker</h1>
-    <p>Run Status: <strong id="runStatus">Idle</strong></p>
-    <p class="layout-edit-row"><label for="layoutEditModeToggle">Layout Edit Mode</label> <input id="layoutEditModeToggle" type="checkbox" /></p>
-    <p class="layout-edit-row"><label for="followLatestToggle">Follow latest sheep</label> <input id="followLatestToggle" type="checkbox" checked /></p>
-    <p class="layout-edit-row"><label for="snapToGridToggle">Snap to grid</label> <input id="snapToGridToggle" type="checkbox" />
-      <label for="gridSizeSelect">Grid</label>
-      <select id="gridSizeSelect" aria-label="Grid size">
-        <option value="5">5</option>
-        <option value="10" selected>10</option>
-        <option value="20">20</option>
-      </select>
-    </p>
-    <p><a class="nav-link" href="connection.html">Connection Settings</a> • <a class="nav-link" href="live.html">Live View</a></p>
-    <section class="status-box minimal-status" aria-live="polite">
-      <strong>Offline Ready / Install</strong>
-      <div>Service Worker installed: <span id="swInstalledStatus">Checking…</span></div>
-      <div>App cached for offline: <span id="offlineCachedStatus">Checking…</span></div>
-      <div>Current network: <span id="networkStatus">Checking…</span></div>
-      <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) At farm join Shelly Wi‑Fi, then open from Home Screen.</div>
-    </section>
+    <div class="top-card-header-row">
+      <div>
+        <h1>SHEARiQ Shear Tracker</h1>
+        <p class="run-status-line">Run Status: <strong id="runStatus">Idle</strong></p>
+      </div>
+      <p class="top-nav-links"><a class="nav-link" href="connection.html">Connection Settings</a> • <a class="nav-link" href="live.html">Live View</a></p>
+    </div>
+
+    <details class="top-card-group" id="layoutSettingsGroup">
+      <summary>Layout & display settings</summary>
+      <div class="top-card-group-body">
+        <p class="layout-edit-row"><label for="layoutEditModeToggle">Layout Edit Mode</label> <input id="layoutEditModeToggle" type="checkbox" /></p>
+        <p class="layout-edit-row"><label for="followLatestToggle">Follow latest sheep</label> <input id="followLatestToggle" type="checkbox" checked /></p>
+        <p class="layout-edit-row"><label for="snapToGridToggle">Snap to grid</label> <input id="snapToGridToggle" type="checkbox" />
+          <label for="gridSizeSelect">Grid</label>
+          <select id="gridSizeSelect" aria-label="Grid size">
+            <option value="5">5</option>
+            <option value="10" selected>10</option>
+            <option value="20">20</option>
+          </select>
+        </p>
+      </div>
+    </details>
+
+    <details class="status-box minimal-status top-card-group" aria-live="polite">
+      <summary>Offline Ready / Install</summary>
+      <div class="top-card-group-body">
+        <div>Service Worker installed: <span id="swInstalledStatus">Checking…</span></div>
+        <div>App cached for offline: <span id="offlineCachedStatus">Checking…</span></div>
+        <div>Current network: <span id="networkStatus">Checking…</span></div>
+        <div class="offline-help-copy">This confirms the app can run at the farm even without internet once it has been installed and cached.</div>
+        <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) At farm join Shelly Wi‑Fi, then open from Home Screen.</div>
+      </div>
+    </details>
   </header>
 
   <main id="dashboardPanels" class="dashboard">
