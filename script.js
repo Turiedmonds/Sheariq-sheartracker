@@ -574,7 +574,9 @@ function getShellyBaseUrl() {
 }
 
 function getShellyUrl() {
-  return "http://localhost:5000/shelly";
+  const ip = normalizeIp(appState.connection.ip) || DEFAULT_CONNECTION_SETTINGS.ip;
+  const query = new URLSearchParams({ ip });
+  return `http://localhost:5000/shelly?${query.toString()}`;
 }
 
 function getMixedContentMessage() {

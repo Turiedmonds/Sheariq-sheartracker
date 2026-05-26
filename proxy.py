@@ -1,13 +1,41 @@
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import parse_qs, urlparse
 import requests
 
-SHELLY_URL = "http://192.168.33.1/rpc/Shelly.GetStatus"
+DEFAULT_SHELLY_IP = "192.168.33.1"
+SHELLY_URL_TEMPLATE = "http://{ip}/rpc/Shelly.GetStatus"
+
+
+def sanitize_ip(raw_ip):
+    ip = (raw_ip or "").strip()
+    if not ip:
+        return DEFAULT_SHELLY_IP
+
+    parts = ip.split(".")
+    if len(parts) != 4:
+        return DEFAULT_SHELLY_IP
+
+    for part in parts:
+        if not part.isdigit():
+            return DEFAULT_SHELLY_IP
+        value = int(part)
+        if value < 0 or value > 255:
+            return DEFAULT_SHELLY_IP
+
+    return ip
 
 class ProxyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/shelly":
+        parsed = urlparse(self.path)
+
+        if parsed.path == "/shelly":
             try:
-                response = requests.get(SHELLY_URL, timeout=5)
+                query_params = parse_qs(parsed.query)
+                requested_ip = query_params.get("ip", [""])[0]
+                shelly_ip = sanitize_ip(requested_ip)
+                shelly_url = SHELLY_URL_TEMPLATE.format(ip=shelly_ip)
+
+                response = requests.get(shelly_url, timeout=5)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Access-Control-Allow-Origin", "*")
