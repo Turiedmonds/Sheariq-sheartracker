@@ -235,26 +235,30 @@
         <div class="panel-header-actions">
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
+          <button id="targetPaceSettingsToggle" class="target-pace-settings-toggle" type="button" aria-expanded="false" aria-controls="targetPaceSettings" aria-label="Open Target / Pace settings">⚙</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
       </div>
       <div class="panel-body">
-        <div class="target-clock-toggle-row">
-          <label for="predictedCatchClockMode">Predicted Catch Time:</label>
-          <select id="predictedCatchClockMode">
-            <option value="day" selected>Day Clock</option>
-            <option value="run">Run Clock</option>
-          </select>
+        <div id="targetPaceSettings" class="target-pace-settings" hidden>
+          <div class="target-pace-settings-row">
+            <label for="predictedCatchClockMode">Time Display</label>
+            <select id="predictedCatchClockMode">
+              <option value="day" selected>Day Clock</option>
+              <option value="run">Run Clock</option>
+            </select>
+          </div>
+          <p class="target-pace-settings-help">Day Clock shows the actual time of day. Run Clock shows the time within the current run.</p>
         </div>
         <div class="metrics-grid target-pace-grid">
           <div class="target-section-title">Required</div>
           <div>Required average total time per sheep: <strong id="requiredCycle">0.0s</strong></div>
           <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
-          <div>Required run total sheep: <strong id="requiredRunTotalSheep">—</strong></div>
-          <div>Total required daily sheep: <strong id="requiredDayTotalSheep">—</strong></div>
+          <div>Required run total: <strong id="requiredRunTotalSheep">—</strong></div>
+          <div>Required daily total: <strong id="requiredDayTotalSheep">—</strong></div>
 
-          <div class="target-section-title">Projected</div>
-          <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
+          <div class="target-section-title">Predicted</div>
+          <div>Predicted total sheep: <strong id="projectedTotal">0</strong></div>
           <div>Predicted Run Target Catch: <strong id="estimatedLastCatchTime">—</strong></div>
           <div>Predicted Final Catch: <strong id="maxCatchTime">—</strong></div>
           <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>

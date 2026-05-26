@@ -202,6 +202,8 @@ const elements = {
   dashboardTab: document.getElementById("dashboardTab"),
   settingsTab: document.getElementById("settingsTab"),
   settingsPanel: document.getElementById("settingsPanel"),
+  targetPaceSettingsToggle: document.getElementById("targetPaceSettingsToggle"),
+  targetPaceSettings: document.getElementById("targetPaceSettings"),
   predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
   timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel")
 };
@@ -3174,6 +3176,13 @@ function bindEvents() {
     elements.predictedCatchClockMode.addEventListener("change", () => {
       appState.predictedCatchClockMode = elements.predictedCatchClockMode.value === "run" ? "run" : "day";
       updateStatsPanel();
+    });
+  }
+  if (elements.targetPaceSettingsToggle && elements.targetPaceSettings) {
+    elements.targetPaceSettingsToggle.addEventListener("click", () => {
+      const isOpen = !elements.targetPaceSettings.hidden;
+      elements.targetPaceSettings.hidden = isOpen;
+      elements.targetPaceSettingsToggle.setAttribute("aria-expanded", String(!isOpen));
     });
   }
   if (elements.controlsDockToggle) {
