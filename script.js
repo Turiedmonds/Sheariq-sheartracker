@@ -15,6 +15,7 @@ const SNAP_GRID_SIZE_STORAGE_KEY = "sheariq.snapGridSize";
 const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
 const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder";
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
+const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 
 const DEFAULT_CONNECTION_SETTINGS = {
@@ -120,7 +121,11 @@ const appState = {
   panelLocks: {},
   scrollLockCount: 0,
   sessionDate: "",
-  predictedCatchClockMode: "day"
+  predictedCatchClockMode: "day",
+  sheepLogSort: {
+    by: "number",
+    order: "asc"
+  }
 };
 
 const elements = {
@@ -162,6 +167,8 @@ const elements = {
   blockMinutes: document.getElementById("blockMinutes"),
   blockResults: document.getElementById("blockResults"),
   sheepLogBody: document.getElementById("sheepLogBody"),
+  sheepLogSortBy: document.getElementById("sheepLogSortBy"),
+  sheepLogSortOrder: document.getElementById("sheepLogSortOrder"),
   shellyIpInput: document.getElementById("shellyIpInput"),
   endpointMode: document.getElementById("endpointMode"),
   pollIntervalInput: document.getElementById("pollIntervalInput"),
@@ -1587,18 +1594,19 @@ function renderLogTable() {
   elements.sheepLogBody.innerHTML = "";
 
   const { requiredCycle } = calculateTargetMetrics();
-  appState.sheep.forEach((entry) => {
+  const sortedSheep = getSortedSheepLogEntries();
+  sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
     const fullCycleClass = requiredCycle > 0
       ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
       : "pace-neutral";
     row.innerHTML = `
       <td>${entry.number}</td>
-      <td>${formatClock(entry.startTime)}</td>
-      <td>${formatClock(entry.endTime)}</td>
-      <td>${formatSeconds(entry.shearDuration)}</td>
-      <td>${formatSeconds(entry.catchDuration)}</td>
-      <td class="${fullCycleClass}">${formatSeconds(entry.fullCycle)}</td>
+      <td class="sheep-log-time-col">${formatClock(entry.startTime)}</td>
+      <td class="sheep-log-time-col">${formatClock(entry.endTime)}</td>
+      <td class="sheep-log-time-col">${formatSeconds(entry.shearDuration)}</td>
+      <td class="sheep-log-time-col">${formatSeconds(entry.catchDuration)}</td>
+      <td class="sheep-log-time-col ${fullCycleClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
     elements.sheepLogBody.appendChild(row);
   });
@@ -1612,6 +1620,55 @@ function renderLogTable() {
       scroller.scrollTop = scroller.scrollHeight;
     });
   });
+}
+
+function getSortedSheepLogEntries() {
+  const entries = [...appState.sheep];
+  const { by, order } = appState.sheepLogSort;
+  if (by === "number") return entries;
+  const multiplier = order === "desc" ? -1 : 1;
+  entries.sort((a, b) => {
+    const aValue = Number(a?.[by]) || 0;
+    const bValue = Number(b?.[by]) || 0;
+    if (aValue !== bValue) return (aValue - bValue) * multiplier;
+    return (a.number - b.number);
+  });
+  return entries;
+}
+
+function loadSheepLogSortSettings() {
+  if (!elements.sheepLogSortBy || !elements.sheepLogSortOrder) return;
+  let nextBy = "number";
+  let nextOrder = "asc";
+  try {
+    const raw = JSON.parse(localStorage.getItem(SHEEP_LOG_SORT_STORAGE_KEY) || "null");
+    if (raw?.by === "shearDuration" || raw?.by === "catchDuration" || raw?.by === "fullCycle" || raw?.by === "number") {
+      nextBy = raw.by;
+    }
+    if (raw?.order === "asc" || raw?.order === "desc") {
+      nextOrder = raw.order;
+    }
+  } catch (error) {
+    nextBy = "number";
+    nextOrder = "asc";
+  }
+  appState.sheepLogSort.by = nextBy;
+  appState.sheepLogSort.order = nextBy === "number" ? "asc" : nextOrder;
+  elements.sheepLogSortBy.value = appState.sheepLogSort.by;
+  elements.sheepLogSortOrder.value = appState.sheepLogSort.order;
+  elements.sheepLogSortOrder.disabled = appState.sheepLogSort.by === "number";
+}
+
+function setSheepLogSortSettings() {
+  if (!elements.sheepLogSortBy || !elements.sheepLogSortOrder) return;
+  const by = elements.sheepLogSortBy.value;
+  const order = by === "number" ? "asc" : (elements.sheepLogSortOrder.value === "desc" ? "desc" : "asc");
+  appState.sheepLogSort.by = by;
+  appState.sheepLogSort.order = order;
+  elements.sheepLogSortOrder.value = appState.sheepLogSort.order;
+  elements.sheepLogSortOrder.disabled = appState.sheepLogSort.by === "number";
+  localStorage.setItem(SHEEP_LOG_SORT_STORAGE_KEY, JSON.stringify(appState.sheepLogSort));
+  renderLogTable();
 }
 
 function cacheSheepLogScroller() {
@@ -3269,6 +3326,12 @@ function bindEvents() {
       setFollowLatestEnabled(elements.followLatestToggle.checked);
     });
   }
+  if (elements.sheepLogSortBy) {
+    elements.sheepLogSortBy.addEventListener("change", setSheepLogSortSettings);
+  }
+  if (elements.sheepLogSortOrder) {
+    elements.sheepLogSortOrder.addEventListener("change", setSheepLogSortSettings);
+  }
   if (elements.predictedCatchClockMode) {
     elements.predictedCatchClockMode.value = appState.predictedCatchClockMode;
     elements.predictedCatchClockMode.addEventListener("change", () => {
@@ -3442,6 +3505,7 @@ function initialize() {
   loadLayoutEditorSettings();
   loadAutosaveSettings();
   loadFollowLatestSettings();
+  loadSheepLogSortSettings();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
