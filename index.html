@@ -338,16 +338,30 @@
         </div>
       </div>
       <div class="panel-body">
+        <div class="sheep-log-sort-controls" aria-label="Sheep log sorting controls">
+          <label for="sheepLogSortBy">Sort by:</label>
+          <select id="sheepLogSortBy">
+            <option value="number">Sheep number</option>
+            <option value="shearDuration">Shear time</option>
+            <option value="catchDuration">Catch time</option>
+            <option value="fullCycle">Catch-to-release time</option>
+          </select>
+          <label for="sheepLogSortOrder">Order:</label>
+          <select id="sheepLogSortOrder">
+            <option value="asc">Fastest first</option>
+            <option value="desc">Slowest first</option>
+          </select>
+        </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">
           <table>
             <thead>
               <tr>
                 <th>Sheep #</th>
-                <th>Start Time</th>
-                <th>End Time</th>
-                <th>Shear Duration</th>
-                <th>Catch Duration</th>
-                <th>Catch-to-Release Time</th>
+                <th class="sheep-log-time-col">Start Time</th>
+                <th class="sheep-log-time-col">End Time</th>
+                <th class="sheep-log-time-col">Shear Duration</th>
+                <th class="sheep-log-time-col">Catch Duration</th>
+                <th class="sheep-log-time-col">Catch-to-Release Time</th>
               </tr>
             </thead>
             <tbody id="sheepLogBody"></tbody>
