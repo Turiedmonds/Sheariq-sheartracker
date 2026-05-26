@@ -117,7 +117,8 @@ const appState = {
   snapGridSize: 10,
   panelLocks: {},
   scrollLockCount: 0,
-  sessionDate: ""
+  sessionDate: "",
+  predictedCatchClockMode: "day"
 };
 
 const elements = {
@@ -200,7 +201,9 @@ const elements = {
   networkStatus: document.getElementById("networkStatus"),
   dashboardTab: document.getElementById("dashboardTab"),
   settingsTab: document.getElementById("settingsTab"),
-  settingsPanel: document.getElementById("settingsPanel")
+  settingsPanel: document.getElementById("settingsPanel"),
+  predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
+  timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel")
 };
 
 const METRIC_VALUE_IDS = new Set([
@@ -339,6 +342,15 @@ function formatClock(ms) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const seconds = String(date.getSeconds()).padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
+}
+
+function formatPredictedCatchTime(runSeconds) {
+  if (!Number.isFinite(runSeconds) || runSeconds < 0) return "—";
+  if (appState.predictedCatchClockMode === "run") {
+    return `${formatCountdown(runSeconds)} into run`;
+  }
+  const dayClockSeconds = appState.dayClockStartSecondsFromMidnight + runSeconds;
+  return formatSecondsFromMidnightClock(dayClockSeconds);
 }
 
 function parseRequiredTotalSheep() {
@@ -894,6 +906,7 @@ function calculateTargetMetrics() {
   const remainingToTarget = requiredRunSheep - sheepDoneThisRun;
   let targetCatchRunSeconds = elapsedRunSeconds;
   let timeSpareText = "—";
+  let timeSpareIsAhead = null;
   let maxPossibleRunTotal = sheepDoneThisRun;
 
   if (avgCycleSeconds > 0) {
@@ -905,6 +918,7 @@ function calculateTargetMetrics() {
     timeSpareText = timeDifference >= 0
       ? `${formatCountdown(timeDifference)} spare`
       : `${formatCountdown(Math.abs(timeDifference))} short`;
+    timeSpareIsAhead = timeDifference >= 0;
   }
 
   // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the bell.
@@ -933,6 +947,7 @@ function calculateTargetMetrics() {
     requiredRunSheep,
     targetCatchRunSeconds,
     timeSpareText,
+    timeSpareIsAhead,
     maxCatchRunSeconds,
     maxPossibleRunTotal
   };
@@ -1603,10 +1618,25 @@ function updateStatsPanel() {
   } else {
     setText(elements.projectedRunVsRequired, "—");
   }
-  setText(elements.estimatedLastCatchTime, formatCountdown(target.targetCatchRunSeconds));
+  setText(elements.estimatedLastCatchTime, formatPredictedCatchTime(target.targetCatchRunSeconds));
   setText(elements.timeSpareToBell, target.timeSpareText);
-  setText(elements.maxCatchTime, formatCountdown(target.maxCatchRunSeconds));
+  setText(elements.maxCatchTime, formatPredictedCatchTime(target.maxCatchRunSeconds));
   setText(elements.catchPrediction, predictCatch());
+  if (elements.timeSpareToBell && elements.timeSpareToBellLabel) {
+    elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
+    elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
+    if (target.timeSpareIsAhead === true) {
+      setText(elements.timeSpareToBellLabel, "Time to Spare");
+      elements.timeSpareToBell.classList.add("target-status-ahead");
+      elements.timeSpareToBellLabel.classList.add("target-status-ahead");
+    } else if (target.timeSpareIsAhead === false) {
+      setText(elements.timeSpareToBellLabel, "Time Behind Run Target");
+      elements.timeSpareToBell.classList.add("target-status-behind");
+      elements.timeSpareToBellLabel.classList.add("target-status-behind");
+    } else {
+      setText(elements.timeSpareToBellLabel, "Time to Spare");
+    }
+  }
   updateTrendFlags();
 
   if (elements.avgCycle) {
@@ -3137,6 +3167,13 @@ function bindEvents() {
   if (elements.followLatestToggle) {
     elements.followLatestToggle.addEventListener("change", () => {
       setFollowLatestEnabled(elements.followLatestToggle.checked);
+    });
+  }
+  if (elements.predictedCatchClockMode) {
+    elements.predictedCatchClockMode.value = appState.predictedCatchClockMode;
+    elements.predictedCatchClockMode.addEventListener("change", () => {
+      appState.predictedCatchClockMode = elements.predictedCatchClockMode.value === "run" ? "run" : "day";
+      updateStatsPanel();
     });
   }
   if (elements.controlsDockToggle) {

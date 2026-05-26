@@ -326,6 +326,48 @@ body.layout-edit-on .resize-handle {
   gap: 0.5rem;
 }
 
+.target-clock-toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+}
+
+.target-clock-toggle-row label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.target-clock-toggle-row select {
+  width: auto;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.86rem;
+}
+
+.target-pace-grid .target-section-title {
+  margin-top: 0.35rem;
+  font-size: 0.87rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #374151;
+}
+
+.target-pace-grid .target-section-title:first-child {
+  margin-top: 0;
+}
+
+#timeSpareToBellLabel.target-status-ahead,
+#timeSpareToBell.target-status-ahead {
+  color: #15803d;
+}
+
+#timeSpareToBellLabel.target-status-behind,
+#timeSpareToBell.target-status-behind {
+  color: #b91c1c;
+}
+
 input,
 select,
 button {
