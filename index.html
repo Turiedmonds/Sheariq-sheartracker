@@ -239,17 +239,29 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="metrics-grid">
+        <div class="target-clock-toggle-row">
+          <label for="predictedCatchClockMode">Predicted Catch Time:</label>
+          <select id="predictedCatchClockMode">
+            <option value="day" selected>Day Clock</option>
+            <option value="run">Run Clock</option>
+          </select>
+        </div>
+        <div class="metrics-grid target-pace-grid">
+          <div class="target-section-title">Required</div>
           <div>Required average catch-to-release time: <strong id="requiredCycle">0.0s</strong></div>
           <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
-          <div>Projected run total sheep: <strong id="projectedTotal">0</strong></div>
-          <div>Required day total sheep: <strong id="requiredDayTotalSheep">—</strong></div>
+          <div>Required total day sheep: <strong id="requiredDayTotalSheep">—</strong></div>
           <div>Required run total sheep: <strong id="requiredRunTotalSheep">—</strong></div>
-          <div>Ahead / Behind target (run): <strong id="projectedRunVsRequired">—</strong></div>
-          <div>Target met at (hand on door): <strong id="estimatedLastCatchTime">—</strong></div>
-          <div>Time spare / short to bell: <strong id="timeSpareToBell">—</strong></div>
-          <div>Last possible sheep catch (before bell): <strong id="maxCatchTime">—</strong></div>
+
+          <div class="target-section-title">Projected</div>
+          <div>Projected total sheep: <strong id="projectedTotal">0</strong></div>
+          <div>Predicted Run Target Catch: <strong id="estimatedLastCatchTime">—</strong></div>
+          <div>Predicted Final Catch: <strong id="maxCatchTime">—</strong></div>
           <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+
+          <div class="target-section-title">Run Target Status</div>
+          <div>Ahead / Behind target (run): <strong id="projectedRunVsRequired">—</strong></div>
+          <div><span id="timeSpareToBellLabel">Time to Spare</span>: <strong id="timeSpareToBell">—</strong></div>
         </div>
       </div>
     </section>
