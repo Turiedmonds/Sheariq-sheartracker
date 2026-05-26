@@ -17,6 +17,7 @@ const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder"
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
+const SHEEP_NOTE_MAX_LENGTH = 200;
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -1658,6 +1659,27 @@ function renderLogTable() {
       <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
       <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
+
+    const noteCell = document.createElement("td");
+    noteCell.className = "sheep-log-note-col";
+    const noteButton = document.createElement("button");
+    noteButton.type = "button";
+    noteButton.className = "sheep-log-note-btn";
+    noteButton.dataset.sheepNumber = String(entry.number);
+    const noteText = normalizeSheepNote(entry.note);
+    if (noteText) {
+      const notePreview = noteText.length > 60 ? `${noteText.slice(0, 60)}…` : noteText;
+      noteButton.textContent = "Edit note";
+      noteButton.title = noteText;
+      const noteLabel = document.createElement("div");
+      noteLabel.className = "sheep-log-note-text";
+      noteLabel.textContent = notePreview;
+      noteCell.append(noteButton, noteLabel);
+    } else {
+      noteButton.textContent = "Add note";
+      noteCell.appendChild(noteButton);
+    }
+    row.appendChild(noteCell);
     elements.sheepLogBody.appendChild(row);
   });
 
@@ -1670,6 +1692,27 @@ function renderLogTable() {
       scroller.scrollTop = scroller.scrollHeight;
     });
   });
+}
+
+function normalizeSheepNote(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, SHEEP_NOTE_MAX_LENGTH);
+}
+
+function promptForSheepNote(sheepNumber) {
+  const sheepEntry = appState.sheep.find((entry) => Number(entry?.number) === sheepNumber);
+  if (!sheepEntry) return;
+  const existingNote = normalizeSheepNote(sheepEntry.note);
+  const input = window.prompt(`Note for sheep #${sheepNumber} (max ${SHEEP_NOTE_MAX_LENGTH} chars). Leave blank to clear.`, existingNote);
+  if (input === null) return;
+  const normalizedNote = normalizeSheepNote(input);
+  if (normalizedNote) {
+    sheepEntry.note = normalizedNote;
+  } else {
+    delete sheepEntry.note;
+  }
+  renderLogTable();
+  autosaveState();
 }
 
 function getSortedSheepLogEntries() {
@@ -3381,6 +3424,17 @@ function bindEvents() {
   }
   if (elements.sheepLogSortOrder) {
     elements.sheepLogSortOrder.addEventListener("change", setSheepLogSortSettings);
+  }
+  if (elements.sheepLogBody) {
+    elements.sheepLogBody.addEventListener("click", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+      const noteButton = target.closest(".sheep-log-note-btn");
+      if (!noteButton) return;
+      const sheepNumber = Number(noteButton.dataset.sheepNumber);
+      if (!Number.isFinite(sheepNumber)) return;
+      promptForSheepNote(sheepNumber);
+    });
   }
   if (elements.predictedCatchClockMode) {
     elements.predictedCatchClockMode.value = appState.predictedCatchClockMode;
