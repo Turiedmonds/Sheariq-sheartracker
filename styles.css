@@ -644,6 +644,22 @@ button:disabled {
   text-align: center;
 }
 
+#panel-log .sheep-log-note-col {
+  min-width: 180px;
+}
+
+#panel-log .sheep-log-note-btn {
+  padding: 0.2rem 0.45rem;
+  font-size: 0.78rem;
+  width: auto;
+}
+
+#panel-log .sheep-log-note-text {
+  font-size: 0.8rem;
+  line-height: 1.3;
+  color: #1f2937;
+}
+
 thead th {
   position: sticky;
   top: 0;
