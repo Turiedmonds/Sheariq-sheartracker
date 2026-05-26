@@ -1600,21 +1600,56 @@ function getSheepLogAnomalyClass(value, average, minSampleSize = 2) {
   return "sheep-log-anomaly-severe";
 }
 
+function calculateSheepLogAnomalyAverages() {
+  if (!Array.isArray(appState.sheep) || appState.sheep.length === 0) {
+    return { avgShearDuration: NaN, avgCatchDuration: NaN, avgFullCycle: NaN };
+  }
+
+  const totals = appState.sheep.reduce((acc, sheep) => {
+    if (Number.isFinite(sheep?.shearDuration)) {
+      acc.shearTotal += sheep.shearDuration;
+      acc.shearCount += 1;
+    }
+    if (Number.isFinite(sheep?.catchDuration)) {
+      acc.catchTotal += sheep.catchDuration;
+      acc.catchCount += 1;
+    }
+    if (Number.isFinite(sheep?.fullCycle)) {
+      acc.cycleTotal += sheep.fullCycle;
+      acc.cycleCount += 1;
+    }
+    return acc;
+  }, {
+    shearTotal: 0,
+    shearCount: 0,
+    catchTotal: 0,
+    catchCount: 0,
+    cycleTotal: 0,
+    cycleCount: 0
+  });
+
+  return {
+    avgShearDuration: totals.shearCount > 0 ? totals.shearTotal / totals.shearCount : NaN,
+    avgCatchDuration: totals.catchCount > 0 ? totals.catchTotal / totals.catchCount : NaN,
+    avgFullCycle: totals.cycleCount > 0 ? totals.cycleTotal / totals.cycleCount : NaN
+  };
+}
+
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
 
-  const metrics = calculateTargetMetrics();
-  const { requiredCycle } = metrics;
+  const { requiredCycle } = calculateTargetMetrics();
+  const anomalyAverages = calculateSheepLogAnomalyAverages();
   const sortedSheep = getSortedSheepLogEntries();
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
     const fullCycleClass = requiredCycle > 0
       ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
       : "pace-neutral";
-    const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, metrics.avgShear);
-    const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, metrics.avgCatch);
-    const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, metrics.avgCycle);
+    const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, anomalyAverages.avgShearDuration);
+    const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, anomalyAverages.avgCatchDuration);
+    const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, anomalyAverages.avgFullCycle);
     row.innerHTML = `
       <td>${entry.number}</td>
       <td class="sheep-log-time-col">${formatClock(entry.startTime)}</td>
