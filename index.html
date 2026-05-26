@@ -250,22 +250,55 @@
           </div>
           <p class="target-pace-settings-help">Day Clock shows the actual time of day. Run Clock shows the time within the current run.</p>
         </div>
-        <div class="metrics-grid target-pace-grid">
-          <div class="target-section-title">Required</div>
-          <div>Required average total time per sheep: <strong id="requiredCycle">0.0s</strong></div>
-          <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
-          <div>Required run total: <strong id="requiredRunTotalSheep">—</strong></div>
-          <div>Required daily total: <strong id="requiredDayTotalSheep">—</strong></div>
+        <div id="targetPaceSections" class="metrics-grid target-pace-grid">
+          <section class="target-panel-section" data-section-id="required">
+            <div class="target-section-header">
+              <div class="target-section-title">Required</div>
+              <div class="target-section-actions">
+                <button class="target-section-move-up" type="button" aria-label="Move Required up">↑</button>
+                <button class="target-section-move-down" type="button" aria-label="Move Required down">↓</button>
+                <button class="target-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Required">−</button>
+              </div>
+            </div>
+            <div class="target-section-content">
+              <div>Required average total time per sheep: <strong id="requiredCycle">0.0s</strong></div>
+              <div>Required sheep per hour: <strong id="requiredRate">0.00</strong></div>
+              <div>Required run total: <strong id="requiredRunTotalSheep">—</strong></div>
+              <div>Required daily total: <strong id="requiredDayTotalSheep">—</strong></div>
+            </div>
+          </section>
 
-          <div class="target-section-title">Predicted</div>
-          <div>Predicted total sheep: <strong id="projectedTotal">0</strong></div>
-          <div>Predicted Run Target Catch: <strong id="estimatedLastCatchTime">—</strong></div>
-          <div>Predicted Final Catch: <strong id="maxCatchTime">—</strong></div>
-          <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+          <section class="target-panel-section" data-section-id="predicted">
+            <div class="target-section-header">
+              <div class="target-section-title">Predicted</div>
+              <div class="target-section-actions">
+                <button class="target-section-move-up" type="button" aria-label="Move Predicted up">↑</button>
+                <button class="target-section-move-down" type="button" aria-label="Move Predicted down">↓</button>
+                <button class="target-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Predicted">−</button>
+              </div>
+            </div>
+            <div class="target-section-content">
+              <div>Predicted total sheep: <strong id="projectedTotal">0</strong></div>
+              <div>Predicted Run Target Catch: <strong id="estimatedLastCatchTime">—</strong></div>
+              <div>Predicted Final Catch: <strong id="maxCatchTime">—</strong></div>
+              <div>Catch prediction: <strong id="catchPrediction">Set target and start run.</strong></div>
+            </div>
+          </section>
 
-          <div class="target-section-title">Run Target Status</div>
-          <div>Ahead / Behind target (run): <strong id="projectedRunVsRequired">—</strong></div>
-          <div><span id="timeSpareToBellLabel">Time to Spare</span>: <strong id="timeSpareToBell">—</strong></div>
+          <section class="target-panel-section" data-section-id="run-target-status">
+            <div class="target-section-header">
+              <div class="target-section-title">Run Target Status</div>
+              <div class="target-section-actions">
+                <button class="target-section-move-up" type="button" aria-label="Move Run Target Status up">↑</button>
+                <button class="target-section-move-down" type="button" aria-label="Move Run Target Status down">↓</button>
+                <button class="target-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Run Target Status">−</button>
+              </div>
+            </div>
+            <div class="target-section-content">
+              <div>Ahead / Behind target (run): <strong id="projectedRunVsRequired">—</strong></div>
+              <div><span id="timeSpareToBellLabel">Time to Spare</span>: <strong id="timeSpareToBell">—</strong></div>
+            </div>
+          </section>
         </div>
       </div>
     </section>

@@ -13,6 +13,8 @@ const PANEL_LAYOUT_STORAGE_KEY = "sheariq.panelLayout";
 const SNAP_TO_GRID_ENABLED_STORAGE_KEY = "sheariq.snapToGridEnabled";
 const SNAP_GRID_SIZE_STORAGE_KEY = "sheariq.snapGridSize";
 const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
+const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder";
+const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 
 const DEFAULT_CONNECTION_SETTINGS = {
@@ -204,9 +206,101 @@ const elements = {
   settingsPanel: document.getElementById("settingsPanel"),
   targetPaceSettingsToggle: document.getElementById("targetPaceSettingsToggle"),
   targetPaceSettings: document.getElementById("targetPaceSettings"),
+  targetPaceSections: document.getElementById("targetPaceSections"),
   predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
   timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel")
 };
+
+function initTargetPaceSections() {
+  const container = elements.targetPaceSections;
+  if (!container) return;
+  const sectionElements = Array.from(container.querySelectorAll(".target-panel-section"));
+  if (!sectionElements.length) return;
+
+  let storedOrder = [];
+  let storedCollapsed = {};
+  try {
+    storedOrder = JSON.parse(localStorage.getItem(TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY) || "[]");
+    storedCollapsed = JSON.parse(localStorage.getItem(TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY) || "{}");
+  } catch (error) {
+    storedOrder = [];
+    storedCollapsed = {};
+  }
+
+  const sectionMap = new Map(sectionElements.map((section) => [section.dataset.sectionId, section]));
+  storedOrder.forEach((sectionId) => {
+    const section = sectionMap.get(sectionId);
+    if (section) container.appendChild(section);
+  });
+
+  const persistState = () => {
+    const currentSections = Array.from(container.querySelectorAll(".target-panel-section"));
+    const order = currentSections.map((section) => section.dataset.sectionId).filter(Boolean);
+    const collapsed = {};
+    currentSections.forEach((section) => {
+      const sectionId = section.dataset.sectionId;
+      if (!sectionId) return;
+      collapsed[sectionId] = section.classList.contains("is-collapsed");
+    });
+    localStorage.setItem(TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY, JSON.stringify(order));
+    localStorage.setItem(TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  const updateMoveButtons = () => {
+    const currentSections = Array.from(container.querySelectorAll(".target-panel-section"));
+    currentSections.forEach((section, index) => {
+      const upBtn = section.querySelector(".target-section-move-up");
+      const downBtn = section.querySelector(".target-section-move-down");
+      if (upBtn) upBtn.disabled = index === 0;
+      if (downBtn) downBtn.disabled = index === currentSections.length - 1;
+    });
+  };
+
+  sectionElements.forEach((section) => {
+    const sectionId = section.dataset.sectionId;
+    const toggleBtn = section.querySelector(".target-section-toggle");
+    const upBtn = section.querySelector(".target-section-move-up");
+    const downBtn = section.querySelector(".target-section-move-down");
+    if (sectionId && storedCollapsed[sectionId]) {
+      section.classList.add("is-collapsed");
+    }
+    const updateToggleState = () => {
+      if (!toggleBtn) return;
+      const isCollapsed = section.classList.contains("is-collapsed");
+      toggleBtn.textContent = isCollapsed ? "+" : "−";
+      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    };
+    updateToggleState();
+
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        section.classList.toggle("is-collapsed");
+        updateToggleState();
+        persistState();
+      });
+    }
+    if (upBtn) {
+      upBtn.addEventListener("click", () => {
+        const previous = section.previousElementSibling;
+        if (!previous) return;
+        container.insertBefore(section, previous);
+        updateMoveButtons();
+        persistState();
+      });
+    }
+    if (downBtn) {
+      downBtn.addEventListener("click", () => {
+        const next = section.nextElementSibling;
+        if (!next) return;
+        container.insertBefore(next, section);
+        updateMoveButtons();
+        persistState();
+      });
+    }
+  });
+  updateMoveButtons();
+  persistState();
+}
 
 const METRIC_VALUE_IDS = new Set([
   "avgShear",
@@ -3185,6 +3279,7 @@ function bindEvents() {
       elements.targetPaceSettingsToggle.setAttribute("aria-expanded", String(!isOpen));
     });
   }
+  initTargetPaceSections();
   if (elements.controlsDockToggle) {
     elements.controlsDockToggle.addEventListener("click", () => {
       setControlsDockEnabled(!appState.controlsDockEnabled);
