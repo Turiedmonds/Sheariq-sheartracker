@@ -1589,24 +1589,39 @@ function drawTrendGraph() {
   }
 }
 
+function getSheepLogAnomalyClass(value, average, minSampleSize = 2) {
+  if (!Number.isFinite(value) || !Number.isFinite(average) || average <= 0) return "";
+  if (!Array.isArray(appState.sheep) || appState.sheep.length < minSampleSize) return "";
+
+  const normalCutoff = Math.max(average + 2, average * 1.3);
+  if (value <= normalCutoff) return "";
+  if (value <= average * 2) return "sheep-log-anomaly-mild";
+  if (value <= average * 3) return "sheep-log-anomaly-strong";
+  return "sheep-log-anomaly-severe";
+}
+
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
 
-  const { requiredCycle } = calculateTargetMetrics();
+  const metrics = calculateTargetMetrics();
+  const { requiredCycle } = metrics;
   const sortedSheep = getSortedSheepLogEntries();
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
     const fullCycleClass = requiredCycle > 0
       ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
       : "pace-neutral";
+    const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, metrics.avgShear);
+    const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, metrics.avgCatch);
+    const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, metrics.avgCycle);
     row.innerHTML = `
       <td>${entry.number}</td>
       <td class="sheep-log-time-col">${formatClock(entry.startTime)}</td>
       <td class="sheep-log-time-col">${formatClock(entry.endTime)}</td>
-      <td class="sheep-log-time-col">${formatSeconds(entry.shearDuration)}</td>
-      <td class="sheep-log-time-col">${formatSeconds(entry.catchDuration)}</td>
-      <td class="sheep-log-time-col ${fullCycleClass}">${formatSeconds(entry.fullCycle)}</td>
+      <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
+      <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
+      <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
     elements.sheepLogBody.appendChild(row);
   });
