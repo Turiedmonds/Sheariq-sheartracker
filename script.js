@@ -433,6 +433,10 @@ function formatSecondsFromMidnightClock(secondsFromMidnight) {
 }
 
 function formatClock(ms) {
+  if (Number.isFinite(appState.runStartTime) && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
+    const elapsedSecondsFromRunStart = (ms - appState.runStartTime) / 1000;
+    return formatSecondsFromMidnightClock(appState.dayClockStartSecondsFromMidnight + elapsedSecondsFromRunStart);
+  }
   const date = new Date(ms);
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
