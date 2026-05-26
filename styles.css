@@ -1020,3 +1020,15 @@ td.pace-neutral {
   width:auto;
   display:block;
 }
+
+#panel-log td.sheep-log-anomaly-mild {
+  background: #fef9c3;
+}
+
+#panel-log td.sheep-log-anomaly-strong {
+  background: #fde68a;
+}
+
+#panel-log td.sheep-log-anomaly-severe {
+  background: #fdba74;
+}
