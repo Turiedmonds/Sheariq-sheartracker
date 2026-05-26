@@ -1668,15 +1668,18 @@ function renderLogTable() {
     noteButton.dataset.sheepNumber = String(entry.number);
     const noteText = normalizeSheepNote(entry.note);
     if (noteText) {
-      const notePreview = noteText.length > 60 ? `${noteText.slice(0, 60)}…` : noteText;
-      noteButton.textContent = "Edit note";
+      noteCell.classList.add("has-note");
+      noteButton.classList.add("has-note");
+      noteButton.textContent = "📝";
+      noteButton.setAttribute("aria-label", `Edit note for sheep #${entry.number}`);
       noteButton.title = noteText;
-      const noteLabel = document.createElement("div");
-      noteLabel.className = "sheep-log-note-text";
-      noteLabel.textContent = notePreview;
-      noteCell.append(noteButton, noteLabel);
+      noteCell.appendChild(noteButton);
     } else {
-      noteButton.textContent = "Add note";
+      noteCell.classList.add("is-empty");
+      noteButton.classList.add("is-empty");
+      noteButton.textContent = "+";
+      noteButton.setAttribute("aria-label", `Add note for sheep #${entry.number}`);
+      noteButton.title = `Add note for sheep #${entry.number}`;
       noteCell.appendChild(noteButton);
     }
     row.appendChild(noteCell);
