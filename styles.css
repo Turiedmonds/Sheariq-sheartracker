@@ -1343,15 +1343,6 @@ td {
   gap: 0.28rem;
 }
 
-#panel-performance .perf-section-title {
-  margin: 0.15rem 0 0.05rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #4b5563;
-}
-
 .panel-section-title {
   margin: 0;
   font-size: 0.82rem;
