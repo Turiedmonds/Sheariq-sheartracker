@@ -184,6 +184,7 @@
       <div class="panel-header" draggable="true">
         <h2 id="run-config-title">Day Configuration Panel</h2>
         <div class="panel-header-actions">
+          <button id="dayConfigHelpBtn" class="panel-help-btn" type="button" aria-label="Open Day Configuration help">? Help</button>
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
@@ -696,6 +697,31 @@
     </section>
   </main>
 
+
+
+  <div id="dayConfigHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="dayConfigHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="dayConfigHelpModalTitle">Day Configuration Help</h3>
+        <button id="dayConfigHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Day Configuration help">✕</button>
+      </div>
+      <div class="connection-help-modal-content day-config-help-content">
+        <h4 class="connection-help-title">What this panel is for</h4>
+        <p>The Day Configuration Panel sets the basic details for the session and run. These settings help the app calculate run time, targets, day clock, and record-specific alerts.</p>
+
+        <h4 class="connection-help-title">Session Details</h4>
+        <p><strong>Session Date:</strong><br />The date for this session.</p>
+        <p><strong>Farm:</strong><br />The farm/station name for this session. The dropdown helps reuse saved farm names.</p>
+
+        <h4 class="connection-help-title">Run Setup</h4>
+        <p><strong>Time System:</strong><br />Sets the run structure used by the app.</p>
+        <p><strong>Record type:</strong><br />Use Normal day when no record rules are needed. Strong wool lambs and Strong wool ewes turn on record-specific pen refill rules.</p>
+        <p><strong>Day Start Time:</strong><br />Sets the working day start time. The Day Clock is based on this.</p>
+        <p><strong>Custom Hours:</strong><br />Used when the time system needs a custom run length.</p>
+        <p><strong>Target Sheep:</strong><br />The target number of sheep for the run/day. This is used by Target / Pace calculations.</p>
+      </div>
+    </div>
+  </div>
 
   <div id="sheepLogHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="sheepLogHelpModalTitle">
