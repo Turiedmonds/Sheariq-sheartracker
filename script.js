@@ -278,6 +278,9 @@ const elements = {
   connectionHelpModalOverlay: document.getElementById("connectionHelpModalOverlay"),
   connectionHelpModalCloseBtn: document.getElementById("connectionHelpModalCloseBtn"),
   connectionHelpModalContent: document.getElementById("connectionHelpModalContent"),
+  dayConfigHelpBtn: document.getElementById("dayConfigHelpBtn"),
+  dayConfigHelpModalOverlay: document.getElementById("dayConfigHelpModalOverlay"),
+  dayConfigHelpModalCloseBtn: document.getElementById("dayConfigHelpModalCloseBtn"),
   sheepLogHelpBtn: document.getElementById("sheepLogHelpBtn"),
   sheepLogHelpModalOverlay: document.getElementById("sheepLogHelpModalOverlay"),
   sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn"),
@@ -446,6 +449,7 @@ function closeShortcutSettingsModal() {
   elements.shortcutSettingsModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
@@ -4152,7 +4156,8 @@ function closeConnectionHelpModal() {
   if (!elements.connectionHelpModalOverlay) return;
   elements.connectionHelpModalOverlay.hidden = true;
   if (
-    elements.sheepLogHelpModalOverlay?.hidden !== false
+    elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4162,6 +4167,28 @@ function closeConnectionHelpModal() {
   }
 }
 
+
+function openDayConfigHelpModal() {
+  if (!elements.dayConfigHelpModalOverlay) return;
+  elements.dayConfigHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeDayConfigHelpModal() {
+  if (!elements.dayConfigHelpModalOverlay) return;
+  elements.dayConfigHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
 
 function openSheepLogHelpModal() {
   if (!elements.sheepLogHelpModalOverlay) return;
@@ -4174,6 +4201,7 @@ function closeSheepLogHelpModal() {
   elements.sheepLogHelpModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4194,6 +4222,7 @@ function closeTimingPanelHelpModal() {
   elements.timingPanelHelpModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4215,6 +4244,7 @@ function closePerformancePanelHelpModal() {
   elements.performancePanelHelpModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4235,6 +4265,7 @@ function closeSimulationControlsHelpModal() {
   elements.simulationControlsHelpModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
@@ -4435,6 +4466,13 @@ function bindEvents() {
       renderShortcutSettings();
     });
   }
+  if (elements.dayConfigHelpBtn) elements.dayConfigHelpBtn.addEventListener("click", openDayConfigHelpModal);
+  if (elements.dayConfigHelpModalCloseBtn) elements.dayConfigHelpModalCloseBtn.addEventListener("click", closeDayConfigHelpModal);
+  if (elements.dayConfigHelpModalOverlay) {
+    elements.dayConfigHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.dayConfigHelpModalOverlay) closeDayConfigHelpModal();
+    });
+  }
   if (elements.dashboardConnectionHelpBtn) elements.dashboardConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
   if (elements.settingsConnectionHelpBtn) elements.settingsConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
   if (elements.connectionHelpModalCloseBtn) elements.connectionHelpModalCloseBtn.addEventListener("click", closeConnectionHelpModal);
@@ -4474,6 +4512,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     handleShortcutKeydown(event);
     if (event.key === "Escape") {
+      closeDayConfigHelpModal();
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
       closeTimingPanelHelpModal();
