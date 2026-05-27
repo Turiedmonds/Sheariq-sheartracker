@@ -53,6 +53,7 @@ const appState = {
     runLengthSeconds: 0
   },
   farm: "",
+  recordType: "none",
   lastMotorState: null,
   currentStats: {
     avgShear: 0,
@@ -143,6 +144,7 @@ const elements = {
   farmInput: document.getElementById("farmInput"),
   sessionDate: document.getElementById("sessionDate"),
   runType: document.getElementById("runType"),
+  recordType: document.getElementById("recordType"),
   dayStartTimeInput: document.getElementById("dayStartTimeInput"),
   customHours: document.getElementById("customHours"),
   targetSheepInput: document.getElementById("targetSheepInput"),
@@ -3032,6 +3034,7 @@ function getAutosavePayload() {
       currentCycle: appState.currentCycle,
       target: appState.target,
       farm: appState.farm,
+      recordType: appState.recordType,
       paused: appState.paused,
       pauseStartedAtMs: appState.pauseStartedAtMs,
       runEndTimeMs: appState.runEndTimeMs,
@@ -3177,6 +3180,8 @@ function loadLastSave() {
     if (!raw || !raw.state) return;
     Object.assign(appState, raw.state);
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
+    appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
+    if (elements.recordType) elements.recordType.value = appState.recordType;
     if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
       const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
       raw.panelOrder.forEach((id) => {
@@ -3730,6 +3735,14 @@ function bindEvents() {
     });
   }
 
+  if (elements.recordType) {
+    elements.recordType.addEventListener("change", () => {
+      const nextRecordType = elements.recordType.value;
+      appState.recordType = nextRecordType === "strongWoolLambs" || nextRecordType === "strongWoolEwes" ? nextRecordType : "none";
+      autosaveState();
+    });
+  }
+
   if (elements.dayStartTimeInput) {
     elements.dayStartTimeInput.addEventListener("input", () => {
       appState.dayStartTimeTouched = true;
@@ -4052,6 +4065,10 @@ function initialize() {
   if (elements.dayStartTimeInput) {
     elements.dayStartTimeInput.value = getDefaultDayStartTime();
     appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
+  }
+
+  if (elements.recordType) {
+    elements.recordType.value = appState.recordType;
   }
 
   setSimulationMode(false);
