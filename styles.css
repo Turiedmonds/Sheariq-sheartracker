@@ -71,6 +71,48 @@ body {
   max-width: 680px;
 }
 
+.connection-help {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.45rem 0.65rem;
+  background: #fff;
+  margin-bottom: 0.55rem;
+}
+
+.connection-help summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.connection-help-title {
+  margin: 0.55rem 0 0.35rem;
+  font-size: 1rem;
+  color: #111827;
+}
+
+.connection-help-list,
+.connection-help-troubleshooting {
+  margin: 0 0 0.5rem 1.1rem;
+  padding: 0;
+}
+
+.connection-help-list li,
+.connection-help-troubleshooting li {
+  margin-bottom: 0.35rem;
+  line-height: 1.35;
+}
+
+.connection-help-subtitle {
+  margin: 0.4rem 0 0.35rem;
+  font-size: 0.96rem;
+  color: #111827;
+}
+
+.help-tip,
+.help-term {
+  cursor: help;
+}
+
 .sim-status-row {
   display: grid;
   gap: 0.55rem;
