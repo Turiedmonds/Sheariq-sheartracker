@@ -188,6 +188,29 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
+.shortcut-hint-line {
+  margin-top: 0.45rem;
+}
+
+.shortcut-settings-group {
+  margin-top: 0.45rem;
+}
+
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 72px;
+  gap: 0.35rem 0.6rem;
+  align-items: center;
+  max-width: 320px;
+}
+
+.shortcut-input {
+  text-transform: uppercase;
+  text-align: center;
+  font-weight: 700;
+  padding: 0.2rem 0.35rem;
+}
+
 .top-card-group {
   margin: 0;
   border: 1px solid #e5e7eb;

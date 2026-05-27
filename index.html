@@ -120,6 +120,28 @@
           <button id="loadLastSaveBtn" type="button">Load Last Save</button>
           <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
         </div>
+        <div id="shortcutHintLine" class="status-box minimal-status shortcut-hint-line" aria-live="polite"></div>
+        <details class="top-card-group shortcut-settings-group">
+          <summary>Shortcut Settings</summary>
+          <div class="top-card-group-body">
+            <div id="shortcutMessage" class="status-box minimal-status" hidden></div>
+            <div class="shortcut-grid">
+              <label for="shortcutStartRun">Start Run</label>
+              <input id="shortcutStartRun" class="shortcut-input" type="text" maxlength="1" />
+              <label for="shortcutStopRun">Stop Run</label>
+              <input id="shortcutStopRun" class="shortcut-input" type="text" maxlength="1" />
+              <label for="shortcutPauseRun">Pause / Resume</label>
+              <input id="shortcutPauseRun" class="shortcut-input" type="text" maxlength="1" />
+              <label for="shortcutResetRun">Reset Run</label>
+              <input id="shortcutResetRun" class="shortcut-input" type="text" maxlength="1" />
+              <label for="shortcutMotorOn">Motor ON</label>
+              <input id="shortcutMotorOn" class="shortcut-input" type="text" maxlength="1" />
+              <label for="shortcutMotorOff">Motor OFF</label>
+              <input id="shortcutMotorOff" class="shortcut-input" type="text" maxlength="1" />
+            </div>
+            <button id="resetShortcutsBtn" class="btn-inline-small" type="button">Reset shortcuts</button>
+          </div>
+        </details>
         <div class="sim-status-row">
           <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
           <div class="status-box minimal-status">Run Status: <strong id="runStatus">Idle</strong></div>

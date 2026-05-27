@@ -18,6 +18,7 @@ const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCo
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
+const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 
@@ -136,6 +137,14 @@ const appState = {
     drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, extraSecondsOverAverage: 3 },
     cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, extraSecondsOverAverage: 5 },
     comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, extraSecondsOverAverage: 8 }
+  },
+  keyboardShortcuts: {
+    startRun: "S",
+    stopRun: "X",
+    pauseRun: "P",
+    resetRun: "R",
+    motorOn: "O",
+    motorOff: "F"
   }
 };
 
@@ -211,6 +220,15 @@ const elements = {
   simulationControls: document.getElementById("simulationControls"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
+  shortcutHintLine: document.getElementById("shortcutHintLine"),
+  shortcutMessage: document.getElementById("shortcutMessage"),
+  shortcutStartRun: document.getElementById("shortcutStartRun"),
+  shortcutStopRun: document.getElementById("shortcutStopRun"),
+  shortcutPauseRun: document.getElementById("shortcutPauseRun"),
+  shortcutResetRun: document.getElementById("shortcutResetRun"),
+  shortcutMotorOn: document.getElementById("shortcutMotorOn"),
+  shortcutMotorOff: document.getElementById("shortcutMotorOff"),
+  resetShortcutsBtn: document.getElementById("resetShortcutsBtn"),
   farmDropdown: document.getElementById("farmDropdown"),
   farmDropdownToggle: document.getElementById("farmDropdownToggle"),
   farmDropdownMenu: document.getElementById("farmDropdownMenu"),
@@ -258,6 +276,125 @@ const elements = {
   timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
   timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn")
 };
+
+const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
+  startRun: "S",
+  stopRun: "X",
+  pauseRun: "P",
+  resetRun: "R",
+  motorOn: "O",
+  motorOff: "F"
+});
+
+const SHORTCUT_ACTIONS = [
+  { key: "startRun", label: "Start Run", elementKey: "shortcutStartRun", buttonKey: "startRunBtn", titleSuffix: "" },
+  { key: "stopRun", label: "Stop Run", elementKey: "shortcutStopRun", buttonKey: "stopRunBtn", titleSuffix: "" },
+  { key: "pauseRun", label: "Pause / Resume", elementKey: "shortcutPauseRun", buttonKey: "pauseRunBtn", titleSuffix: "" },
+  { key: "resetRun", label: "Reset Run", elementKey: "shortcutResetRun", buttonKey: "resetRunBtn", titleSuffix: "" },
+  { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only" },
+  { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only" }
+];
+
+function sanitizeShortcutKey(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim().toUpperCase();
+  return trimmed.length === 1 ? trimmed : "";
+}
+
+function getFallbackShortcuts() {
+  return { ...DEFAULT_KEYBOARD_SHORTCUTS };
+}
+
+function normalizeShortcuts(payload) {
+  if (!payload || typeof payload !== "object") return getFallbackShortcuts();
+  const next = {};
+  const used = new Set();
+  for (const action of SHORTCUT_ACTIONS) {
+    const raw = sanitizeShortcutKey(payload[action.key]);
+    if (!raw || used.has(raw)) return getFallbackShortcuts();
+    next[action.key] = raw;
+    used.add(raw);
+  }
+  return next;
+}
+
+function saveKeyboardShortcuts() {
+  localStorage.setItem(KEYBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(appState.keyboardShortcuts));
+}
+
+function loadKeyboardShortcuts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEYBOARD_SHORTCUTS_STORAGE_KEY) || "null");
+    appState.keyboardShortcuts = normalizeShortcuts(parsed);
+  } catch (error) {
+    appState.keyboardShortcuts = getFallbackShortcuts();
+  }
+}
+
+function setShortcutMessage(message) {
+  if (!elements.shortcutMessage) return;
+  if (!message) {
+    elements.shortcutMessage.hidden = true;
+    elements.shortcutMessage.textContent = "";
+    return;
+  }
+  elements.shortcutMessage.hidden = false;
+  elements.shortcutMessage.textContent = message;
+}
+
+function renderShortcutSettings() {
+  SHORTCUT_ACTIONS.forEach((action) => {
+    const input = elements[action.elementKey];
+    if (input) input.value = appState.keyboardShortcuts[action.key];
+    const button = elements[action.buttonKey];
+    if (button) button.title = `Shortcut: ${appState.keyboardShortcuts[action.key]}${action.titleSuffix}`;
+  });
+  if (elements.shortcutHintLine) {
+    const s = appState.keyboardShortcuts;
+    elements.shortcutHintLine.textContent = `Shortcuts: ${s.startRun} Start, ${s.stopRun} Stop, ${s.pauseRun} Pause, ${s.resetRun} Reset, ${s.motorOn} Motor ON, ${s.motorOff} Motor OFF`;
+  }
+}
+
+function isTypingTarget(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+}
+
+function applyShortcutAssignment(actionKey, proposedValue) {
+  const value = sanitizeShortcutKey(proposedValue);
+  if (!value) {
+    setShortcutMessage("Press one key (letter/number/symbol).");
+    renderShortcutSettings();
+    return;
+  }
+  const conflict = SHORTCUT_ACTIONS.find((action) => action.key !== actionKey && appState.keyboardShortcuts[action.key] === value);
+  if (conflict) {
+    setShortcutMessage(`That key is already used by ${conflict.label}.`);
+    renderShortcutSettings();
+    return;
+  }
+  appState.keyboardShortcuts[actionKey] = value;
+  saveKeyboardShortcuts();
+  setShortcutMessage("");
+  renderShortcutSettings();
+}
+
+function handleShortcutKeydown(event) {
+  if (event.repeat || isTypingTarget(event.target)) return;
+  const key = sanitizeShortcutKey(event.key);
+  if (!key) return;
+  for (const action of SHORTCUT_ACTIONS) {
+    if (appState.keyboardShortcuts[action.key] !== key) continue;
+    if ((action.key === "motorOn" || action.key === "motorOff") && !appState.simulationMode) return;
+    const button = elements[action.buttonKey];
+    if (!button || button.disabled) return;
+    event.preventDefault();
+    button.click();
+    return;
+  }
+}
 
 function initTargetPaceSections() {
   const container = elements.targetPaceSections;
@@ -3884,6 +4021,31 @@ function bindEvents() {
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
+  SHORTCUT_ACTIONS.forEach((action) => {
+    const input = elements[action.elementKey];
+    if (!input) return;
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Tab") return;
+      event.preventDefault();
+      if (event.key === "Escape") {
+        renderShortcutSettings();
+        setShortcutMessage("");
+        return;
+      }
+      applyShortcutAssignment(action.key, event.key);
+    });
+    input.addEventListener("input", () => {
+      renderShortcutSettings();
+    });
+  });
+  if (elements.resetShortcutsBtn) {
+    elements.resetShortcutsBtn.addEventListener("click", () => {
+      appState.keyboardShortcuts = getFallbackShortcuts();
+      saveKeyboardShortcuts();
+      setShortcutMessage("");
+      renderShortcutSettings();
+    });
+  }
   if (elements.dashboardConnectionHelpBtn) elements.dashboardConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
   if (elements.settingsConnectionHelpBtn) elements.settingsConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
   if (elements.connectionHelpModalCloseBtn) elements.connectionHelpModalCloseBtn.addEventListener("click", closeConnectionHelpModal);
@@ -3907,6 +4069,7 @@ function bindEvents() {
     });
   }
   document.addEventListener("keydown", (event) => {
+    handleShortcutKeydown(event);
     if (event.key === "Escape") {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
@@ -4142,6 +4305,7 @@ function initialize() {
   loadSheepLogSortSettings();
   loadPlannedDelayMarkerVisibility();
   loadMarkerSettings();
+  loadKeyboardShortcuts();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
@@ -4156,6 +4320,7 @@ function initialize() {
   ensureInitialPanelLayout();
   applyPanelLayout();
   renderFarmDropdown();
+  renderShortcutSettings();
 
   if (elements.customHours && elements.runType) {
     elements.customHours.disabled = elements.runType.value !== "custom";
