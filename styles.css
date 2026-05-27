@@ -1376,11 +1376,11 @@ td.pace-neutral {
 }
 
 #panel-cycle .pen-refill-alert-row.pen-refill-alert-soon {
-  background: #ecfeff;
-  box-shadow: inset 0 0 0 1px #67e8f9;
+  background: #fce7f3;
+  box-shadow: inset 0 0 0 1px #f9a8d4;
 }
 
 #panel-cycle .pen-refill-alert-row.pen-refill-alert-now {
-  background: #cffafe;
-  box-shadow: inset 0 0 0 1px #06b6d4;
+  background: #fbcfe8;
+  box-shadow: inset 0 0 0 1px #ec4899;
 }
