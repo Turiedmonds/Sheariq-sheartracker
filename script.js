@@ -220,7 +220,6 @@ const elements = {
   simulationControls: document.getElementById("simulationControls"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
-  shortcutHintLine: document.getElementById("shortcutHintLine"),
   shortcutMessage: document.getElementById("shortcutMessage"),
   shortcutStartRun: document.getElementById("shortcutStartRun"),
   shortcutStopRun: document.getElementById("shortcutStopRun"),
@@ -379,10 +378,6 @@ function renderShortcutSettings() {
     const button = elements[action.buttonKey];
     if (button) button.title = `Shortcut: ${formatShortcutLabel(appState.keyboardShortcuts[action.key])}${action.titleSuffix}`;
   });
-  if (elements.shortcutHintLine) {
-    const s = appState.keyboardShortcuts;
-    elements.shortcutHintLine.textContent = `Shortcuts: ${formatShortcutLabel(s.startRun)} Start, ${formatShortcutLabel(s.stopRun)} Stop, ${formatShortcutLabel(s.pauseRun)} Pause, ${formatShortcutLabel(s.resetRun)} Reset, ${formatShortcutLabel(s.motorOn)} Motor ON, ${formatShortcutLabel(s.motorOff)} Motor OFF`;
-  }
 }
 
 function isTypingTarget(target) {
@@ -417,10 +412,10 @@ function handleShortcutKeydown(event) {
   if (!key) return;
   for (const action of SHORTCUT_ACTIONS) {
     if (appState.keyboardShortcuts[action.key] !== key) continue;
+    event.preventDefault();
     if ((action.key === "motorOn" || action.key === "motorOff") && !appState.simulationMode) return;
     const button = elements[action.buttonKey];
     if (!button || button.disabled) return;
-    event.preventDefault();
     button.click();
     return;
   }
