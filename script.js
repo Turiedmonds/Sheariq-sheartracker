@@ -161,6 +161,7 @@ const elements = {
   motorState: document.getElementById("motorState"),
   currentShear: document.getElementById("currentShear"),
   currentCatch: document.getElementById("currentCatch"),
+  runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
   runBadge: document.getElementById("runBadge"),
   dayClock: document.getElementById("dayClock"),
@@ -361,6 +362,7 @@ const METRIC_VALUE_IDS = new Set([
   "motorState",
   "currentShear",
   "currentCatch",
+  "runClock",
   "runCountdown",
   "dayClock",
   "totalSheep",
@@ -2037,6 +2039,7 @@ function updateLivePanel() {
   setText(elements.motorState, appState.currentMotorDisplay);
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
+  setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateRunBadge();
   updateDayClockDisplay();
