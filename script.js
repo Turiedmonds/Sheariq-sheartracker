@@ -193,6 +193,7 @@ const elements = {
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
   predictedQuarterTotal: document.getElementById("predictedQuarterTotal"),
+  predictedHourTotal: document.getElementById("predictedHourTotal"),
   requiredDayTotalSheep: document.getElementById("requiredDayTotalSheep"),
   requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
   requiredQuarterTotal: document.getElementById("requiredQuarterTotal"),
@@ -2797,6 +2798,10 @@ function updateStatsPanel() {
   const quarterTotals = calculateQuarterTotals(target);
   setText(elements.requiredQuarterTotal, quarterTotals.required === null ? "—" : String(quarterTotals.required));
   setText(elements.predictedQuarterTotal, quarterTotals.predicted === null ? "—" : String(quarterTotals.predicted));
+  const predictedHourTotal = appState.runActive && appState.currentStats.avgCycle > 0
+    ? Math.round(appState.currentStats.sheepPerHour)
+    : null;
+  setText(elements.predictedHourTotal, predictedHourTotal === null ? "—" : String(predictedHourTotal));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
     if (diff > 0) {
