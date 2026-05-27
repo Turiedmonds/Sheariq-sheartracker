@@ -16,6 +16,7 @@ const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
 const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder";
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
+const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 
@@ -126,7 +127,8 @@ const appState = {
   sheepLogSort: {
     by: "number",
     order: "asc"
-  }
+  },
+  showPlannedDelayMarkers: true
 };
 
 const elements = {
@@ -170,6 +172,7 @@ const elements = {
   sheepLogBody: document.getElementById("sheepLogBody"),
   sheepLogSortBy: document.getElementById("sheepLogSortBy"),
   sheepLogSortOrder: document.getElementById("sheepLogSortOrder"),
+  showPlannedDelayMarkers: document.getElementById("showPlannedDelayMarkers"),
   shellyIpInput: document.getElementById("shellyIpInput"),
   endpointMode: document.getElementById("endpointMode"),
   pollIntervalInput: document.getElementById("pollIntervalInput"),
@@ -1647,6 +1650,7 @@ function renderLogTable() {
 
   const { requiredCycle } = calculateTargetMetrics();
   const anomalyAverages = calculateSheepLogAnomalyAverages();
+  const plannedDelayMarkers = getPlannedDelayMarkersBySheepNumber();
   const sortedSheep = getSortedSheepLogEntries();
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
@@ -1664,6 +1668,24 @@ function renderLogTable() {
       <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
       <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
+    const markerCell = document.createElement("td");
+    markerCell.className = "sheep-log-marker-col";
+    if (appState.showPlannedDelayMarkers) {
+      const markers = plannedDelayMarkers.get(entry.number) || [];
+      if (markers.length) {
+        const tags = document.createElement("div");
+        tags.className = "sheep-log-marker-tags";
+        markers.forEach((marker) => {
+          const tag = document.createElement("span");
+          tag.className = "sheep-log-marker-tag";
+          tag.textContent = marker.shortLabel;
+          tag.title = marker.label;
+          tags.appendChild(tag);
+        });
+        markerCell.appendChild(tags);
+      }
+    }
+    row.appendChild(markerCell);
 
     const noteCell = document.createElement("td");
     noteCell.className = "sheep-log-note-col";
@@ -1700,6 +1722,62 @@ function renderLogTable() {
       scroller.scrollTop = scroller.scrollHeight;
     });
   });
+}
+
+function getPlannedDelayMarkersBySheepNumber() {
+  const markersBySheep = new Map();
+  if (!Array.isArray(appState.sheep) || appState.sheep.length < 4) return markersBySheep;
+  const catchEntries = appState.sheep.filter((entry) => Number.isFinite(entry?.catchDuration) && entry.catchDuration > 0);
+  if (catchEntries.length < 4) return markersBySheep;
+  const catchAverage = catchEntries.reduce((sum, entry) => sum + entry.catchDuration, 0) / catchEntries.length;
+  if (!Number.isFinite(catchAverage) || catchAverage <= 0) return markersBySheep;
+
+  const isNearCadence = (elapsedSeconds, cadenceSeconds, toleranceSeconds) => {
+    if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return false;
+    const nearestMultiple = Math.round(elapsedSeconds / cadenceSeconds) * cadenceSeconds;
+    return nearestMultiple > 0 && Math.abs(elapsedSeconds - nearestMultiple) <= toleranceSeconds;
+  };
+
+  appState.sheep.forEach((entry) => {
+    const catchDuration = Number(entry?.catchDuration);
+    const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
+    const markers = [];
+    const isComb = catchDuration >= catchAverage * 1.8 && isNearCadence(elapsedSeconds, 3600, 30);
+    const isCutter = catchDuration >= catchAverage * 1.4 && isNearCadence(elapsedSeconds, 900, 25);
+    const isDrink = catchDuration >= catchAverage * 1.25 && isNearCadence(elapsedSeconds, 450, 25);
+
+    if (isComb) {
+      markers.push({ type: "comb", shortLabel: "Comb", label: "Likely comb/handpiece change" });
+    } else if (isCutter) {
+      markers.push({ type: "cutter", shortLabel: "Cutter", label: "Likely cutter change" });
+    }
+    if (isDrink && markers.length === 0) {
+      markers.push({ type: "drink", shortLabel: "Drink?", label: "Possible drink break" });
+    }
+    if (markers.length > 0 && Number.isFinite(entry?.number)) {
+      markersBySheep.set(entry.number, markers);
+    }
+  });
+  return markersBySheep;
+}
+
+function loadPlannedDelayMarkerVisibility() {
+  let visible = true;
+  try {
+    const raw = localStorage.getItem(SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY);
+    if (raw === "false") visible = false;
+  } catch (error) {
+    visible = true;
+  }
+  appState.showPlannedDelayMarkers = visible;
+  if (elements.showPlannedDelayMarkers) elements.showPlannedDelayMarkers.checked = visible;
+}
+
+function setPlannedDelayMarkerVisibility(nextVisible) {
+  appState.showPlannedDelayMarkers = Boolean(nextVisible);
+  if (elements.showPlannedDelayMarkers) elements.showPlannedDelayMarkers.checked = appState.showPlannedDelayMarkers;
+  localStorage.setItem(SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY, appState.showPlannedDelayMarkers ? "true" : "false");
+  renderLogTable();
 }
 
 function normalizeSheepNote(value) {
@@ -3464,6 +3542,11 @@ function bindEvents() {
   if (elements.sheepLogSortOrder) {
     elements.sheepLogSortOrder.addEventListener("change", setSheepLogSortSettings);
   }
+  if (elements.showPlannedDelayMarkers) {
+    elements.showPlannedDelayMarkers.addEventListener("change", () => {
+      setPlannedDelayMarkerVisibility(elements.showPlannedDelayMarkers.checked);
+    });
+  }
   if (elements.sheepLogBody) {
     elements.sheepLogBody.addEventListener("click", (event) => {
       const target = event.target;
@@ -3649,6 +3732,7 @@ function initialize() {
   loadAutosaveSettings();
   loadFollowLatestSettings();
   loadSheepLogSortSettings();
+  loadPlannedDelayMarkerVisibility();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
