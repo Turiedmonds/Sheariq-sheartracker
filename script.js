@@ -253,7 +253,10 @@ const elements = {
   connectionHelpModalContent: document.getElementById("connectionHelpModalContent"),
   sheepLogHelpBtn: document.getElementById("sheepLogHelpBtn"),
   sheepLogHelpModalOverlay: document.getElementById("sheepLogHelpModalOverlay"),
-  sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn")
+  sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn"),
+  timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
+  timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
+  timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn")
 };
 
 function initTargetPaceSections() {
@@ -3675,7 +3678,10 @@ function openConnectionHelpModal() {
 function closeConnectionHelpModal() {
   if (!elements.connectionHelpModalOverlay) return;
   elements.connectionHelpModalOverlay.hidden = true;
-  if (elements.sheepLogHelpModalOverlay?.hidden !== false) {
+  if (
+    elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+  ) {
     document.body.classList.remove("layout-scroll-lock");
   }
 }
@@ -3690,7 +3696,27 @@ function openSheepLogHelpModal() {
 function closeSheepLogHelpModal() {
   if (!elements.sheepLogHelpModalOverlay) return;
   elements.sheepLogHelpModalOverlay.hidden = true;
-  if (elements.connectionHelpModalOverlay?.hidden !== false) {
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
+function openTimingPanelHelpModal() {
+  if (!elements.timingPanelHelpModalOverlay) return;
+  elements.timingPanelHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeTimingPanelHelpModal() {
+  if (!elements.timingPanelHelpModalOverlay) return;
+  elements.timingPanelHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+  ) {
     document.body.classList.remove("layout-scroll-lock");
   }
 }
@@ -3873,10 +3899,18 @@ function bindEvents() {
       if (event.target === elements.sheepLogHelpModalOverlay) closeSheepLogHelpModal();
     });
   }
+  if (elements.timingPanelHelpBtn) elements.timingPanelHelpBtn.addEventListener("click", openTimingPanelHelpModal);
+  if (elements.timingPanelHelpModalCloseBtn) elements.timingPanelHelpModalCloseBtn.addEventListener("click", closeTimingPanelHelpModal);
+  if (elements.timingPanelHelpModalOverlay) {
+    elements.timingPanelHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.timingPanelHelpModalOverlay) closeTimingPanelHelpModal();
+    });
+  }
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
+      closeTimingPanelHelpModal();
     }
   });
   if (elements.autosaveToggle) {

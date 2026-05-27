@@ -306,6 +306,10 @@ body.layout-edit-on .panel-dragging {
   margin: 0.35rem 0 0.55rem;
 }
 
+.timing-panel-help-content p {
+  margin: 0.35rem 0 0.55rem;
+}
+
 .panel-body {
   padding: 0.8rem;
   color: #4b5563;
