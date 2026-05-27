@@ -654,8 +654,11 @@ button:disabled {
 .sim-controls-section-actions {
   display: flex;
   align-items: center;
+  gap: 0.2rem;
 }
 
+.sim-controls-section-move-up,
+.sim-controls-section-move-down,
 .sim-controls-section-toggle {
   width: 1.6rem;
   min-width: 1.6rem;
