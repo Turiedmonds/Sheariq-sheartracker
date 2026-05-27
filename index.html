@@ -647,24 +647,47 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="form-grid single-row">
-          <label for="trendBucketSize">Bucket size</label>
-          <select id="trendBucketSize">
-            <option value="5">5 min</option>
-            <option value="15" selected>15 min</option>
-            <option value="30">30 min</option>
-          </select>
-        </div>
-        <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-          <span><strong>Blue</strong> Avg catch-to-release</span>
-          <span><strong>Green</strong> Avg catch</span>
-          <span><strong>Orange</strong> Target cycle</span>
-        </div>
-        <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg catch-to-release 0.000s • Target 0.000s • Set target for pace comparison.</div>
-        <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
-        <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
-        <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
-        <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
+        <section class="panel-section" aria-labelledby="trend-graph-settings-title">
+          <header class="panel-section-header">
+            <h3 id="trend-graph-settings-title" class="panel-section-title">Graph Settings</h3>
+          </header>
+          <div class="panel-section-content">
+            <div class="form-grid single-row">
+              <label for="trendBucketSize">Bucket size</label>
+              <select id="trendBucketSize">
+                <option value="5">5 min</option>
+                <option value="15" selected>15 min</option>
+                <option value="30">30 min</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel-section" aria-labelledby="trend-graph-summary-title">
+          <header class="panel-section-header">
+            <h3 id="trend-graph-summary-title" class="panel-section-title">Graph Summary</h3>
+          </header>
+          <div class="panel-section-content">
+            <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
+              <span><strong>Blue</strong> Avg catch-to-release</span>
+              <span><strong>Green</strong> Avg catch</span>
+              <span><strong>Orange</strong> Target cycle</span>
+            </div>
+            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg catch-to-release 0.000s • Target 0.000s • Set target for pace comparison.</div>
+            <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
+            <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
+          </div>
+        </section>
+
+        <section class="panel-section" aria-labelledby="trend-graph-canvas-title">
+          <header class="panel-section-header">
+            <h3 id="trend-graph-canvas-title" class="panel-section-title">Graph</h3>
+          </header>
+          <div class="panel-section-content trend-graph-canvas-section">
+            <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
+            <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
+          </div>
+        </section>
       </div>
     </section>
 

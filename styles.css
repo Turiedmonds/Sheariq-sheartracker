@@ -1062,7 +1062,16 @@ td {
   -webkit-overflow-scrolling: touch;
 }
 
-.trend-legend {
+
+#panel-trend-graph .trend-graph-canvas-section {
+  gap: 0.6rem;
+}
+
+#panel-trend-graph .panel-section-content .form-grid.single-row {
+  margin-top: 0;
+}
+
+#panel-trend-graph .trend-legend {
   margin-top: 0.6rem;
   padding: 0.45rem 0.6rem;
   border: 1px solid #dbe3ef;
@@ -1075,7 +1084,7 @@ td {
   gap: 0.6rem;
 }
 
-.trend-latest-summary {
+#panel-trend-graph .trend-latest-summary {
   margin-top: 0.5rem;
   padding: 0.5rem 0.6rem;
   border: 1px solid #d1d5db;
@@ -1084,7 +1093,7 @@ td {
   color: #111827;
 }
 
-.trend-graph-tooltip {
+#panel-trend-graph .trend-graph-tooltip {
   margin-top: 0.5rem;
   padding: 0.55rem 0.65rem;
   border: 1px solid #94a3b8;
@@ -1094,7 +1103,7 @@ td {
   line-height: 1.45;
 }
 
-.trend-details-toggle {
+#panel-trend-graph .trend-details-toggle {
   margin-top: 0.45rem;
   padding: 0.28rem 0.55rem;
   width: auto;
