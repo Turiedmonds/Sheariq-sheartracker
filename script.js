@@ -2178,12 +2178,19 @@ function updatePenRefillAlertDisplay() {
   }
 
   const sheepCompletedCount = appState.sheep.length;
-  if (!Number.isFinite(sheepCompletedCount) || sheepCompletedCount <= 0) {
+  const hasActiveSheepOnBoard = Boolean(
+    appState.runActive
+    && appState.currentCycle.motorOn
+    && appState.currentCycle.shearStart
+  );
+  const sheepTakenFromPen = sheepCompletedCount + (hasActiveSheepOnBoard ? 1 : 0);
+
+  if (!Number.isFinite(sheepTakenFromPen) || sheepTakenFromPen <= 0) {
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
-  const sheepIntoCycle = sheepCompletedCount % cycleSize;
+  const sheepIntoCycle = sheepTakenFromPen % cycleSize;
   if (sheepIntoCycle === 0) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
