@@ -499,18 +499,32 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="form-grid single-row">
-          <label for="blockMinutes">Custom minutes</label>
-          <input id="blockMinutes" type="number" min="1" value="15" />
-        </div>
-        <div class="button-row">
-          <button class="block-btn" data-minutes="5" type="button">5</button>
-          <button class="block-btn" data-minutes="10" type="button">10</button>
-          <button class="block-btn" data-minutes="15" type="button">15</button>
-          <button class="block-btn" data-minutes="30" type="button">30</button>
-          <button class="block-btn" data-minutes="60" type="button">60</button>
-        </div>
-        <div id="blockResults">No block data yet.</div>
+        <section class="panel-section" aria-labelledby="block-settings-title">
+          <header class="panel-section-header">
+            <h3 id="block-settings-title" class="panel-section-title">Block Settings</h3>
+          </header>
+          <div class="panel-section-content">
+            <div class="form-grid single-row">
+              <label for="blockMinutes">Custom minutes</label>
+              <input id="blockMinutes" type="number" min="1" value="15" />
+            </div>
+            <div class="button-row">
+              <button class="block-btn" data-minutes="5" type="button">5</button>
+              <button class="block-btn" data-minutes="10" type="button">10</button>
+              <button class="block-btn" data-minutes="15" type="button">15</button>
+              <button class="block-btn" data-minutes="30" type="button">30</button>
+              <button class="block-btn" data-minutes="60" type="button">60</button>
+            </div>
+          </div>
+        </section>
+        <section class="panel-section" aria-labelledby="block-results-title">
+          <header class="panel-section-header">
+            <h3 id="block-results-title" class="panel-section-title">Block Results</h3>
+          </header>
+          <div class="panel-section-content">
+            <div id="blockResults">No block data yet.</div>
+          </div>
+        </section>
       </div>
     </section>
 
