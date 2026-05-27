@@ -592,8 +592,56 @@ button {
 }
 
 button:disabled {
-  opacity: 0.6;
+  opacity: 0.82;
   cursor: not-allowed;
+}
+
+.btn-start:disabled,
+.btn-stop:disabled,
+.btn-pause:disabled,
+.btn-reset:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
+.btn-start:disabled {
+  background: #6fae86;
+  color: #f8fafc;
+}
+
+.btn-stop:disabled {
+  background: #c47f7f;
+  color: #f8fafc;
+}
+
+.btn-pause:disabled {
+  background: #d8cf83;
+  color: #1f2937;
+}
+
+.btn-reset:disabled {
+  background: #e5e7eb;
+  color: #4b5563;
+  border-color: #cbd5e1;
+}
+
+.sim-controls-body {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.sim-controls-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.7rem 0.75rem;
+  background: #fcfcfd;
+}
+
+.sim-controls-section-title {
+  margin: 0 0 0.45rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #374151;
 }
 
 .button-row {
