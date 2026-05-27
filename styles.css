@@ -1363,3 +1363,24 @@ td.pace-neutral {
   background: #e5e7eb;
   box-shadow: inset 0 0 0 1px #9ca3af;
 }
+
+#panel-cycle .pen-refill-alert-row {
+  border-radius: 4px;
+  transition: background-color 150ms ease, box-shadow 150ms ease;
+}
+
+#panel-cycle .pen-refill-alert-row.pen-refill-alert-active {
+  padding: 0.2rem 0.35rem;
+  margin-inline: -0.35rem;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+#panel-cycle .pen-refill-alert-row.pen-refill-alert-soon {
+  background: #ecfeff;
+  box-shadow: inset 0 0 0 1px #67e8f9;
+}
+
+#panel-cycle .pen-refill-alert-row.pen-refill-alert-now {
+  background: #cffafe;
+  box-shadow: inset 0 0 0 1px #06b6d4;
+}
