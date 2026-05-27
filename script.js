@@ -16,6 +16,8 @@ const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
 const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder";
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SIM_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.simSectionsCollapsed";
+const SIM_SECTIONS_ORDER_STORAGE_KEY = "sheariq.simSectionsOrder";
+const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
@@ -533,31 +535,79 @@ function initTargetPaceSections() {
 }
 
 function initializeSimulationSections() {
-  const sections = Array.from(document.querySelectorAll("#panel-sim .sim-controls-section"));
+  const container = document.querySelector("#panel-sim .sim-controls-body");
+  if (!container) return;
+  const sections = Array.from(container.querySelectorAll(".sim-controls-section"));
   if (!sections.length) return;
+  const sectionMap = new Map(
+    sections
+      .map((section) => [section.dataset.sectionId, section])
+      .filter(([sectionId]) => Boolean(sectionId))
+  );
+
+  let storedOrder = [];
   let storedCollapsed = {};
   try {
+    const rawOrder = JSON.parse(localStorage.getItem(SIM_SECTIONS_ORDER_STORAGE_KEY) || "[]");
+    storedOrder = Array.isArray(rawOrder) ? rawOrder : [];
     const raw = JSON.parse(localStorage.getItem(SIM_SECTIONS_COLLAPSED_STORAGE_KEY) || "{}");
     storedCollapsed = raw && typeof raw === "object" ? raw : {};
   } catch (error) {
+    storedOrder = [];
     storedCollapsed = {};
   }
 
+  const validStoredOrder = storedOrder.filter((sectionId) => sectionMap.has(sectionId));
+  const appliedOrder = [];
+  validStoredOrder.forEach((sectionId) => {
+    if (appliedOrder.includes(sectionId)) return;
+    appliedOrder.push(sectionId);
+  });
+  DEFAULT_SIM_SECTION_ORDER.forEach((sectionId) => {
+    if (sectionMap.has(sectionId) && !appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
+  });
+
+  appliedOrder.forEach((sectionId) => {
+    const section = sectionMap.get(sectionId);
+    if (section) container.appendChild(section);
+  });
+
   const persistState = () => {
+    const currentSections = Array.from(container.querySelectorAll(".sim-controls-section"));
+    const order = currentSections
+      .map((section) => section.dataset.sectionId)
+      .filter((sectionId) => Boolean(sectionId));
     const collapsed = {};
-    sections.forEach((section) => {
+    currentSections.forEach((section) => {
       const sectionId = section.dataset.sectionId;
       if (!sectionId) return;
       collapsed[sectionId] = section.classList.contains("is-collapsed");
     });
+    localStorage.setItem(SIM_SECTIONS_ORDER_STORAGE_KEY, JSON.stringify(order));
     localStorage.setItem(SIM_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  const updateSimulationSectionMoveButtons = () => {
+    const currentSections = Array.from(container.querySelectorAll(".sim-controls-section"));
+    currentSections.forEach((section, index) => {
+      const upBtn = section.querySelector(".sim-controls-section-move-up");
+      const downBtn = section.querySelector(".sim-controls-section-move-down");
+      if (upBtn) upBtn.disabled = index === 0;
+      if (downBtn) downBtn.disabled = index === currentSections.length - 1;
+    });
   };
 
   sections.forEach((section) => {
     const sectionId = section.dataset.sectionId;
     const toggleBtn = section.querySelector(".sim-controls-section-toggle");
+    const upBtn = section.querySelector(".sim-controls-section-move-up");
+    const downBtn = section.querySelector(".sim-controls-section-move-down");
     if (!sectionId || !toggleBtn) return;
-    if (storedCollapsed[sectionId]) section.classList.add("is-collapsed");
+    if (storedCollapsed[sectionId]) {
+      section.classList.add("is-collapsed");
+    } else {
+      section.classList.remove("is-collapsed");
+    }
     const updateToggleState = () => {
       const isCollapsed = section.classList.contains("is-collapsed");
       toggleBtn.textContent = isCollapsed ? "+" : "−";
@@ -569,7 +619,28 @@ function initializeSimulationSections() {
       updateToggleState();
       persistState();
     });
+    if (upBtn) {
+      upBtn.addEventListener("click", () => {
+        const previous = section.previousElementSibling;
+        if (!previous) return;
+        container.insertBefore(section, previous);
+        updateSimulationSectionMoveButtons();
+        persistState();
+      });
+    }
+    if (downBtn) {
+      downBtn.addEventListener("click", () => {
+        const next = section.nextElementSibling;
+        if (!next) return;
+        container.insertBefore(next, section);
+        updateSimulationSectionMoveButtons();
+        persistState();
+      });
+    }
   });
+
+  updateSimulationSectionMoveButtons();
+  persistState();
 }
 
 const METRIC_VALUE_IDS = new Set([
