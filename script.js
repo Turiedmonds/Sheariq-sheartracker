@@ -132,9 +132,9 @@ const appState = {
   showPlannedDelayMarkers: true,
   markerSettingsOpen: false,
   markerSettings: {
-    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, catchLongerThanAverage: 1.25 },
-    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, catchLongerThanAverage: 1.4 },
-    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, catchLongerThanAverage: 1.8 }
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, extraSecondsOverAverage: 3 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, extraSecondsOverAverage: 5 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, extraSecondsOverAverage: 8 }
   }
 };
 
@@ -185,13 +185,13 @@ const elements = {
   resetMarkerSettingsBtn: document.getElementById("resetMarkerSettingsBtn"),
   drinkTimingMinutes: document.getElementById("drinkTimingMinutes"),
   drinkWindowSeconds: document.getElementById("drinkWindowSeconds"),
-  drinkCatchLonger: document.getElementById("drinkCatchLonger"),
+  drinkExtraSeconds: document.getElementById("drinkExtraSeconds"),
   cutterTimingMinutes: document.getElementById("cutterTimingMinutes"),
   cutterWindowSeconds: document.getElementById("cutterWindowSeconds"),
-  cutterCatchLonger: document.getElementById("cutterCatchLonger"),
+  cutterExtraSeconds: document.getElementById("cutterExtraSeconds"),
   combTimingMinutes: document.getElementById("combTimingMinutes"),
   combWindowSeconds: document.getElementById("combWindowSeconds"),
-  combCatchLonger: document.getElementById("combCatchLonger"),
+  combExtraSeconds: document.getElementById("combExtraSeconds"),
   shellyIpInput: document.getElementById("shellyIpInput"),
   endpointMode: document.getElementById("endpointMode"),
   pollIntervalInput: document.getElementById("pollIntervalInput"),
@@ -1762,11 +1762,11 @@ function getPlannedDelayMarkersBySheepNumber() {
     const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
     const markers = [];
     const { drink, cutter, comb } = appState.markerSettings;
-    const isComb = catchDuration >= catchAverage * comb.catchLongerThanAverage
+    const isComb = catchDuration >= catchAverage + comb.extraSecondsOverAverage
       && isNearCadence(elapsedSeconds, comb.plannedTimingMinutes * 60, comb.timeWindowSeconds);
-    const isCutter = catchDuration >= catchAverage * cutter.catchLongerThanAverage
+    const isCutter = catchDuration >= catchAverage + cutter.extraSecondsOverAverage
       && isNearCadence(elapsedSeconds, cutter.plannedTimingMinutes * 60, cutter.timeWindowSeconds);
-    const isDrink = catchDuration >= catchAverage * drink.catchLongerThanAverage
+    const isDrink = catchDuration >= catchAverage + drink.extraSecondsOverAverage
       && isNearCadence(elapsedSeconds, drink.plannedTimingMinutes * 60, drink.timeWindowSeconds);
 
     if (isComb) {
@@ -1786,9 +1786,9 @@ function getPlannedDelayMarkersBySheepNumber() {
 
 function getDefaultMarkerSettings() {
   return {
-    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, catchLongerThanAverage: 1.25 },
-    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, catchLongerThanAverage: 1.4 },
-    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, catchLongerThanAverage: 1.8 }
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, extraSecondsOverAverage: 3 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, extraSecondsOverAverage: 5 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, extraSecondsOverAverage: 8 }
   };
 }
 
@@ -1797,11 +1797,17 @@ function sanitizeMarkerSettings(rawSettings) {
   const sanitizeRule = (rawRule, fallbackRule) => {
     const plannedTimingMinutes = Number(rawRule?.plannedTimingMinutes);
     const timeWindowSeconds = Number(rawRule?.timeWindowSeconds);
+    const extraSecondsOverAverage = Number(rawRule?.extraSecondsOverAverage);
     const catchLongerThanAverage = Number(rawRule?.catchLongerThanAverage);
+    const migratedExtraSecondsOverAverage = Number.isFinite(extraSecondsOverAverage)
+      ? extraSecondsOverAverage
+      : (Number.isFinite(catchLongerThanAverage) ? (catchLongerThanAverage - 1) * 10 : NaN);
     return {
       plannedTimingMinutes: Number.isFinite(plannedTimingMinutes) && plannedTimingMinutes > 0 ? plannedTimingMinutes : fallbackRule.plannedTimingMinutes,
       timeWindowSeconds: Number.isFinite(timeWindowSeconds) && timeWindowSeconds > 0 ? timeWindowSeconds : fallbackRule.timeWindowSeconds,
-      catchLongerThanAverage: Number.isFinite(catchLongerThanAverage) && catchLongerThanAverage >= 1 ? catchLongerThanAverage : fallbackRule.catchLongerThanAverage
+      extraSecondsOverAverage: Number.isFinite(migratedExtraSecondsOverAverage) && migratedExtraSecondsOverAverage >= 0
+        ? migratedExtraSecondsOverAverage
+        : fallbackRule.extraSecondsOverAverage
     };
   };
   return {
@@ -1815,13 +1821,13 @@ function syncMarkerSettingsInputs() {
   const { drink, cutter, comb } = appState.markerSettings;
   if (elements.drinkTimingMinutes) elements.drinkTimingMinutes.value = String(drink.plannedTimingMinutes);
   if (elements.drinkWindowSeconds) elements.drinkWindowSeconds.value = String(drink.timeWindowSeconds);
-  if (elements.drinkCatchLonger) elements.drinkCatchLonger.value = String(drink.catchLongerThanAverage);
+  if (elements.drinkExtraSeconds) elements.drinkExtraSeconds.value = String(drink.extraSecondsOverAverage);
   if (elements.cutterTimingMinutes) elements.cutterTimingMinutes.value = String(cutter.plannedTimingMinutes);
   if (elements.cutterWindowSeconds) elements.cutterWindowSeconds.value = String(cutter.timeWindowSeconds);
-  if (elements.cutterCatchLonger) elements.cutterCatchLonger.value = String(cutter.catchLongerThanAverage);
+  if (elements.cutterExtraSeconds) elements.cutterExtraSeconds.value = String(cutter.extraSecondsOverAverage);
   if (elements.combTimingMinutes) elements.combTimingMinutes.value = String(comb.plannedTimingMinutes);
   if (elements.combWindowSeconds) elements.combWindowSeconds.value = String(comb.timeWindowSeconds);
-  if (elements.combCatchLonger) elements.combCatchLonger.value = String(comb.catchLongerThanAverage);
+  if (elements.combExtraSeconds) elements.combExtraSeconds.value = String(comb.extraSecondsOverAverage);
 }
 
 function saveMarkerSettings() {
@@ -1851,17 +1857,17 @@ function applyMarkerSettingsFromInputs() {
     drink: {
       plannedTimingMinutes: elements.drinkTimingMinutes?.value,
       timeWindowSeconds: elements.drinkWindowSeconds?.value,
-      catchLongerThanAverage: elements.drinkCatchLonger?.value
+      extraSecondsOverAverage: elements.drinkExtraSeconds?.value
     },
     cutter: {
       plannedTimingMinutes: elements.cutterTimingMinutes?.value,
       timeWindowSeconds: elements.cutterWindowSeconds?.value,
-      catchLongerThanAverage: elements.cutterCatchLonger?.value
+      extraSecondsOverAverage: elements.cutterExtraSeconds?.value
     },
     comb: {
       plannedTimingMinutes: elements.combTimingMinutes?.value,
       timeWindowSeconds: elements.combWindowSeconds?.value,
-      catchLongerThanAverage: elements.combCatchLonger?.value
+      extraSecondsOverAverage: elements.combExtraSeconds?.value
     }
   });
   syncMarkerSettingsInputs();
@@ -3670,13 +3676,13 @@ function bindEvents() {
   [
     elements.drinkTimingMinutes,
     elements.drinkWindowSeconds,
-    elements.drinkCatchLonger,
+    elements.drinkExtraSeconds,
     elements.cutterTimingMinutes,
     elements.cutterWindowSeconds,
-    elements.cutterCatchLonger,
+    elements.cutterExtraSeconds,
     elements.combTimingMinutes,
     elements.combWindowSeconds,
-    elements.combCatchLonger
+    elements.combExtraSeconds
   ].filter(Boolean).forEach((input) => {
     input.addEventListener("change", applyMarkerSettingsFromInputs);
   });
