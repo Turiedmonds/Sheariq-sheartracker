@@ -236,82 +236,82 @@
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
-          <button id="performancePanelHelpBtn" class="sheep-log-help-btn" type="button" aria-label="Open Performance Panel help">? Help</button>
+          <button id="performancePanelHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Performance Panel help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
         <div class="perf-sections">
-          <section id="perf-section-count" class="perf-section" data-section-id="sheepCount" aria-labelledby="perf-section-count-title">
-            <header class="perf-section-header">
-              <h3 id="perf-section-count-title" class="perf-section-title">Sheep Count</h3>
-              <div class="perf-section-actions">
-                <button class="perf-section-move-up" type="button" aria-label="Move Sheep Count section up">↑</button>
-                <button class="perf-section-move-down" type="button" aria-label="Move Sheep Count section down">↓</button>
-                <button class="perf-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Sheep Count section">−</button>
+          <section id="perf-section-count" class="perf-section panel-section" data-section-id="sheepCount" aria-labelledby="perf-section-count-title">
+            <header class="perf-section-header panel-section-header">
+              <h3 id="perf-section-count-title" class="perf-section-title panel-section-title">Sheep Count</h3>
+              <div class="perf-section-actions panel-section-actions">
+                <button class="perf-section-move-up section-icon-btn" type="button" aria-label="Move Sheep Count section up">↑</button>
+                <button class="perf-section-move-down section-icon-btn" type="button" aria-label="Move Sheep Count section down">↓</button>
+                <button class="perf-section-toggle section-icon-btn" type="button" aria-expanded="true" aria-label="Collapse Sheep Count section">−</button>
               </div>
             </header>
-            <div class="perf-section-content">
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Total Sheep Shorn</span>
-                <strong id="totalSheep" class="perf-metric-value">0</strong>
+            <div class="perf-section-content panel-section-content">
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Total Sheep Shorn</span>
+                <strong id="totalSheep" class="perf-metric-value panel-metric-value">0</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Current Sheep Number</span>
-                <strong id="currentSheepNumber" class="perf-metric-value">0</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Current Sheep Number</span>
+                <strong id="currentSheepNumber" class="perf-metric-value panel-metric-value">0</strong>
               </div>
             </div>
           </section>
 
-          <section id="perf-section-avg" class="perf-section" data-section-id="averages" aria-labelledby="perf-section-avg-title">
-            <header class="perf-section-header">
-              <h3 id="perf-section-avg-title" class="perf-section-title">Averages</h3>
-              <div class="perf-section-actions">
-                <button class="perf-section-move-up" type="button" aria-label="Move Averages section up">↑</button>
-                <button class="perf-section-move-down" type="button" aria-label="Move Averages section down">↓</button>
-                <button class="perf-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Averages section">−</button>
+          <section id="perf-section-avg" class="perf-section panel-section" data-section-id="averages" aria-labelledby="perf-section-avg-title">
+            <header class="perf-section-header panel-section-header">
+              <h3 id="perf-section-avg-title" class="perf-section-title panel-section-title">Averages</h3>
+              <div class="perf-section-actions panel-section-actions">
+                <button class="perf-section-move-up section-icon-btn" type="button" aria-label="Move Averages section up">↑</button>
+                <button class="perf-section-move-down section-icon-btn" type="button" aria-label="Move Averages section down">↓</button>
+                <button class="perf-section-toggle section-icon-btn" type="button" aria-expanded="true" aria-label="Collapse Averages section">−</button>
               </div>
             </header>
-            <div class="perf-section-content">
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Average shear time</span>
-                <strong id="avgShear" class="perf-metric-value">0.0s</strong>
+            <div class="perf-section-content panel-section-content">
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Average shear time</span>
+                <strong id="avgShear" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Average catch time</span>
-                <strong id="avgCatch" class="perf-metric-value">0.0s</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Average catch time</span>
+                <strong id="avgCatch" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Average catch-to-release time</span>
-                <strong id="avgCycle" class="perf-metric-value">0.0s</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Average catch-to-release time</span>
+                <strong id="avgCycle" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Sheep per hour</span>
-                <strong id="sheepPerHour" class="perf-metric-value">0.00</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Sheep per hour</span>
+                <strong id="sheepPerHour" class="perf-metric-value panel-metric-value">0.00</strong>
               </div>
             </div>
           </section>
 
-          <section id="perf-section-latest" class="perf-section" data-section-id="latestExtremes" aria-labelledby="perf-section-latest-title">
-            <header class="perf-section-header">
-              <h3 id="perf-section-latest-title" class="perf-section-title">Latest &amp; Extremes</h3>
-              <div class="perf-section-actions">
-                <button class="perf-section-move-up" type="button" aria-label="Move Latest and Extremes section up">↑</button>
-                <button class="perf-section-move-down" type="button" aria-label="Move Latest and Extremes section down">↓</button>
-                <button class="perf-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Latest and Extremes section">−</button>
+          <section id="perf-section-latest" class="perf-section panel-section" data-section-id="latestExtremes" aria-labelledby="perf-section-latest-title">
+            <header class="perf-section-header panel-section-header">
+              <h3 id="perf-section-latest-title" class="perf-section-title panel-section-title">Latest &amp; Extremes</h3>
+              <div class="perf-section-actions panel-section-actions">
+                <button class="perf-section-move-up section-icon-btn" type="button" aria-label="Move Latest and Extremes section up">↑</button>
+                <button class="perf-section-move-down section-icon-btn" type="button" aria-label="Move Latest and Extremes section down">↓</button>
+                <button class="perf-section-toggle section-icon-btn" type="button" aria-expanded="true" aria-label="Collapse Latest and Extremes section">−</button>
               </div>
             </header>
-            <div class="perf-section-content">
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Last sheep time</span>
-                <strong id="lastSheepTime" class="perf-metric-value">—</strong>
+            <div class="perf-section-content panel-section-content">
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Last sheep time</span>
+                <strong id="lastSheepTime" class="perf-metric-value panel-metric-value">—</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Fastest sheep today</span>
-                <strong id="fastestSheepToday" class="perf-metric-value">—</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Fastest sheep today</span>
+                <strong id="fastestSheepToday" class="perf-metric-value panel-metric-value">—</strong>
               </div>
-              <div class="perf-metric-row">
-                <span class="perf-metric-label">Slowest sheep today</span>
-                <strong id="slowestSheepToday" class="perf-metric-value">—</strong>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Slowest sheep today</span>
+                <strong id="slowestSheepToday" class="perf-metric-value panel-metric-value">—</strong>
               </div>
             </div>
           </section>
