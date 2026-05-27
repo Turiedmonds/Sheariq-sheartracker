@@ -1236,6 +1236,57 @@ td {
   padding-bottom: 0.65rem;
 }
 
+#panel-performance .panel-body {
+  padding-top: 0.65rem;
+  padding-bottom: 0.65rem;
+}
+
+#panel-performance .perf-sections {
+  display: grid;
+  gap: 0.7rem;
+}
+
+#panel-performance .perf-section {
+  display: grid;
+  gap: 0.28rem;
+}
+
+#panel-performance .perf-section-header {
+  display: block;
+}
+
+#panel-performance .perf-section-title {
+  margin: 0.15rem 0 0.05rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4b5563;
+}
+
+#panel-performance .perf-section-content {
+  display: grid;
+  gap: 0.25rem;
+}
+
+#panel-performance .perf-metric-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) auto;
+  align-items: center;
+  column-gap: 0.55rem;
+}
+
+#panel-performance .perf-metric-label {
+  min-width: 0;
+}
+
+#panel-performance .perf-metric-value {
+  justify-self: end;
+  text-align: right;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 #panel-cycle .metrics-grid {
   gap: 0.35rem;
 }
@@ -1289,6 +1340,16 @@ td {
 }
 
 @media (max-width: 900px) {
+  #panel-performance .perf-metric-row {
+    grid-template-columns: 1fr;
+    row-gap: 0.15rem;
+  }
+
+  #panel-performance .perf-metric-value {
+    justify-self: start;
+    text-align: left;
+  }
+
   #panel-cycle .metric-row {
     grid-template-columns: 1fr;
     row-gap: 0.15rem;
