@@ -19,6 +19,7 @@ const SIM_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.simSectionsCollapsed";
 const SIM_SECTIONS_ORDER_STORAGE_KEY = "sheariq.simSectionsOrder";
 const PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.performanceSectionsCollapsed";
 const PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.performanceSectionsOrder";
+const DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.dayConfigSectionsCollapsed";
 const DEFAULT_PERFORMANCE_SECTION_ORDER = ["sheepCount", "averages", "latestExtremes"];
 const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
@@ -772,6 +773,53 @@ function initializePerformanceSections() {
   });
 
   updatePerformanceSectionMoveButtons();
+  persistState();
+}
+
+function initializeDayConfigSections() {
+  const sections = Array.from(document.querySelectorAll("#panel-config .day-config-section"));
+  if (!sections.length) return;
+
+  let storedCollapsed = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY) || "{}");
+    storedCollapsed = raw && typeof raw === "object" ? raw : {};
+  } catch (error) {
+    storedCollapsed = {};
+  }
+
+  const persistState = () => {
+    const collapsed = {};
+    sections.forEach((section) => {
+      const sectionId = section.dataset.sectionId;
+      if (!sectionId) return;
+      collapsed[sectionId] = section.classList.contains("is-collapsed");
+    });
+    localStorage.setItem(DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  sections.forEach((section) => {
+    const sectionId = section.dataset.sectionId;
+    const toggleBtn = section.querySelector(".day-config-section-toggle");
+    if (!sectionId || !toggleBtn) return;
+    if (storedCollapsed[sectionId] === true) {
+      section.classList.add("is-collapsed");
+    } else {
+      section.classList.remove("is-collapsed");
+    }
+    const updateToggleState = () => {
+      const isCollapsed = section.classList.contains("is-collapsed");
+      toggleBtn.textContent = isCollapsed ? "+" : "−";
+      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    };
+    updateToggleState();
+    toggleBtn.addEventListener("click", () => {
+      section.classList.toggle("is-collapsed");
+      updateToggleState();
+      persistState();
+    });
+  });
+
   persistState();
 }
 
@@ -4503,6 +4551,7 @@ function bindEvents() {
   }
   initializeSimulationSections();
   initializePerformanceSections();
+  initializeDayConfigSections();
   initTargetPaceSections();
   if (elements.controlsDockToggle) {
     elements.controlsDockToggle.addEventListener("click", () => {
