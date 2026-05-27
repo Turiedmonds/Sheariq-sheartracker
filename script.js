@@ -2089,9 +2089,15 @@ function updateTimingAlertDisplay() {
     return;
   }
 
-  const DRINK_INTERVAL_SECONDS = 450;
-  const CUTTER_INTERVAL_SECONDS = 900;
-  const COMB_INTERVAL_SECONDS = 3600;
+  const getPlannedTimingSeconds = (markerType, fallbackSeconds) => {
+    const plannedTimingMinutes = Number(appState.markerSettings?.[markerType]?.plannedTimingMinutes);
+    if (!Number.isFinite(plannedTimingMinutes) || plannedTimingMinutes <= 0) return fallbackSeconds;
+    return plannedTimingMinutes * 60;
+  };
+
+  const DRINK_INTERVAL_SECONDS = getPlannedTimingSeconds("drink", 450);
+  const CUTTER_INTERVAL_SECONDS = getPlannedTimingSeconds("cutter", 900);
+  const COMB_INTERVAL_SECONDS = getPlannedTimingSeconds("comb", 3600);
   const ALERT_LEAD_SECONDS = 60;
   const ALERT_GRACE_SECONDS = 10;
   const LAST_QUARTER_SECONDS = 900;
