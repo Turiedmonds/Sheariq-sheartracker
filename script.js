@@ -164,6 +164,8 @@ const elements = {
   runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
   runBadge: document.getElementById("runBadge"),
+  currentQuarter: document.getElementById("currentQuarter"),
+  quarterClock: document.getElementById("quarterClock"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -364,6 +366,8 @@ const METRIC_VALUE_IDS = new Set([
   "currentCatch",
   "runClock",
   "runCountdown",
+  "currentQuarter",
+  "quarterClock",
   "dayClock",
   "totalSheep",
   "currentSheepNumber",
@@ -2026,6 +2030,27 @@ function findScrollableParent(startElement, boundaryElement = null) {
   return null;
 }
 
+
+function updateQuarterDisplay() {
+  const quarterSeconds = 900;
+  const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+
+  if (!hasRunStarted) {
+    setText(elements.currentQuarter, "—");
+    setText(elements.quarterClock, "00:00");
+    return;
+  }
+
+  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
+  const totalQuarters = Math.max(Math.ceil(runDurationSeconds / quarterSeconds), 1);
+  const currentQuarterNumber = Math.min(Math.floor(elapsedSeconds / quarterSeconds) + 1, totalQuarters);
+  const quarterElapsedSeconds = elapsedSeconds % quarterSeconds;
+
+  setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
+  setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
+}
+
 function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -2041,6 +2066,7 @@ function updateLivePanel() {
   setText(elements.currentCatch, formatSeconds(catchCurrent));
   setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
+  updateQuarterDisplay();
   updateRunBadge();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
