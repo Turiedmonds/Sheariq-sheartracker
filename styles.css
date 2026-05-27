@@ -321,6 +321,52 @@ body.layout-edit-on .panel-dragging {
   font-size: 1.12rem;
 }
 
+.panel-header h2 {
+  min-width: 0;
+}
+
+.panel-header-actions {
+  flex-wrap: wrap;
+  row-gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.panel-header-actions .panel-help-btn,
+.panel-header-actions .panel-settings-btn,
+.panel-header-actions .panel-dock-btn,
+.panel-header-actions .panel-icon-btn,
+.panel-section-actions .section-icon-btn {
+  min-height: 1.5rem;
+  padding: 0.2rem 0.4rem;
+}
+
+.panel-header-actions .panel-help-btn {
+  font-size: 0.82rem;
+}
+
+.panel-section-header {
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.panel-section-content {
+  margin-top: 0.25rem;
+}
+
+.panel-section.is-collapsed .panel-section-header {
+  margin-bottom: 0;
+}
+
+@media (max-width: 700px) {
+  .panel-header {
+    align-items: flex-start;
+  }
+
+  .panel-header-actions {
+    width: 100%;
+  }
+}
+
 .panel-header-actions {
   display: flex;
   gap: 0.25rem;
@@ -333,12 +379,6 @@ body.layout-edit-on .panel-dragging {
 
 .panel-lock-toggle {
   min-width: 2rem;
-}
-
-.sheep-log-help-btn {
-  font-size: 0.82rem;
-  padding: 0.2rem 0.45rem;
-  min-width: auto;
 }
 
 .sheep-log-help-content p {
