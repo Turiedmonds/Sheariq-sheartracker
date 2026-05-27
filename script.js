@@ -413,6 +413,7 @@ function handleShortcutKeydown(event) {
   for (const action of SHORTCUT_ACTIONS) {
     if (appState.keyboardShortcuts[action.key] !== key) continue;
     event.preventDefault();
+    event.stopPropagation();
     if ((action.key === "motorOn" || action.key === "motorOff") && !appState.simulationMode) return;
     const button = elements[action.buttonKey];
     if (!button || button.disabled) return;
@@ -4124,7 +4125,7 @@ function bindEvents() {
       closeTimingPanelHelpModal();
       closeShortcutSettingsModal();
     }
-  });
+  }, { capture: true });
   if (elements.autosaveToggle) {
     elements.autosaveToggle.addEventListener("change", () => {
       setAutosaveEnabled(elements.autosaveToggle.checked);
