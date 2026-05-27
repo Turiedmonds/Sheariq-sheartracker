@@ -279,7 +279,10 @@ const elements = {
   sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn"),
   timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
   timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
-  timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn")
+  timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn"),
+  simulationControlsHelpBtn: document.getElementById("simulationControlsHelpBtn"),
+  simulationControlsHelpModalOverlay: document.getElementById("simulationControlsHelpModalOverlay"),
+  simulationControlsHelpModalCloseBtn: document.getElementById("simulationControlsHelpModalCloseBtn")
 };
 
 const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
@@ -438,6 +441,7 @@ function closeShortcutSettingsModal() {
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -3974,6 +3978,7 @@ function closeConnectionHelpModal() {
   if (
     elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
@@ -3993,6 +3998,7 @@ function closeSheepLogHelpModal() {
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
@@ -4011,6 +4017,26 @@ function closeTimingPanelHelpModal() {
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
+function openSimulationControlsHelpModal() {
+  if (!elements.simulationControlsHelpModalOverlay) return;
+  elements.simulationControlsHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeSimulationControlsHelpModal() {
+  if (!elements.simulationControlsHelpModalOverlay) return;
+  elements.simulationControlsHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4229,12 +4255,20 @@ function bindEvents() {
       if (event.target === elements.timingPanelHelpModalOverlay) closeTimingPanelHelpModal();
     });
   }
+  if (elements.simulationControlsHelpBtn) elements.simulationControlsHelpBtn.addEventListener("click", openSimulationControlsHelpModal);
+  if (elements.simulationControlsHelpModalCloseBtn) elements.simulationControlsHelpModalCloseBtn.addEventListener("click", closeSimulationControlsHelpModal);
+  if (elements.simulationControlsHelpModalOverlay) {
+    elements.simulationControlsHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.simulationControlsHelpModalOverlay) closeSimulationControlsHelpModal();
+    });
+  }
   document.addEventListener("keydown", (event) => {
     handleShortcutKeydown(event);
     if (event.key === "Escape") {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
       closeTimingPanelHelpModal();
+      closeSimulationControlsHelpModal();
       closeShortcutSettingsModal();
     }
   }, { capture: true });
