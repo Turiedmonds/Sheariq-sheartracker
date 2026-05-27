@@ -92,6 +92,7 @@
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
           <button id="shortcutSettingsBtn" class="target-pace-settings-toggle" type="button" aria-label="Keyboard shortcut settings" title="Keyboard shortcut settings">⚙</button>
+          <button id="simulationControlsHelpBtn" class="sheep-log-help-btn" type="button" aria-label="Open Simulation Controls help">? Help</button>
           <button id="controlsDockToggle" type="button" aria-label="Toggle controls dock">Dock</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
@@ -754,6 +755,66 @@
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 3 sheep are left. That means the alert is based on every 7 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="simulationControlsHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="simulationControlsHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="simulationControlsHelpModalTitle">Simulation Controls Help</h3>
+        <button id="simulationControlsHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Simulation Controls help">✕</button>
+      </div>
+      <div class="connection-help-modal-content simulation-controls-help-content">
+        <h4 class="connection-help-title">What this panel is for</h4>
+        <p>The Simulation Controls panel is used to start, stop, pause, and test a run. It also shows simulation controls, autosave status, shortcut settings, Shelly connection status, and run status.</p>
+
+        <h4 class="connection-help-title">Simulation Mode</h4>
+        <p>Use Simulation Mode when testing the app without the real Evo/Shelly signal.</p>
+        <p>When Simulation Mode is ON:</p>
+        <ul class="connection-help-list">
+          <li>Shelly polling is paused.</li>
+          <li>Motor ON and Motor OFF buttons are shown.</li>
+          <li>Motor shortcuts can be used.</li>
+        </ul>
+        <p>When Simulation Mode is OFF:</p>
+        <ul class="connection-help-list">
+          <li>Motor state should come from the real Evo/Shelly signal.</li>
+          <li>Motor ON/OFF shortcuts do not force the motor state.</li>
+        </ul>
+
+        <h4 class="connection-help-title">Motor ON / Motor OFF</h4>
+        <p>Motor ON simulates the Evo motor starting. Motor OFF simulates the Evo motor stopping.</p>
+        <p>These buttons are for testing only. In real use, the app should read the motor state from the Shelly inside the Evo.</p>
+
+        <h4 class="connection-help-title">Run Controls</h4>
+        <p><strong>Start Run:</strong> Starts the current run timer.</p>
+        <p><strong>Stop Run:</strong> Stops the current run.</p>
+        <p><strong>Pause:</strong> Pauses or resumes the run timer.</p>
+        <p><strong>Reset Run:</strong> Clears the current run back to its starting state.</p>
+        <p><strong>Load Last Save:</strong> Loads the most recent autosaved session.</p>
+
+        <h4 class="connection-help-title">Disabled buttons</h4>
+        <p>Some buttons become unavailable depending on the run state. For example, Stop Run is unavailable before a run starts. A disabled button means the app is preventing that action at that moment.</p>
+
+        <h4 class="connection-help-title">Autosave</h4>
+        <p>Autosave saves the current session regularly so the latest work can be restored if needed.</p>
+        <p>Autosave status shows whether autosave is currently on.</p>
+
+        <h4 class="connection-help-title">Status</h4>
+        <p><strong>Shelly status:</strong> Shows whether the app can talk to the Shelly helper/proxy and how long the response took.</p>
+        <p><strong>Run Status:</strong> Shows whether the run is idle, running, paused, or stopped.</p>
+
+        <h4 class="connection-help-title">Shortcut Settings</h4>
+        <p>The gear button in the panel header opens Keyboard Shortcut Settings.</p>
+        <p>You can set your own shortcut keys for Start Run, Stop Run, Pause / Resume, Reset Run, Motor ON, and Motor OFF.</p>
+        <p>Shortcuts do not run while typing in fields.</p>
+        <p>Motor ON/OFF shortcuts only work when Simulation Mode is ON.</p>
+
+        <h4 class="connection-help-title">Section layout</h4>
+        <p>Each section can be collapsed with the +/− button.</p>
+        <p>Use the ↑ and ↓ buttons to move sections into the order you prefer.</p>
+        <p>The app remembers your section order and collapsed sections after reload.</p>
       </div>
     </div>
   </div>
