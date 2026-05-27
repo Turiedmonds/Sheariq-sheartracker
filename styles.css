@@ -737,6 +737,71 @@ button:disabled {
   margin: 0;
 }
 
+.marker-settings-toggle {
+  padding: 0.3rem 0.55rem;
+  font-size: 0.78rem;
+}
+
+.marker-settings-panel {
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+  padding: 0.65rem;
+  margin-bottom: 0.5rem;
+}
+
+.marker-settings-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.55rem;
+}
+
+.marker-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem;
+}
+
+.marker-settings-group {
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 0.5rem;
+  background: #fff;
+}
+
+.marker-settings-group h3 {
+  font-size: 0.82rem;
+  margin: 0 0 0.45rem 0;
+}
+
+.marker-settings-group label {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.45rem;
+  align-items: center;
+  font-size: 0.76rem;
+  margin-bottom: 0.35rem;
+}
+
+.marker-settings-group input[type="number"] {
+  width: 82px;
+  padding: 0.2rem 0.3rem;
+}
+
+.marker-unit {
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.marker-help {
+  cursor: help;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
 @media (max-width: 520px) {
   .sheep-log-sort-controls {
     gap: 0.35rem 0.5rem;

@@ -357,9 +357,65 @@
             <option value="desc">Slowest first</option>
             </select>
           </div>
-          <div class="sheep-log-sort-control sheep-log-markers-toggle">
-            <label for="showPlannedDelayMarkers">Show planned-delay markers</label>
-            <input id="showPlannedDelayMarkers" type="checkbox" checked />
+          <div class="sheep-log-sort-control">
+            <button id="markerSettingsToggle" class="marker-settings-toggle" type="button" aria-expanded="false">⚙ Marker Settings</button>
+          </div>
+        </div>
+        <div id="markerSettingsPanel" class="marker-settings-panel" hidden>
+          <div class="marker-settings-top">
+            <label class="sheep-log-markers-toggle" for="showPlannedDelayMarkers">
+              <span>Automatic markers</span>
+              <span class="marker-help" title="These are suggestions only. They help explain likely planned delays, but you can still add your own note to the sheep row.">ⓘ</span>
+              <input id="showPlannedDelayMarkers" type="checkbox" checked />
+            </label>
+            <button id="resetMarkerSettingsBtn" class="marker-settings-reset" type="button">Reset marker settings</button>
+          </div>
+          <div class="marker-settings-grid">
+            <div class="marker-settings-group">
+              <h3>Drink break marker</h3>
+              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
+                <input id="drinkTimingMinutes" type="number" min="0.1" step="0.1" />
+                <span class="marker-unit">minutes</span>
+              </label>
+              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
+                <input id="drinkWindowSeconds" type="number" min="1" step="1" />
+                <span class="marker-unit">seconds</span>
+              </label>
+              <label>Mark when catch time is <span class="marker-help" title="How much longer the catch time needs to be before the app marks it. Example: 1.4× means 40% longer than the average catch time.">ⓘ</span>
+                <input id="drinkCatchLonger" type="number" min="1" step="0.05" />
+                <span class="marker-unit">× average</span>
+              </label>
+            </div>
+            <div class="marker-settings-group">
+              <h3>Cutter change marker</h3>
+              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
+                <input id="cutterTimingMinutes" type="number" min="0.1" step="0.1" />
+                <span class="marker-unit">minutes</span>
+              </label>
+              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
+                <input id="cutterWindowSeconds" type="number" min="1" step="1" />
+                <span class="marker-unit">seconds</span>
+              </label>
+              <label>Mark when catch time is <span class="marker-help" title="How much longer the catch time needs to be before the app marks it. Example: 1.4× means 40% longer than the average catch time.">ⓘ</span>
+                <input id="cutterCatchLonger" type="number" min="1" step="0.05" />
+                <span class="marker-unit">× average</span>
+              </label>
+            </div>
+            <div class="marker-settings-group">
+              <h3>Comb/handpiece change marker</h3>
+              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
+                <input id="combTimingMinutes" type="number" min="0.1" step="0.1" />
+                <span class="marker-unit">minutes</span>
+              </label>
+              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
+                <input id="combWindowSeconds" type="number" min="1" step="1" />
+                <span class="marker-unit">seconds</span>
+              </label>
+              <label>Mark when catch time is <span class="marker-help" title="How much longer the catch time needs to be before the app marks it. Example: 1.4× means 40% longer than the average catch time.">ⓘ</span>
+                <input id="combCatchLonger" type="number" min="1" step="0.05" />
+                <span class="marker-unit">× average</span>
+              </label>
+            </div>
           </div>
         </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">

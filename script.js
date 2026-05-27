@@ -17,6 +17,7 @@ const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder"
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
+const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 
@@ -128,7 +129,13 @@ const appState = {
     by: "number",
     order: "asc"
   },
-  showPlannedDelayMarkers: true
+  showPlannedDelayMarkers: true,
+  markerSettingsOpen: false,
+  markerSettings: {
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, catchLongerThanAverage: 1.25 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, catchLongerThanAverage: 1.4 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, catchLongerThanAverage: 1.8 }
+  }
 };
 
 const elements = {
@@ -172,7 +179,19 @@ const elements = {
   sheepLogBody: document.getElementById("sheepLogBody"),
   sheepLogSortBy: document.getElementById("sheepLogSortBy"),
   sheepLogSortOrder: document.getElementById("sheepLogSortOrder"),
+  markerSettingsToggle: document.getElementById("markerSettingsToggle"),
+  markerSettingsPanel: document.getElementById("markerSettingsPanel"),
   showPlannedDelayMarkers: document.getElementById("showPlannedDelayMarkers"),
+  resetMarkerSettingsBtn: document.getElementById("resetMarkerSettingsBtn"),
+  drinkTimingMinutes: document.getElementById("drinkTimingMinutes"),
+  drinkWindowSeconds: document.getElementById("drinkWindowSeconds"),
+  drinkCatchLonger: document.getElementById("drinkCatchLonger"),
+  cutterTimingMinutes: document.getElementById("cutterTimingMinutes"),
+  cutterWindowSeconds: document.getElementById("cutterWindowSeconds"),
+  cutterCatchLonger: document.getElementById("cutterCatchLonger"),
+  combTimingMinutes: document.getElementById("combTimingMinutes"),
+  combWindowSeconds: document.getElementById("combWindowSeconds"),
+  combCatchLonger: document.getElementById("combCatchLonger"),
   shellyIpInput: document.getElementById("shellyIpInput"),
   endpointMode: document.getElementById("endpointMode"),
   pollIntervalInput: document.getElementById("pollIntervalInput"),
@@ -1742,9 +1761,13 @@ function getPlannedDelayMarkersBySheepNumber() {
     const catchDuration = Number(entry?.catchDuration);
     const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
     const markers = [];
-    const isComb = catchDuration >= catchAverage * 1.8 && isNearCadence(elapsedSeconds, 3600, 30);
-    const isCutter = catchDuration >= catchAverage * 1.4 && isNearCadence(elapsedSeconds, 900, 25);
-    const isDrink = catchDuration >= catchAverage * 1.25 && isNearCadence(elapsedSeconds, 450, 25);
+    const { drink, cutter, comb } = appState.markerSettings;
+    const isComb = catchDuration >= catchAverage * comb.catchLongerThanAverage
+      && isNearCadence(elapsedSeconds, comb.plannedTimingMinutes * 60, comb.timeWindowSeconds);
+    const isCutter = catchDuration >= catchAverage * cutter.catchLongerThanAverage
+      && isNearCadence(elapsedSeconds, cutter.plannedTimingMinutes * 60, cutter.timeWindowSeconds);
+    const isDrink = catchDuration >= catchAverage * drink.catchLongerThanAverage
+      && isNearCadence(elapsedSeconds, drink.plannedTimingMinutes * 60, drink.timeWindowSeconds);
 
     if (isComb) {
       markers.push({ type: "comb", shortLabel: "Comb", label: "Likely comb/handpiece change" });
@@ -1759,6 +1782,98 @@ function getPlannedDelayMarkersBySheepNumber() {
     }
   });
   return markersBySheep;
+}
+
+function getDefaultMarkerSettings() {
+  return {
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, catchLongerThanAverage: 1.25 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, catchLongerThanAverage: 1.4 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, catchLongerThanAverage: 1.8 }
+  };
+}
+
+function sanitizeMarkerSettings(rawSettings) {
+  const defaults = getDefaultMarkerSettings();
+  const sanitizeRule = (rawRule, fallbackRule) => {
+    const plannedTimingMinutes = Number(rawRule?.plannedTimingMinutes);
+    const timeWindowSeconds = Number(rawRule?.timeWindowSeconds);
+    const catchLongerThanAverage = Number(rawRule?.catchLongerThanAverage);
+    return {
+      plannedTimingMinutes: Number.isFinite(plannedTimingMinutes) && plannedTimingMinutes > 0 ? plannedTimingMinutes : fallbackRule.plannedTimingMinutes,
+      timeWindowSeconds: Number.isFinite(timeWindowSeconds) && timeWindowSeconds > 0 ? timeWindowSeconds : fallbackRule.timeWindowSeconds,
+      catchLongerThanAverage: Number.isFinite(catchLongerThanAverage) && catchLongerThanAverage >= 1 ? catchLongerThanAverage : fallbackRule.catchLongerThanAverage
+    };
+  };
+  return {
+    drink: sanitizeRule(rawSettings?.drink, defaults.drink),
+    cutter: sanitizeRule(rawSettings?.cutter, defaults.cutter),
+    comb: sanitizeRule(rawSettings?.comb, defaults.comb)
+  };
+}
+
+function syncMarkerSettingsInputs() {
+  const { drink, cutter, comb } = appState.markerSettings;
+  if (elements.drinkTimingMinutes) elements.drinkTimingMinutes.value = String(drink.plannedTimingMinutes);
+  if (elements.drinkWindowSeconds) elements.drinkWindowSeconds.value = String(drink.timeWindowSeconds);
+  if (elements.drinkCatchLonger) elements.drinkCatchLonger.value = String(drink.catchLongerThanAverage);
+  if (elements.cutterTimingMinutes) elements.cutterTimingMinutes.value = String(cutter.plannedTimingMinutes);
+  if (elements.cutterWindowSeconds) elements.cutterWindowSeconds.value = String(cutter.timeWindowSeconds);
+  if (elements.cutterCatchLonger) elements.cutterCatchLonger.value = String(cutter.catchLongerThanAverage);
+  if (elements.combTimingMinutes) elements.combTimingMinutes.value = String(comb.plannedTimingMinutes);
+  if (elements.combWindowSeconds) elements.combWindowSeconds.value = String(comb.timeWindowSeconds);
+  if (elements.combCatchLonger) elements.combCatchLonger.value = String(comb.catchLongerThanAverage);
+}
+
+function saveMarkerSettings() {
+  localStorage.setItem(SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY, JSON.stringify(appState.markerSettings));
+}
+
+function loadMarkerSettings() {
+  let parsed = getDefaultMarkerSettings();
+  try {
+    const raw = localStorage.getItem(SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY);
+    if (raw) parsed = sanitizeMarkerSettings(JSON.parse(raw));
+  } catch (error) {
+    parsed = getDefaultMarkerSettings();
+  }
+  appState.markerSettings = parsed;
+  syncMarkerSettingsInputs();
+}
+
+function setMarkerSettingsOpen(isOpen) {
+  appState.markerSettingsOpen = Boolean(isOpen);
+  if (elements.markerSettingsPanel) elements.markerSettingsPanel.hidden = !appState.markerSettingsOpen;
+  if (elements.markerSettingsToggle) elements.markerSettingsToggle.setAttribute("aria-expanded", String(appState.markerSettingsOpen));
+}
+
+function applyMarkerSettingsFromInputs() {
+  appState.markerSettings = sanitizeMarkerSettings({
+    drink: {
+      plannedTimingMinutes: elements.drinkTimingMinutes?.value,
+      timeWindowSeconds: elements.drinkWindowSeconds?.value,
+      catchLongerThanAverage: elements.drinkCatchLonger?.value
+    },
+    cutter: {
+      plannedTimingMinutes: elements.cutterTimingMinutes?.value,
+      timeWindowSeconds: elements.cutterWindowSeconds?.value,
+      catchLongerThanAverage: elements.cutterCatchLonger?.value
+    },
+    comb: {
+      plannedTimingMinutes: elements.combTimingMinutes?.value,
+      timeWindowSeconds: elements.combWindowSeconds?.value,
+      catchLongerThanAverage: elements.combCatchLonger?.value
+    }
+  });
+  syncMarkerSettingsInputs();
+  saveMarkerSettings();
+  renderLogTable();
+}
+
+function resetMarkerSettings() {
+  appState.markerSettings = getDefaultMarkerSettings();
+  syncMarkerSettingsInputs();
+  saveMarkerSettings();
+  renderLogTable();
 }
 
 function loadPlannedDelayMarkerVisibility() {
@@ -3547,6 +3662,27 @@ function bindEvents() {
       setPlannedDelayMarkerVisibility(elements.showPlannedDelayMarkers.checked);
     });
   }
+  if (elements.markerSettingsToggle) {
+    elements.markerSettingsToggle.addEventListener("click", () => {
+      setMarkerSettingsOpen(!appState.markerSettingsOpen);
+    });
+  }
+  [
+    elements.drinkTimingMinutes,
+    elements.drinkWindowSeconds,
+    elements.drinkCatchLonger,
+    elements.cutterTimingMinutes,
+    elements.cutterWindowSeconds,
+    elements.cutterCatchLonger,
+    elements.combTimingMinutes,
+    elements.combWindowSeconds,
+    elements.combCatchLonger
+  ].filter(Boolean).forEach((input) => {
+    input.addEventListener("change", applyMarkerSettingsFromInputs);
+  });
+  if (elements.resetMarkerSettingsBtn) {
+    elements.resetMarkerSettingsBtn.addEventListener("click", resetMarkerSettings);
+  }
   if (elements.sheepLogBody) {
     elements.sheepLogBody.addEventListener("click", (event) => {
       const target = event.target;
@@ -3733,6 +3869,7 @@ function initialize() {
   loadFollowLatestSettings();
   loadSheepLogSortSettings();
   loadPlannedDelayMarkerVisibility();
+  loadMarkerSettings();
   initializeSessionDate();
   loadControlsDockSettings();
   updateConnectionInputs();
