@@ -190,42 +190,58 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="form-grid">
-          <label for="sessionDate">Session Date</label>
-          <input id="sessionDate" type="date" />
+        <section class="panel-section" aria-labelledby="day-config-session-details-title">
+          <header class="panel-section-header">
+            <h3 id="day-config-session-details-title" class="panel-section-title">Session Details</h3>
+          </header>
+          <div class="panel-section-content">
+            <div class="form-grid">
+              <label for="sessionDate">Session Date</label>
+              <input id="sessionDate" type="date" />
 
-          <label for="farmInput">Farm</label>
-          <div class="farm-dropdown" id="farmDropdown">
-            <div class="farm-input-row">
-              <input id="farmInput" type="text" placeholder="Enter or select farm name" autocomplete="off" />
-              <button id="farmDropdownToggle" class="farm-dropdown-toggle" type="button" aria-label="Toggle farm list" aria-expanded="false">▼</button>
+              <label for="farmInput">Farm</label>
+              <div class="farm-dropdown" id="farmDropdown">
+                <div class="farm-input-row">
+                  <input id="farmInput" type="text" placeholder="Enter or select farm name" autocomplete="off" />
+                  <button id="farmDropdownToggle" class="farm-dropdown-toggle" type="button" aria-label="Toggle farm list" aria-expanded="false">▼</button>
+                </div>
+                <div id="farmDropdownMenu" class="farm-dropdown-menu" hidden role="listbox"></div>
+              </div>
             </div>
-            <div id="farmDropdownMenu" class="farm-dropdown-menu" hidden role="listbox"></div>
           </div>
+        </section>
 
-          <label for="runType">Time System</label>
-          <select id="runType">
-            <option value="8">8hr</option>
-            <option value="9">9hr</option>
-            <option value="custom">Custom</option>
-          </select>
+        <section class="panel-section" aria-labelledby="day-config-run-setup-title">
+          <header class="panel-section-header">
+            <h3 id="day-config-run-setup-title" class="panel-section-title">Run Setup</h3>
+          </header>
+          <div class="panel-section-content">
+            <div class="form-grid">
+              <label for="runType">Time System</label>
+              <select id="runType">
+                <option value="8">8hr</option>
+                <option value="9">9hr</option>
+                <option value="custom">Custom</option>
+              </select>
 
-          <label for="recordType">Record type</label>
-          <select id="recordType">
-            <option value="none">Normal day / No record rules</option>
-            <option value="strongWoolLambs">Strong wool lambs</option>
-            <option value="strongWoolEwes">Strong wool ewes</option>
-          </select>
+              <label for="recordType">Record type</label>
+              <select id="recordType">
+                <option value="none">Normal day / No record rules</option>
+                <option value="strongWoolLambs">Strong wool lambs</option>
+                <option value="strongWoolEwes">Strong wool ewes</option>
+              </select>
 
-          <label for="dayStartTimeInput">Day Start Time</label>
-          <input id="dayStartTimeInput" type="time" value="07:00" />
+              <label for="dayStartTimeInput">Day Start Time</label>
+              <input id="dayStartTimeInput" type="time" value="07:00" />
 
-          <label for="customHours">Custom Hours</label>
-          <input id="customHours" type="number" min="1" step="0.5" value="8" />
+              <label for="customHours">Custom Hours</label>
+              <input id="customHours" type="number" min="1" step="0.5" value="8" />
 
-          <label for="targetSheepInput">Target Sheep</label>
-          <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
-        </div>
+              <label for="targetSheepInput">Target Sheep</label>
+              <input id="targetSheepInput" type="number" min="0" step="1" value="0" />
+            </div>
+          </div>
+        </section>
       </div>
     </section>
 
