@@ -121,27 +121,7 @@
           <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
         </div>
         <div id="shortcutHintLine" class="status-box minimal-status shortcut-hint-line" aria-live="polite"></div>
-        <details class="top-card-group shortcut-settings-group">
-          <summary>Shortcut Settings</summary>
-          <div class="top-card-group-body">
-            <div id="shortcutMessage" class="status-box minimal-status" hidden></div>
-            <div class="shortcut-grid">
-              <label for="shortcutStartRun">Start Run</label>
-              <input id="shortcutStartRun" class="shortcut-input" type="text" maxlength="1" />
-              <label for="shortcutStopRun">Stop Run</label>
-              <input id="shortcutStopRun" class="shortcut-input" type="text" maxlength="1" />
-              <label for="shortcutPauseRun">Pause / Resume</label>
-              <input id="shortcutPauseRun" class="shortcut-input" type="text" maxlength="1" />
-              <label for="shortcutResetRun">Reset Run</label>
-              <input id="shortcutResetRun" class="shortcut-input" type="text" maxlength="1" />
-              <label for="shortcutMotorOn">Motor ON</label>
-              <input id="shortcutMotorOn" class="shortcut-input" type="text" maxlength="1" />
-              <label for="shortcutMotorOff">Motor OFF</label>
-              <input id="shortcutMotorOff" class="shortcut-input" type="text" maxlength="1" />
-            </div>
-            <button id="resetShortcutsBtn" class="btn-inline-small" type="button">Reset shortcuts</button>
-          </div>
-        </details>
+        <button id="shortcutSettingsBtn" class="btn-inline-small shortcut-settings-btn" type="button">⌨ Shortcut Settings</button>
         <div class="sim-status-row">
           <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
           <div class="status-box minimal-status">Run Status: <strong id="runStatus">Idle</strong></div>
@@ -646,6 +626,33 @@
 
         <h4 class="connection-help-title">Sorting</h4>
         <p>Sorting only changes how the table is displayed. It does not change the sheep numbers or the stored sheep records.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="shortcutSettingsModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal shortcut-settings-modal" role="dialog" aria-modal="true" aria-labelledby="shortcutSettingsModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="shortcutSettingsModalTitle">Keyboard Shortcut Settings</h3>
+        <button id="shortcutSettingsModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close shortcut settings">✕</button>
+      </div>
+      <div class="connection-help-modal-content">
+        <div id="shortcutMessage" class="status-box minimal-status" hidden></div>
+        <div class="shortcut-grid">
+          <label for="shortcutStartRun">Start Run</label>
+          <input id="shortcutStartRun" class="shortcut-input" type="text" readonly />
+          <label for="shortcutStopRun">Stop Run</label>
+          <input id="shortcutStopRun" class="shortcut-input" type="text" readonly />
+          <label for="shortcutPauseRun">Pause / Resume</label>
+          <input id="shortcutPauseRun" class="shortcut-input" type="text" readonly />
+          <label for="shortcutResetRun">Reset Run</label>
+          <input id="shortcutResetRun" class="shortcut-input" type="text" readonly />
+          <label for="shortcutMotorOn">Motor ON</label>
+          <input id="shortcutMotorOn" class="shortcut-input" type="text" readonly />
+          <label for="shortcutMotorOff">Motor OFF</label>
+          <input id="shortcutMotorOff" class="shortcut-input" type="text" readonly />
+        </div>
+        <button id="resetShortcutsBtn" class="btn-inline-small" type="button">Reset shortcuts</button>
       </div>
     </div>
   </div>
