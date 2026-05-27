@@ -61,6 +61,7 @@ const appState = {
     sheep: 0,
     runLengthSeconds: 0
   },
+  targetPacePredictionSnapshot: null,
   farm: "",
   recordType: "none",
   lastMotorState: null,
@@ -199,6 +200,7 @@ const elements = {
   requiredQuarterTotal: document.getElementById("requiredQuarterTotal"),
   projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
+  estimatedLastCatchTimeLabel: document.getElementById("estimatedLastCatchTimeLabel"),
   timeSpareToBell: document.getElementById("timeSpareToBell"),
   maxCatchTime: document.getElementById("maxCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
@@ -1312,7 +1314,32 @@ function resetRunState() {
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
+  appState.targetPacePredictionSnapshot = null;
   calculateAverages();
+}
+
+function buildTargetPacePredictionSnapshot(liveValues) {
+  const requiredRunTotalSheep = calculateRequiredRunTotalSheep();
+  return {
+    predictedQuarterTotal: liveValues.predictedQuarterTotal,
+    predictedHourTotal: liveValues.predictedHourTotal,
+    projectedTotal: liveValues.projectedTotal,
+    estimatedLastCatchTime: liveValues.estimatedLastCatchTime,
+    maxCatchTime: liveValues.maxCatchTime,
+    catchPrediction: liveValues.catchPrediction,
+    requiredRunTotalSheep
+  };
+}
+
+function updateTargetPacePredictionSnapshot(liveValues) {
+  appState.targetPacePredictionSnapshot = buildTargetPacePredictionSnapshot(liveValues);
+}
+
+function getTargetRunTotalPredictionLabel(requiredRunTotalSheep) {
+  if (requiredRunTotalSheep === null) {
+    return "Predicted time to reach target run total:";
+  }
+  return `Predicted time to reach target run total (${requiredRunTotalSheep}):`;
 }
 
 function startRun() {
@@ -1351,6 +1378,7 @@ function startRun() {
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
+  appState.targetPacePredictionSnapshot = null;
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
@@ -1470,6 +1498,7 @@ function handleMotorOff() {
   appState.currentMotorDisplay = "OFF";
 
   calculateAverages();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
   updateStatsPanel();
   updateLivePanel();
   renderLogTable();
@@ -2792,16 +2821,17 @@ function updateStatsPanel() {
   setText(elements.lastSheepTime, last ? `${last.fullCycle.toFixed(3)}s` : "—");
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
-  setText(elements.projectedTotal, String(target.projectedTotal));
   setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
   const quarterTotals = calculateQuarterTotals(target);
   setText(elements.requiredQuarterTotal, quarterTotals.required === null ? "—" : String(quarterTotals.required));
-  setText(elements.predictedQuarterTotal, quarterTotals.predicted === null ? "—" : String(quarterTotals.predicted));
-  const predictedHourTotal = appState.runActive && appState.currentStats.avgCycle > 0
-    ? Math.round(appState.currentStats.sheepPerHour)
-    : null;
-  setText(elements.predictedHourTotal, predictedHourTotal === null ? "—" : String(predictedHourTotal));
+  const livePredictions = getLiveTargetPacePredictions(target, quarterTotals);
+  const displayPredictions = appState.currentCycle.motorOn && appState.targetPacePredictionSnapshot
+    ? appState.targetPacePredictionSnapshot
+    : buildTargetPacePredictionSnapshot(livePredictions);
+  setText(elements.predictedQuarterTotal, displayPredictions.predictedQuarterTotal === null ? "—" : String(displayPredictions.predictedQuarterTotal));
+  setText(elements.predictedHourTotal, displayPredictions.predictedHourTotal === null ? "—" : String(displayPredictions.predictedHourTotal));
+  setText(elements.projectedTotal, String(displayPredictions.projectedTotal));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
     if (diff > 0) {
@@ -2814,10 +2844,13 @@ function updateStatsPanel() {
   } else {
     setText(elements.projectedRunVsRequired, "—");
   }
-  setText(elements.estimatedLastCatchTime, formatPredictedCatchTime(target.targetCatchRunSeconds));
+  setText(elements.estimatedLastCatchTime, displayPredictions.estimatedLastCatchTime);
   setText(elements.timeSpareToBell, target.timeSpareText);
-  setText(elements.maxCatchTime, formatPredictedCatchTime(target.maxCatchRunSeconds));
-  setText(elements.catchPrediction, predictCatch());
+  setText(elements.maxCatchTime, displayPredictions.maxCatchTime);
+  setText(elements.catchPrediction, displayPredictions.catchPrediction);
+  if (elements.estimatedLastCatchTimeLabel) {
+    setText(elements.estimatedLastCatchTimeLabel, getTargetRunTotalPredictionLabel(requiredRunTotalSheep));
+  }
   if (elements.timeSpareToBell && elements.timeSpareToBellLabel) {
     elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
     elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
@@ -2849,6 +2882,22 @@ function updateStatsPanel() {
     elements.avgCycle.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
     elements.avgCycle.classList.add(onPaceClass);
   }
+}
+
+function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null) {
+  const target = targetMetrics ?? calculateTargetMetrics();
+  const quarter = quarterTotals ?? calculateQuarterTotals(target);
+  const predictedHourTotal = appState.runActive && appState.currentStats.avgCycle > 0
+    ? Math.round(appState.currentStats.sheepPerHour)
+    : null;
+  return {
+    predictedQuarterTotal: quarter.predicted,
+    predictedHourTotal,
+    projectedTotal: target.projectedTotal,
+    estimatedLastCatchTime: formatPredictedCatchTime(target.targetCatchRunSeconds),
+    maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
+    catchPrediction: predictCatch()
+  };
 }
 
 function updateConnectionStatus({ ok, parsedState, responseTimeMs, debugText, blockingMessage, rawResponseOk }) {
