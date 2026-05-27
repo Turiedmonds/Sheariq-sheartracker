@@ -207,6 +207,7 @@
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+          <button id="timingPanelHelpBtn" class="sheep-log-help-btn" type="button" aria-label="Open Timing Panel help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
@@ -623,6 +624,57 @@
 
         <h4 class="connection-help-title">Sorting</h4>
         <p>Sorting only changes how the table is displayed. It does not change the sheep numbers or the stored sheep records.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="timingPanelHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="timingPanelHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="timingPanelHelpModalTitle">Timing Panel Help</h3>
+        <button id="timingPanelHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Timing Panel help">✕</button>
+      </div>
+      <div class="connection-help-modal-content timing-panel-help-content">
+        <h4 class="connection-help-title">What this panel is for</h4>
+        <p>The Timing Panel shows what is happening right now during the run. It helps you track the current sheep, run time, quarter timing, and upcoming reminders.</p>
+
+        <h4 class="connection-help-title">Run badge</h4>
+        <p>Shows the current run number, such as Run 1 or Run 2.</p>
+
+        <h4 class="connection-help-title">Live sheep timing</h4>
+        <p><strong>Motor state:</strong><br />Shows the live ON/OFF signal from the Shelly/Evo. ON means the motor is running. OFF means the motor is stopped. The app uses this to start and stop sheep timing.</p>
+        <p><strong>Current catch time:</strong><br />Shows how long it has been since the last sheep finished and the next sheep started.</p>
+        <p><strong>Current shear time:</strong><br />Shows how long the current sheep has been getting shorn while the motor is ON.</p>
+
+        <h4 class="connection-help-title">Run timing</h4>
+        <p><strong>Run clock:</strong><br />Counts forward from the start of the run.</p>
+        <p><strong>Run countdown:</strong><br />Counts backward from the run length to zero.</p>
+        <p><strong>Day clock:</strong><br />Shows the simulated working day time based on the Day Start Time setting.</p>
+
+        <h4 class="connection-help-title">Quarter tracking</h4>
+        <p><strong>Quarter:</strong><br />Shows which 15-minute block of the run you are in.</p>
+        <p>For a 2-hour run, there are 8 quarters.</p>
+        <p><strong>Quarter clock:</strong><br />Shows how far through the current 15-minute quarter you are.</p>
+
+        <h4 class="connection-help-title">Alerts</h4>
+        <p>Alerts help you see what is coming up. They are reminders only. They do not mean the shearer must act at that exact second.</p>
+        <p><strong>Timing alert:</strong><br />Shows planned timing reminders such as drink break, cutter change, comb/handpiece change, or last quarter.</p>
+        <ul class="connection-help-list">
+          <li><strong>Drink break:</strong> blue</li>
+          <li><strong>Cutter change:</strong> purple</li>
+          <li><strong>Comb/handpiece change:</strong> indigo</li>
+          <li><strong>Last quarter:</strong> slate/grey</li>
+        </ul>
+        <p>Timing alert uses the Planned timing values from Sheep Log → Marker Settings for Drink break, Cutter change, and Comb/handpiece change.</p>
+        <p>If you change Drink planned timing in Marker Settings, the Timing Panel drink alert will follow that timing too.</p>
+
+        <h4 class="connection-help-title">Pen refill</h4>
+        <p>Pen refill only applies when a record type is selected in Day Configuration.</p>
+        <p>If Record type is Normal day / No record rules, Pen refill stays off.</p>
+        <p><strong>Strong wool lambs:</strong><br />Pen starts with 20 sheep. Refill is allowed when 5 sheep are left. That means the alert is based on every 15 sheep taken from the pen.</p>
+        <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 3 sheep are left. That means the alert is based on every 7 sheep taken from the pen.</p>
+        <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
+        <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>
   </div>
