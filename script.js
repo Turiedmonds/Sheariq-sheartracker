@@ -283,6 +283,9 @@ const elements = {
   timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
   timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
   timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn"),
+  performancePanelHelpBtn: document.getElementById("performancePanelHelpBtn"),
+  performancePanelHelpModalOverlay: document.getElementById("performancePanelHelpModalOverlay"),
+  performancePanelHelpModalCloseBtn: document.getElementById("performancePanelHelpModalCloseBtn"),
   simulationControlsHelpBtn: document.getElementById("simulationControlsHelpBtn"),
   simulationControlsHelpModalOverlay: document.getElementById("simulationControlsHelpModalOverlay"),
   simulationControlsHelpModalCloseBtn: document.getElementById("simulationControlsHelpModalCloseBtn")
@@ -444,6 +447,7 @@ function closeShortcutSettingsModal() {
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
@@ -4102,6 +4106,7 @@ function closeConnectionHelpModal() {
   if (
     elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
@@ -4122,6 +4127,7 @@ function closeSheepLogHelpModal() {
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
@@ -4141,7 +4147,30 @@ function closeTimingPanelHelpModal() {
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
+
+function openPerformancePanelHelpModal() {
+  if (!elements.performancePanelHelpModalOverlay) return;
+  elements.performancePanelHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closePerformancePanelHelpModal() {
+  if (!elements.performancePanelHelpModalOverlay) return;
+  elements.performancePanelHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4160,6 +4189,7 @@ function closeSimulationControlsHelpModal() {
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
@@ -4379,6 +4409,13 @@ function bindEvents() {
       if (event.target === elements.timingPanelHelpModalOverlay) closeTimingPanelHelpModal();
     });
   }
+  if (elements.performancePanelHelpBtn) elements.performancePanelHelpBtn.addEventListener("click", openPerformancePanelHelpModal);
+  if (elements.performancePanelHelpModalCloseBtn) elements.performancePanelHelpModalCloseBtn.addEventListener("click", closePerformancePanelHelpModal);
+  if (elements.performancePanelHelpModalOverlay) {
+    elements.performancePanelHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.performancePanelHelpModalOverlay) closePerformancePanelHelpModal();
+    });
+  }
   if (elements.simulationControlsHelpBtn) elements.simulationControlsHelpBtn.addEventListener("click", openSimulationControlsHelpModal);
   if (elements.simulationControlsHelpModalCloseBtn) elements.simulationControlsHelpModalCloseBtn.addEventListener("click", closeSimulationControlsHelpModal);
   if (elements.simulationControlsHelpModalOverlay) {
@@ -4392,6 +4429,7 @@ function bindEvents() {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
       closeTimingPanelHelpModal();
+      closePerformancePanelHelpModal();
       closeSimulationControlsHelpModal();
       closeShortcutSettingsModal();
     }

@@ -130,6 +130,10 @@ body {
   padding: 0.8rem 1rem 1rem;
 }
 
+.performance-panel-help-content p {
+  margin-bottom: 0.5rem;
+}
+
 .connection-help-title {
   margin: 0.55rem 0 0.35rem;
   font-size: 1rem;
