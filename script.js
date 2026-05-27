@@ -169,6 +169,7 @@ const elements = {
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
   timingAlert: document.getElementById("timingAlert"),
+  penRefillAlert: document.getElementById("penRefillAlert"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -2147,6 +2148,56 @@ function updateTimingAlertDisplay() {
   }
 }
 
+function updatePenRefillAlertDisplay() {
+  const penRefillAlertRow = elements.penRefillAlert ? elements.penRefillAlert.closest(".pen-refill-alert-row") : null;
+  const alertClassNames = [
+    "pen-refill-alert-active",
+    "pen-refill-alert-soon",
+    "pen-refill-alert-now"
+  ];
+
+  const setPenRefillAlertDisplay = (alertType, alertText) => {
+    if (penRefillAlertRow) {
+      penRefillAlertRow.classList.remove(...alertClassNames);
+      if (alertType !== "none") {
+        penRefillAlertRow.classList.add("pen-refill-alert-active", `pen-refill-alert-${alertType}`);
+      }
+    }
+    setText(elements.penRefillAlert, alertText);
+  };
+
+  const cycleSizeByRecordType = {
+    strongWoolLambs: 15,
+    strongWoolEwes: 7
+  };
+
+  const cycleSize = cycleSizeByRecordType[appState.recordType];
+  if (!Number.isFinite(cycleSize) || cycleSize <= 0) {
+    setPenRefillAlertDisplay("none", "—");
+    return;
+  }
+
+  const sheepCompletedCount = appState.sheep.length;
+  if (!Number.isFinite(sheepCompletedCount) || sheepCompletedCount <= 0) {
+    setPenRefillAlertDisplay("none", "—");
+    return;
+  }
+
+  const sheepIntoCycle = sheepCompletedCount % cycleSize;
+  if (sheepIntoCycle === 0) {
+    setPenRefillAlertDisplay("now", "Pen refill allowed");
+    return;
+  }
+
+  const sheepUntilRefill = cycleSize - sheepIntoCycle;
+  if (sheepUntilRefill === 2 || sheepUntilRefill === 1) {
+    setPenRefillAlertDisplay("soon", `${sheepUntilRefill} sheep until pen refill`);
+    return;
+  }
+
+  setPenRefillAlertDisplay("none", "—");
+}
+
 function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -2164,6 +2215,7 @@ function updateLivePanel() {
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateQuarterDisplay();
   updateTimingAlertDisplay();
+  updatePenRefillAlertDisplay();
   updateRunBadge();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
