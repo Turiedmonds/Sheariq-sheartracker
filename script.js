@@ -2054,8 +2054,27 @@ function updateQuarterDisplay() {
 
 function updateTimingAlertDisplay() {
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+  const timingAlertRow = elements.timingAlert ? elements.timingAlert.closest(".timing-alert-row") : null;
+  const alertClassNames = [
+    "timing-alert-active",
+    "timing-alert-drink",
+    "timing-alert-cutter",
+    "timing-alert-comb",
+    "timing-alert-last-quarter"
+  ];
+
+  const setTimingAlertDisplay = (alertType, alertText) => {
+    if (timingAlertRow) {
+      timingAlertRow.classList.remove(...alertClassNames);
+      if (alertType !== "none") {
+        timingAlertRow.classList.add("timing-alert-active", `timing-alert-${alertType}`);
+      }
+    }
+    setText(elements.timingAlert, alertText);
+  };
+
   if (!hasRunStarted) {
-    setText(elements.timingAlert, "—");
+    setTimingAlertDisplay("none", "—");
     return;
   }
 
@@ -2063,7 +2082,7 @@ function updateTimingAlertDisplay() {
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const runComplete = runDurationSeconds > 0 && elapsedSeconds >= runDurationSeconds;
   if (runComplete) {
-    setText(elements.timingAlert, "—");
+    setTimingAlertDisplay("none", "—");
     return;
   }
 
@@ -2074,8 +2093,8 @@ function updateTimingAlertDisplay() {
   const ALERT_GRACE_SECONDS = 10;
   const LAST_QUARTER_SECONDS = 900;
 
-  const isCadenceAlertActive = (intervalSeconds) => {
-    if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return false;
+  const getCadenceAlertState = (intervalSeconds) => {
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return null;
     const previousEventMultiple = Math.floor(elapsedSeconds / intervalSeconds);
     const previousEventTime = previousEventMultiple * intervalSeconds;
     const nextEventTime = (previousEventMultiple + 1) * intervalSeconds;
@@ -2087,24 +2106,43 @@ function updateTimingAlertDisplay() {
     const canShowPostEventGrace = previousEventTime > 0
       && secondsSincePreviousEvent >= 0
       && secondsSincePreviousEvent <= ALERT_GRACE_SECONDS;
-    return canShowPreEventWarning || canShowPostEventGrace;
+
+    if (canShowPreEventWarning) {
+      return { mode: "countdown", seconds: Math.ceil(secondsUntilNextEvent) };
+    }
+    if (canShowPostEventGrace) {
+      return { mode: "now" };
+    }
+    return null;
   };
 
   const remainingSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
   const inLastQuarter = runDurationSeconds > 0 && remainingSeconds <= LAST_QUARTER_SECONDS;
 
-  let alertText = "—";
-  if (isCadenceAlertActive(COMB_INTERVAL_SECONDS)) {
-    alertText = "Comb/handpiece change in 1 min";
-  } else if (isCadenceAlertActive(CUTTER_INTERVAL_SECONDS)) {
-    alertText = "Cutter change in 1 min";
-  } else if (isCadenceAlertActive(DRINK_INTERVAL_SECONDS)) {
-    alertText = "Drink break in 1 min";
-  } else if (inLastQuarter) {
-    alertText = "Last quarter";
-  }
+  const combAlert = getCadenceAlertState(COMB_INTERVAL_SECONDS);
+  const cutterAlert = getCadenceAlertState(CUTTER_INTERVAL_SECONDS);
+  const drinkAlert = getCadenceAlertState(DRINK_INTERVAL_SECONDS);
 
-  setText(elements.timingAlert, alertText);
+  if (combAlert) {
+    const alertText = combAlert.mode === "now"
+      ? "Comb/handpiece change now"
+      : `Comb/handpiece change in ${combAlert.seconds}s`;
+    setTimingAlertDisplay("comb", alertText);
+  } else if (cutterAlert) {
+    const alertText = cutterAlert.mode === "now"
+      ? "Cutter change now"
+      : `Cutter change in ${cutterAlert.seconds}s`;
+    setTimingAlertDisplay("cutter", alertText);
+  } else if (drinkAlert) {
+    const alertText = drinkAlert.mode === "now"
+      ? "Drink break now"
+      : `Drink break in ${drinkAlert.seconds}s`;
+    setTimingAlertDisplay("drink", alertText);
+  } else if (inLastQuarter) {
+    setTimingAlertDisplay("last-quarter", "Last quarter");
+  } else {
+    setTimingAlertDisplay("none", "—");
+  }
 }
 
 function updateLivePanel() {
