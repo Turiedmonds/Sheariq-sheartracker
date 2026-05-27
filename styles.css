@@ -1447,6 +1447,18 @@ td {
   display: none;
 }
 
+#panel-config .day-config-section-header,
+#panel-config .day-config-section .panel-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+#panel-config .day-config-section.is-collapsed .panel-section-content {
+  display: none;
+}
+
 #panel-cycle .run-countdown-value-wrap {
   display: inline-flex;
   align-items: center;
