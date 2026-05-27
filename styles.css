@@ -1276,3 +1276,35 @@ td.pace-neutral {
 #panel-log td.sheep-log-anomaly-severe {
   background: #fdba74;
 }
+
+.sheep-log-help-swatches {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 10px;
+}
+
+.sheep-log-help-swatch-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sheep-log-help-swatch {
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.2);
+  flex: 0 0 auto;
+}
+
+.sheep-log-help-swatch.sheep-log-anomaly-mild {
+  background: #fef9c3;
+}
+
+.sheep-log-help-swatch.sheep-log-anomaly-strong {
+  background: #fde68a;
+}
+
+.sheep-log-help-swatch.sheep-log-anomaly-severe {
+  background: #fdba74;
+}
