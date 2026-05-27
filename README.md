@@ -60,8 +60,8 @@ Notes for common refresh issues:
    Plug in and power on the Heiniger Evo shearing plant. This also powers the Shelly inside the plant.
 2. **Connect laptop Wi-Fi to `Shear-Tracker-Shelly`.**  
    If Windows says **No internet**, this is normal for this setup.
-3. **Open the app from desktop shortcut `Shear Tracker Launcher`.**  
-   This starts ShearTracker Web and ShearTracker Proxy, and should open: `http://localhost:8080/index.html`.
+3. **On the laptop desktop/home screen, open `Shear Tracker Launcher`.**  
+   Double-clicking it opens two command windows (`ShearTracker Web` and `ShearTracker Proxy`) and should also open a browser tab at: `http://localhost:8080/index.html`. That browser tab is the SHEΔR iQ Shear Tracker app.
 4. **Keep command windows open.**  
    If they are closed, the app may stop loading or stop talking to the Shelly.
 5. **In the app, open Settings → Connection Settings and confirm:**
