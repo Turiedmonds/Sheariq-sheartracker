@@ -360,7 +360,7 @@
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Live sheep timing</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Motor state <span class="help-tip" tabindex="0" title="Live ON/OFF from Shelly. ON means the Evo motor is running. OFF means the Evo motor is stopped. This is used to start and stop sheep timing.">ⓘ</span>:</span>
+              <span class="metric-label panel-metric-label">Motor state:</span>
               <strong id="motorState" class="panel-metric-value">OFF</strong>
             </div>
             <div class="metric-row panel-metric-row">
@@ -450,6 +450,7 @@
               <div class="panel-metric-row"><span class="panel-metric-label">Required average total time per sheep:</span> <strong id="requiredCycle" class="panel-metric-value">0.0s</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required sheep per hour:</span> <strong id="requiredRate" class="panel-metric-value">0.00</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required run total:</span> <strong id="requiredRunTotalSheep" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Required quarter total:</span> <strong id="requiredQuarterTotal" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required daily total:</span> <strong id="requiredDayTotalSheep" class="panel-metric-value">—</strong></div>
             </div>
           </section>
@@ -465,8 +466,9 @@
             </div>
             <div class="target-section-content panel-section-content">
               <div class="panel-metric-row"><span class="panel-metric-label">Predicted run total:</span> <strong id="projectedTotal" class="panel-metric-value">0</strong></div>
-              <div class="panel-metric-row"><span class="panel-metric-label">Predicted Run Target Catch:</span> <strong id="estimatedLastCatchTime" class="panel-metric-value">—</strong></div>
-              <div class="panel-metric-row"><span class="panel-metric-label">Predicted Final Catch:</span> <strong id="maxCatchTime" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Predicted quarter total:</span> <strong id="predictedQuarterTotal" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Predicted target catch time:</span> <strong id="estimatedLastCatchTime" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Predicted run final catch:</span> <strong id="maxCatchTime" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Catch prediction:</span> <strong id="catchPrediction" class="panel-metric-value">Set target and start run.</strong></div>
             </div>
           </section>
@@ -554,6 +556,13 @@
             <select id="sheepLogSortOrder">
             <option value="asc">Fastest first</option>
             <option value="desc">Slowest first</option>
+            </select>
+          </div>
+                    <div class="sheep-log-sort-control">
+            <label for="sheepLogFillDirection">Fill:</label>
+            <select id="sheepLogFillDirection">
+            <option value="latestFirst">Latest first</option>
+            <option value="oldestFirst">Oldest first</option>
             </select>
           </div>
           <div class="sheep-log-sort-control">
@@ -924,7 +933,7 @@
         <p>Pen refill only applies when a record type is selected in Day Configuration.</p>
         <p>If Record type is Normal day / No record rules, Pen refill stays off.</p>
         <p><strong>Strong wool lambs:</strong><br />Pen starts with 20 sheep. Refill is allowed when 5 sheep are left. That means the alert is based on every 15 sheep taken from the pen.</p>
-        <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 3 sheep are left. That means the alert is based on every 7 sheep taken from the pen.</p>
+        <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 2 sheep are left. That means the alert is based on every 8 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
