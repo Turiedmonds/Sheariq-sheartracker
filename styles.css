@@ -618,12 +618,10 @@ body.layout-edit-on .panel:hover .resize-handle {
 }
 
 .target-panel-section {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 0.4rem;
+  padding-top: 0.2rem;
 }
 
 .target-panel-section:first-child {
-  border-top: none;
   padding-top: 0;
 }
 

@@ -23,6 +23,7 @@ const DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.dayConfigSectionsColl
 const DEFAULT_PERFORMANCE_SECTION_ORDER = ["sheepCount", "averages", "latestExtremes"];
 const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
+const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
@@ -138,6 +139,7 @@ const appState = {
     by: "number",
     order: "asc"
   },
+  sheepLogFillDirection: "latestFirst",
   showPlannedDelayMarkers: true,
   markerSettingsOpen: false,
   markerSettings: {
@@ -190,8 +192,10 @@ const elements = {
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
+  predictedQuarterTotal: document.getElementById("predictedQuarterTotal"),
   requiredDayTotalSheep: document.getElementById("requiredDayTotalSheep"),
   requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
+  requiredQuarterTotal: document.getElementById("requiredQuarterTotal"),
   projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   timeSpareToBell: document.getElementById("timeSpareToBell"),
@@ -202,6 +206,7 @@ const elements = {
   sheepLogBody: document.getElementById("sheepLogBody"),
   sheepLogSortBy: document.getElementById("sheepLogSortBy"),
   sheepLogSortOrder: document.getElementById("sheepLogSortOrder"),
+  sheepLogFillDirection: document.getElementById("sheepLogFillDirection"),
   markerSettingsToggle: document.getElementById("markerSettingsToggle"),
   markerSettingsPanel: document.getElementById("markerSettingsPanel"),
   showPlannedDelayMarkers: document.getElementById("showPlannedDelayMarkers"),
@@ -2418,14 +2423,16 @@ function promptForSheepNote(sheepNumber) {
 function getSortedSheepLogEntries() {
   const entries = [...appState.sheep];
   const { by, order } = appState.sheepLogSort;
-  if (by === "number") return entries;
-  const multiplier = order === "desc" ? -1 : 1;
-  entries.sort((a, b) => {
-    const aValue = Number(a?.[by]) || 0;
-    const bValue = Number(b?.[by]) || 0;
-    if (aValue !== bValue) return (aValue - bValue) * multiplier;
-    return (a.number - b.number);
-  });
+  if (by !== "number") {
+    const multiplier = order === "desc" ? -1 : 1;
+    entries.sort((a, b) => {
+      const aValue = Number(a?.[by]) || 0;
+      const bValue = Number(b?.[by]) || 0;
+      if (aValue !== bValue) return (aValue - bValue) * multiplier;
+      return (a.number - b.number);
+    });
+  }
+  if (appState.sheepLogFillDirection === "latestFirst") entries.reverse();
   return entries;
 }
 
@@ -2461,6 +2468,29 @@ function setSheepLogSortSettings() {
   elements.sheepLogSortOrder.value = appState.sheepLogSort.order;
   elements.sheepLogSortOrder.disabled = appState.sheepLogSort.by === "number";
   localStorage.setItem(SHEEP_LOG_SORT_STORAGE_KEY, JSON.stringify(appState.sheepLogSort));
+  renderLogTable();
+}
+
+
+function loadSheepLogFillDirectionSettings() {
+  if (!elements.sheepLogFillDirection) return;
+  let nextDirection = "latestFirst";
+  try {
+    const raw = localStorage.getItem(SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY);
+    if (raw === "latestFirst" || raw === "oldestFirst") nextDirection = raw;
+  } catch (error) {
+    nextDirection = "latestFirst";
+  }
+  appState.sheepLogFillDirection = nextDirection;
+  elements.sheepLogFillDirection.value = nextDirection;
+}
+
+function setSheepLogFillDirectionSettings() {
+  if (!elements.sheepLogFillDirection) return;
+  const nextDirection = elements.sheepLogFillDirection.value === "oldestFirst" ? "oldestFirst" : "latestFirst";
+  appState.sheepLogFillDirection = nextDirection;
+  elements.sheepLogFillDirection.value = nextDirection;
+  localStorage.setItem(SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY, nextDirection);
   renderLogTable();
 }
 
@@ -2514,6 +2544,33 @@ function findScrollableParent(startElement, boundaryElement = null) {
   return null;
 }
 
+
+function calculateQuarterTotals(targetMetrics) {
+  const quarterSeconds = 900;
+  const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+  if (!hasRunStarted) return { required: null, predicted: null };
+
+  const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
+  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const currentQuarterIndex = Math.floor(elapsedSeconds / quarterSeconds);
+  const quarterStartSeconds = currentQuarterIndex * quarterSeconds;
+  const quarterEndSeconds = Math.min(quarterStartSeconds + quarterSeconds, runDurationSeconds);
+  const quarterLengthSeconds = Math.max(quarterEndSeconds - quarterStartSeconds, 0);
+
+  const required = runDurationSeconds > 0 && targetMetrics.requiredRunSheep > 0
+    ? Math.max(Math.round((targetMetrics.requiredRunSheep * quarterLengthSeconds) / runDurationSeconds), 0)
+    : null;
+
+  if (quarterLengthSeconds <= 0 || appState.currentStats.avgCycle <= 0) return { required, predicted: null };
+
+  const sheepDoneByQuarterStart = appState.sheep.filter((entry) => (Number(entry?.effectiveElapsedSeconds) || 0) <= quarterStartSeconds).length;
+  const completedInQuarter = Math.max(appState.sheep.length - sheepDoneByQuarterStart, 0);
+  const remainingQuarterSeconds = Math.max(quarterEndSeconds - elapsedSeconds, 0);
+  const projectedAdditional = Math.floor(remainingQuarterSeconds / appState.currentStats.avgCycle);
+  const predicted = Math.max(completedInQuarter + projectedAdditional, 0);
+
+  return { required, predicted };
+}
 
 function updateQuarterDisplay() {
   const quarterSeconds = 900;
@@ -2654,7 +2711,7 @@ function updatePenRefillAlertDisplay() {
 
   const cycleSizeByRecordType = {
     strongWoolLambs: 15,
-    strongWoolEwes: 7
+    strongWoolEwes: 8
   };
 
   const cycleSize = cycleSizeByRecordType[appState.recordType];
@@ -2737,6 +2794,9 @@ function updateStatsPanel() {
   setText(elements.projectedTotal, String(target.projectedTotal));
   setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
+  const quarterTotals = calculateQuarterTotals(target);
+  setText(elements.requiredQuarterTotal, quarterTotals.required === null ? "—" : String(quarterTotals.required));
+  setText(elements.predictedQuarterTotal, quarterTotals.predicted === null ? "—" : String(quarterTotals.predicted));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
     if (diff > 0) {
@@ -2769,6 +2829,13 @@ function updateStatsPanel() {
     }
   }
   updateTrendFlags();
+
+  if (elements.lastSheepTime) {
+    elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
+    if (last && target.requiredCycle > 0 && Number.isFinite(last.fullCycle)) {
+      elements.lastSheepTime.classList.add(last.fullCycle <= target.requiredCycle ? "on-pace-good" : "on-pace-bad");
+    }
+  }
 
   if (elements.avgCycle) {
     const onPaceClass = target.requiredCycle > 0
@@ -4537,6 +4604,9 @@ function bindEvents() {
   if (elements.sheepLogSortOrder) {
     elements.sheepLogSortOrder.addEventListener("change", setSheepLogSortSettings);
   }
+  if (elements.sheepLogFillDirection) {
+    elements.sheepLogFillDirection.addEventListener("change", setSheepLogFillDirectionSettings);
+  }
   if (elements.showPlannedDelayMarkers) {
     elements.showPlannedDelayMarkers.addEventListener("change", () => {
       setPlannedDelayMarkerVisibility(elements.showPlannedDelayMarkers.checked);
@@ -4751,6 +4821,7 @@ function initialize() {
   loadAutosaveSettings();
   loadFollowLatestSettings();
   loadSheepLogSortSettings();
+  loadSheepLogFillDirectionSettings();
   loadPlannedDelayMarkerVisibility();
   loadMarkerSettings();
   loadKeyboardShortcuts();
