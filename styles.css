@@ -727,6 +727,16 @@ button:disabled {
   line-height: 1.2;
 }
 
+.sheep-log-markers-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.sheep-log-markers-toggle input[type="checkbox"] {
+  margin: 0;
+}
+
 @media (max-width: 520px) {
   .sheep-log-sort-controls {
     gap: 0.35rem 0.5rem;
@@ -750,6 +760,29 @@ button:disabled {
 #panel-log .sheep-log-note-col {
   min-width: 70px;
   text-align: center;
+}
+
+#panel-log .sheep-log-marker-col {
+  min-width: 88px;
+}
+
+#panel-log .sheep-log-marker-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+#panel-log .sheep-log-marker-tag {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  border-radius: 999px;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #cbd5e1;
+  background: rgba(148, 163, 184, 0.18);
+  color: #334155;
+  white-space: nowrap;
 }
 
 #panel-log .sheep-log-note-btn {
