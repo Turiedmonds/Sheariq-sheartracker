@@ -216,7 +216,12 @@ const elements = {
   targetPaceSettings: document.getElementById("targetPaceSettings"),
   targetPaceSections: document.getElementById("targetPaceSections"),
   predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
-  timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel")
+  timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel"),
+  dashboardConnectionHelpBtn: document.getElementById("dashboardConnectionHelpBtn"),
+  settingsConnectionHelpBtn: document.getElementById("settingsConnectionHelpBtn"),
+  connectionHelpModalOverlay: document.getElementById("connectionHelpModalOverlay"),
+  connectionHelpModalCloseBtn: document.getElementById("connectionHelpModalCloseBtn"),
+  connectionHelpModalContent: document.getElementById("connectionHelpModalContent")
 };
 
 function initTargetPaceSections() {
@@ -3260,12 +3265,21 @@ function initializeTopTabs() {
 function initializeConnectionHelp() {
   const template = document.getElementById("connectionHelpTemplate");
   if (!(template instanceof HTMLTemplateElement)) return;
-  ["dashboardConnectionHelpContent", "settingsConnectionHelpContent"].forEach((containerId) => {
-    const container = document.getElementById(containerId);
-    if (!container) return;
-    container.innerHTML = "";
-    container.appendChild(template.content.cloneNode(true));
-  });
+  if (!elements.connectionHelpModalContent) return;
+  elements.connectionHelpModalContent.innerHTML = "";
+  elements.connectionHelpModalContent.appendChild(template.content.cloneNode(true));
+}
+
+function openConnectionHelpModal() {
+  if (!elements.connectionHelpModalOverlay) return;
+  elements.connectionHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeConnectionHelpModal() {
+  if (!elements.connectionHelpModalOverlay) return;
+  elements.connectionHelpModalOverlay.hidden = true;
+  document.body.classList.remove("layout-scroll-lock");
 }
 
 function bindEvents() {
@@ -3423,6 +3437,17 @@ function bindEvents() {
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
+  if (elements.dashboardConnectionHelpBtn) elements.dashboardConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
+  if (elements.settingsConnectionHelpBtn) elements.settingsConnectionHelpBtn.addEventListener("click", openConnectionHelpModal);
+  if (elements.connectionHelpModalCloseBtn) elements.connectionHelpModalCloseBtn.addEventListener("click", closeConnectionHelpModal);
+  if (elements.connectionHelpModalOverlay) {
+    elements.connectionHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.connectionHelpModalOverlay) closeConnectionHelpModal();
+    });
+  }
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeConnectionHelpModal();
+  });
   if (elements.autosaveToggle) {
     elements.autosaveToggle.addEventListener("change", () => {
       setAutosaveEnabled(elements.autosaveToggle.checked);
