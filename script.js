@@ -3257,6 +3257,17 @@ function initializeTopTabs() {
   }
 }
 
+function initializeConnectionHelp() {
+  const template = document.getElementById("connectionHelpTemplate");
+  if (!(template instanceof HTMLTemplateElement)) return;
+  ["dashboardConnectionHelpContent", "settingsConnectionHelpContent"].forEach((containerId) => {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    container.innerHTML = "";
+    container.appendChild(template.content.cloneNode(true));
+  });
+}
+
 function bindEvents() {
   ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
@@ -3619,6 +3630,7 @@ function initialize() {
   initializeOfflineStatusPanel();
   ensurePanelLockButtons();
   initializeMetricValueStyling();
+  initializeConnectionHelp();
   bindEvents();
   initializeTopTabs();
   applyPanelState();

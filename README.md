@@ -54,6 +54,36 @@ Notes for common refresh issues:
 - You can use manual **Motor ON / Motor OFF** buttons for testing.
 - Live automatic motor tracking requires both the Shelly connection and the proxy/helper running.
 
+## Real Evo/Shelly connection workflow
+
+1. **Power on the shearing plant.**  
+   Plug in and power on the Heiniger Evo shearing plant. This also powers the Shelly inside the plant.
+2. **Connect laptop Wi-Fi to `Shear-Tracker-Shelly`.**  
+   If Windows says **No internet**, this is normal for this setup.
+3. **Open the app from desktop shortcut `Shear Tracker Launcher`.**  
+   This starts ShearTracker Web and ShearTracker Proxy, and should open: `http://localhost:8080/index.html`.
+4. **Keep command windows open.**  
+   If they are closed, the app may stop loading or stop talking to the Shelly.
+5. **In the app, open Settings → Connection Settings and confirm:**
+   - Shelly IP: `192.168.33.1`
+   - Endpoint Mode: `/rpc/Shelly.GetStatus (gen2+)`
+   - Poll Interval: `200`
+6. **Click `Test Connection`.**  
+   You want: Connection `ok`, Motor `ON` or `OFF`, and a response time shown in ms.
+7. **Return to Dashboard and set Simulation Mode = OFF.**
+8. **Click `Start Run`.**
+9. **Pull the Evo cord** to start the motor.  
+   You should see Trigger state `ON` and current shear time counting.
+10. **Stop the motor.**  
+    You should see Trigger state `OFF` and a sheep entry added to Sheep Log.
+
+Troubleshooting:
+
+- **App does not open:** double-click `Shear Tracker Launcher` again and keep command windows open.
+- **Test Connection fails:** confirm Wi-Fi `Shear-Tracker-Shelly`, Shelly IP `192.168.33.1`, Endpoint Mode `/rpc/Shelly.GetStatus (gen2+)`, and command windows still running.
+- **Pulling cord does nothing:** confirm Simulation Mode is OFF, Start Run was clicked, and Test Connection says Connection `ok`.
+- **Sheep is not logged:** logging happens only after motor ON then motor OFF, and only after the run has started.
+
 ## Plain-English architecture
 
 ```text

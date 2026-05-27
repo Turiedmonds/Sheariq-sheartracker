@@ -27,6 +27,10 @@
     <details class="top-card-group" open>
       <summary>Connection Settings</summary>
       <div class="top-card-group-body">
+        <details class="connection-help" id="settingsConnectionHelp">
+          <summary>How to connect Evo/Shelly</summary>
+          <div id="settingsConnectionHelpContent"></div>
+        </details>
         <div class="form-grid settings-form-grid">
           <label for="shellyIpInput">Shelly IP</label>
           <input id="shellyIpInput" type="text" value="192.168.33.1" />
@@ -94,6 +98,10 @@
         </div>
       </div>
       <div class="panel-body">
+        <details class="connection-help" id="dashboardConnectionHelp">
+          <summary>Connection Help</summary>
+          <div id="dashboardConnectionHelpContent"></div>
+        </details>
         <div class="form-grid single-row sim-toggle-row">
           <label for="simulationModeToggle">Simulation Mode</label>
           <input id="simulationModeToggle" type="checkbox" />
@@ -448,6 +456,28 @@
       </div>
     </section>
   </main>
+
+  <template id="connectionHelpTemplate">
+    <h3 class="connection-help-title">How to connect the Evo/Shelly</h3>
+    <ol class="connection-help-list">
+      <li><strong>Power on the shearing plant</strong><br />Plug in and power on the Heiniger Evo shearing plant. This also powers the Shelly device inside the plant.</li>
+      <li><strong>Connect your laptop to the Shelly Wi-Fi <span class="help-tip" tabindex="0" title="The Shelly creates its own local Wi-Fi network when it has power. Your laptop connects to this Wi-Fi so the app can talk to the Shelly without internet.">ⓘ</span></strong><br />On your laptop, open Wi-Fi settings. Connect to <strong>Shear-Tracker-Shelly</strong>. If Windows says <em>No internet</em> <span class="help-tip" tabindex="0" title="This is normal. The laptop only needs a local connection to the Shelly. It does not need home Wi-Fi, mobile data, or farm internet.">ⓘ</span>, that is normal.</li>
+      <li><strong>Start the Shear Tracker app</strong><br />On the laptop desktop home screen, double-click <strong>Shear Tracker Launcher</strong> (small gear icon). This starts <strong>ShearTracker Web</strong> <span class="help-tip" tabindex="0" title="This lets this laptop open the Shear Tracker app like a webpage. It is not using the internet. It is serving the app from this computer.">ⓘ</span> and <strong>ShearTracker Proxy</strong> <span class="help-tip" tabindex="0" title="This helper sits between the app and the Shelly. The app asks the helper for the motor status, and the helper asks the Shelly.">ⓘ</span>. It should open the app at <strong>http://localhost:8080/index.html</strong> (<span class="help-term" title="Localhost means this same computer. It tells the browser to open something running on this laptop, not on the internet.">localhost</span>). Keep command windows <span class="help-tip" tabindex="0" title="The command windows keep the app and Shelly helper running. If you close them, the app may stop loading or stop talking to the Shelly.">ⓘ</span> open.</li>
+      <li><strong>Check Connection Settings</strong><br />In the app, go to <strong>Settings → Connection Settings</strong> and check: Shelly IP <span class="help-tip" tabindex="0" title="Use 192.168.33.1 when connected to the Shelly’s own Wi-Fi. This is the Shelly device address. Do not use the laptop IP here.">ⓘ</span> = <strong>192.168.33.1</strong>, Endpoint Mode <span class="help-tip" tabindex="0" title="Endpoint Mode is the door the app uses to ask the Shelly for its motor status. /rpc/Shelly.GetStatus (gen2+) is the correct door for this Shelly model.">ⓘ</span> = <strong>/rpc/Shelly.GetStatus (gen2+)</strong>, Poll Interval <span class="help-tip" tabindex="0" title="This controls how often the app checks the Shelly. 200 means the app checks about every 200 milliseconds.">ⓘ</span> = <strong>200</strong>.</li>
+      <li><strong>Test the connection</strong><br />Click <strong>Test Connection</strong>. You want to see: <strong>Connection: ok</strong>, <strong>Motor: ON or OFF</strong>, and response time in ms.</li>
+      <li><strong>Turn Simulation Mode OFF <span class="help-tip" tabindex="0" title="Simulation Mode is for testing without the real Shelly. For the real Evo cord test, Simulation Mode must be OFF.">ⓘ</span></strong><br />Go back to the Dashboard and make sure Simulation Mode = <strong>OFF</strong>.</li>
+      <li><strong>Start the run</strong><br />Click <strong>Start Run</strong>. The app is now waiting for the Evo cord.</li>
+      <li><strong>Pull the Evo cord</strong><br />When the motor starts, the app should show <strong>Trigger state: ON</strong> and current shear time counting.</li>
+      <li><strong>Stop the motor</strong><br />When the motor stops, the app should show <strong>Trigger state: OFF</strong>. A sheep entry should be added to the Sheep Log.</li>
+    </ol>
+    <h4 class="connection-help-subtitle">Troubleshooting</h4>
+    <ul class="connection-help-troubleshooting">
+      <li><strong>App does not open:</strong> Double-click <strong>Shear Tracker Launcher</strong> again. Keep command windows open.</li>
+      <li><strong>Test Connection fails:</strong> Check Wi-Fi is <strong>Shear-Tracker-Shelly</strong>, Shelly IP is <strong>192.168.33.1</strong>, Endpoint Mode is <strong>/rpc/Shelly.GetStatus (gen2+)</strong>, and command windows are still running.</li>
+      <li><strong>Pulling the cord does nothing:</strong> Check Simulation Mode is OFF, Start Run was clicked, Test Connection says Connection: ok, and Trigger state changes when motor turns ON/OFF.</li>
+      <li><strong>Sheep is not logged:</strong> The app logs a sheep only after Motor ON then Motor OFF, and the run must be started first.</li>
+    </ul>
+  </template>
 
   <script src="script.js"></script>
   <script>
