@@ -337,6 +337,7 @@
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+          <button id="sheepLogHelpBtn" class="sheep-log-help-btn" type="button" aria-label="Open Sheep Log help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
@@ -511,6 +512,65 @@
       </div>
     </section>
   </main>
+
+
+  <div id="sheepLogHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="sheepLogHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="sheepLogHelpModalTitle">Sheep Log Help</h3>
+        <button id="sheepLogHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Sheep Log help">✕</button>
+      </div>
+      <div class="connection-help-modal-content sheep-log-help-content">
+        <h4 class="connection-help-title">What this panel shows</h4>
+        <p>The Sheep Log records each sheep when the motor turns ON and OFF.</p>
+        <p>It shows:</p>
+        <ul class="connection-help-list">
+          <li>Sheep number</li>
+          <li>Start time</li>
+          <li>End time</li>
+          <li>Shear duration</li>
+          <li>Catch duration</li>
+          <li>Catch-to-release time</li>
+          <li>Markers</li>
+          <li>Notes</li>
+        </ul>
+
+        <h4 class="connection-help-title">Duration columns</h4>
+        <p><strong>Shear Duration:</strong><br />How long the motor was running for that sheep.</p>
+        <p><strong>Catch Duration:</strong><br />How long it took from the end of one sheep to the start of the next sheep.</p>
+        <p><strong>Catch-to-Release Time:</strong><br />The full time from starting the catch through to releasing the sheep. This combines catch time and shear time.</p>
+
+        <h4 class="connection-help-title">Colour shading</h4>
+        <p>Yellow/orange shading means that time was longer than normal compared with the average for that same column.</p>
+        <ul class="connection-help-list">
+          <li>Light yellow = slightly longer than normal</li>
+          <li>Strong yellow = much longer than normal</li>
+          <li>Orange = extreme delay</li>
+        </ul>
+        <p>The colour does not automatically mean something went wrong. It is only a quick way to spot times worth checking.</p>
+
+        <h4 class="connection-help-title">Markers</h4>
+        <p>Markers are automatic suggestions only.</p>
+        <p><strong>Drink?:</strong><br />Possible drink break.</p>
+        <p><strong>Cutter:</strong><br />Likely cutter change.</p>
+        <p><strong>Comb:</strong><br />Likely comb/handpiece change.</p>
+        <p>A marker appears only when the sheep is near the planned timing window and the catch time is long enough compared with the average catch time per sheep.</p>
+
+        <h4 class="connection-help-title">Marker Settings</h4>
+        <p>Marker Settings lets you adjust when the automatic markers appear.</p>
+        <p><strong>Planned timing:</strong><br />How often the planned delay usually happens.</p>
+        <p><strong>Time window:</strong><br />How many seconds before or after the planned time the app should check.</p>
+        <p><strong>Extra seconds over average catch time:</strong><br />How many seconds longer than the average catch time per sheep the catch must be before a marker appears.</p>
+
+        <h4 class="connection-help-title">Notes</h4>
+        <p>Notes are entered by the user. Use notes to record the real reason for a delay, such as a stitch, gear issue, sheep issue, board delay, drink, or cutter change.</p>
+        <p>Automatic markers do not overwrite notes.</p>
+
+        <h4 class="connection-help-title">Sorting</h4>
+        <p>Sorting only changes how the table is displayed. It does not change the sheep numbers or the stored sheep records.</p>
+      </div>
+    </div>
+  </div>
 
   <div id="connectionHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="connectionHelpModalTitle">

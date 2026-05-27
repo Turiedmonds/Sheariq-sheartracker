@@ -243,7 +243,10 @@ const elements = {
   settingsConnectionHelpBtn: document.getElementById("settingsConnectionHelpBtn"),
   connectionHelpModalOverlay: document.getElementById("connectionHelpModalOverlay"),
   connectionHelpModalCloseBtn: document.getElementById("connectionHelpModalCloseBtn"),
-  connectionHelpModalContent: document.getElementById("connectionHelpModalContent")
+  connectionHelpModalContent: document.getElementById("connectionHelpModalContent"),
+  sheepLogHelpBtn: document.getElementById("sheepLogHelpBtn"),
+  sheepLogHelpModalOverlay: document.getElementById("sheepLogHelpModalOverlay"),
+  sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn")
 };
 
 function initTargetPaceSections() {
@@ -3478,7 +3481,24 @@ function openConnectionHelpModal() {
 function closeConnectionHelpModal() {
   if (!elements.connectionHelpModalOverlay) return;
   elements.connectionHelpModalOverlay.hidden = true;
-  document.body.classList.remove("layout-scroll-lock");
+  if (elements.sheepLogHelpModalOverlay?.hidden !== false) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
+
+function openSheepLogHelpModal() {
+  if (!elements.sheepLogHelpModalOverlay) return;
+  elements.sheepLogHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeSheepLogHelpModal() {
+  if (!elements.sheepLogHelpModalOverlay) return;
+  elements.sheepLogHelpModalOverlay.hidden = true;
+  if (elements.connectionHelpModalOverlay?.hidden !== false) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
 }
 
 function bindEvents() {
@@ -3644,8 +3664,18 @@ function bindEvents() {
       if (event.target === elements.connectionHelpModalOverlay) closeConnectionHelpModal();
     });
   }
+  if (elements.sheepLogHelpBtn) elements.sheepLogHelpBtn.addEventListener("click", openSheepLogHelpModal);
+  if (elements.sheepLogHelpModalCloseBtn) elements.sheepLogHelpModalCloseBtn.addEventListener("click", closeSheepLogHelpModal);
+  if (elements.sheepLogHelpModalOverlay) {
+    elements.sheepLogHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.sheepLogHelpModalOverlay) closeSheepLogHelpModal();
+    });
+  }
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeConnectionHelpModal();
+    if (event.key === "Escape") {
+      closeConnectionHelpModal();
+      closeSheepLogHelpModal();
+    }
   });
   if (elements.autosaveToggle) {
     elements.autosaveToggle.addEventListener("change", () => {
