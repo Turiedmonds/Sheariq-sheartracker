@@ -18,6 +18,8 @@ const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCo
 const SIM_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.simSectionsCollapsed";
 const SIM_SECTIONS_ORDER_STORAGE_KEY = "sheariq.simSectionsOrder";
 const PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.performanceSectionsCollapsed";
+const PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.performanceSectionsOrder";
+const DEFAULT_PERFORMANCE_SECTION_ORDER = ["sheepCount", "averages", "latestExtremes"];
 const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
@@ -662,19 +664,70 @@ function initializePerformanceSections() {
     storedCollapsed = {};
   }
 
+  let storedOrder = [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY) || "[]");
+    storedOrder = Array.isArray(raw) ? raw : [];
+  } catch (error) {
+    storedOrder = [];
+  }
+
+  const sectionMap = new Map(
+    sections
+      .map((section) => [section.dataset.sectionId, section])
+      .filter(([sectionId]) => Boolean(sectionId))
+  );
+
+  const validStoredOrder = storedOrder.filter((sectionId) => sectionMap.has(sectionId));
+  const appliedOrder = [];
+
+  validStoredOrder.forEach((sectionId) => {
+    if (!appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
+  });
+
+  DEFAULT_PERFORMANCE_SECTION_ORDER.forEach((sectionId) => {
+    if (sectionMap.has(sectionId) && !appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
+  });
+
+  sectionMap.forEach((_, sectionId) => {
+    if (!appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
+  });
+
+  appliedOrder.forEach((sectionId) => {
+    const section = sectionMap.get(sectionId);
+    if (section) container.appendChild(section);
+  });
+
   const persistState = () => {
+    const currentSections = Array.from(container.querySelectorAll(".perf-section"));
+    const order = currentSections
+      .map((section) => section.dataset.sectionId)
+      .filter((sectionId) => Boolean(sectionId));
     const collapsed = {};
-    sections.forEach((section) => {
+    currentSections.forEach((section) => {
       const sectionId = section.dataset.sectionId;
       if (!sectionId) return;
       collapsed[sectionId] = section.classList.contains("is-collapsed");
     });
+    localStorage.setItem(PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY, JSON.stringify(order));
     localStorage.setItem(PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  const updatePerformanceSectionMoveButtons = () => {
+    const currentSections = Array.from(container.querySelectorAll(".perf-section"));
+    currentSections.forEach((section, index) => {
+      const upBtn = section.querySelector(".perf-section-move-up");
+      const downBtn = section.querySelector(".perf-section-move-down");
+      if (upBtn) upBtn.disabled = index === 0;
+      if (downBtn) downBtn.disabled = index === currentSections.length - 1;
+    });
   };
 
   sections.forEach((section) => {
     const sectionId = section.dataset.sectionId;
     const toggleBtn = section.querySelector(".perf-section-toggle");
+    const upBtn = section.querySelector(".perf-section-move-up");
+    const downBtn = section.querySelector(".perf-section-move-down");
     if (!sectionId || !toggleBtn) return;
     if (storedCollapsed[sectionId] === true) {
       section.classList.add("is-collapsed");
@@ -692,8 +745,29 @@ function initializePerformanceSections() {
       updateToggleState();
       persistState();
     });
+
+    if (upBtn) {
+      upBtn.addEventListener("click", () => {
+        const previous = section.previousElementSibling;
+        if (!previous) return;
+        container.insertBefore(section, previous);
+        updatePerformanceSectionMoveButtons();
+        persistState();
+      });
+    }
+
+    if (downBtn) {
+      downBtn.addEventListener("click", () => {
+        const next = section.nextElementSibling;
+        if (!next) return;
+        container.insertBefore(next, section);
+        updatePerformanceSectionMoveButtons();
+        persistState();
+      });
+    }
   });
 
+  updatePerformanceSectionMoveButtons();
   persistState();
 }
 

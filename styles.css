@@ -1343,6 +1343,8 @@ td {
   align-items: center;
 }
 
+#panel-performance .perf-section-move-up,
+#panel-performance .perf-section-move-down,
 #panel-performance .perf-section-toggle {
   min-width: 1.5rem;
   height: 1.5rem;
@@ -1355,8 +1357,16 @@ td {
   cursor: pointer;
 }
 
+#panel-performance .perf-section-move-up:hover,
+#panel-performance .perf-section-move-down:hover,
 #panel-performance .perf-section-toggle:hover {
   background: #f1f5f9;
+}
+
+
+#panel-performance .perf-section-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 #panel-performance .perf-section.is-collapsed .perf-section-content {
