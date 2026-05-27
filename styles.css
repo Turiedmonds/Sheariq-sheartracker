@@ -349,11 +349,21 @@ body.layout-edit-on .panel-dragging {
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
+  flex-wrap: nowrap;
 }
 
 .panel-section-content {
   margin-top: 0.25rem;
 }
+
+.panel-section-title {
+  min-width: 0;
+}
+
+.panel-section-actions {
+  flex-wrap: nowrap;
+}
+
 
 .panel-section.is-collapsed .panel-section-header {
   margin-bottom: 0;
@@ -608,6 +618,31 @@ body.layout-edit-on .resize-handle {
 
 .target-panel-section.is-collapsed .target-section-content {
   display: none;
+}
+
+#panel-target .target-section-content .panel-metric-row {
+  grid-template-columns: minmax(150px, 1fr) minmax(0, auto);
+  align-items: start;
+}
+
+#panel-target .target-section-content .panel-metric-label {
+  padding-right: 0.35rem;
+}
+
+#panel-target #catchPrediction.panel-metric-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  #panel-target .target-section-content .panel-metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  #panel-target #catchPrediction.panel-metric-value {
+    text-align: left;
+  }
 }
 
 #timeSpareToBellLabel.target-status-ahead,
@@ -1490,6 +1525,7 @@ td {
   align-items: center;
   justify-content: space-between;
   gap: 0.4rem;
+  flex-wrap: nowrap;
 }
 
 #panel-config .day-config-section.is-collapsed .panel-section-content {
