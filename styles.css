@@ -1142,6 +1142,21 @@ td {
   align-items: center;
 }
 
+#panel-cycle .timing-group {
+  display: grid;
+  gap: 0.28rem;
+  margin-top: 0.28rem;
+}
+
+#panel-cycle .timing-group-heading {
+  margin: 0.15rem 0 0.05rem;
+  font-size: 0.73rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #4b5563;
+}
+
 #panel-cycle .run-countdown-value-wrap {
   display: inline-flex;
   align-items: center;

@@ -207,43 +207,55 @@
           <div class="metric-row run-badge-row">
             <span id="runBadge" class="run-badge">Run 1</span>
           </div>
-          <div class="metric-row">
-            <span class="metric-label">Motor state <span class="help-tip" tabindex="0" title="Live ON/OFF from Shelly. ON means the Evo motor is running. OFF means the Evo motor is stopped. This is used to start and stop sheep timing.">ⓘ</span>:</span>
-            <strong id="motorState">OFF</strong>
+          <div class="timing-group">
+            <h3 class="timing-group-heading">Live sheep timing</h3>
+            <div class="metric-row">
+              <span class="metric-label">Motor state <span class="help-tip" tabindex="0" title="Live ON/OFF from Shelly. ON means the Evo motor is running. OFF means the Evo motor is stopped. This is used to start and stop sheep timing.">ⓘ</span>:</span>
+              <strong id="motorState">OFF</strong>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Current catch time:</span>
+              <strong id="currentCatch">0.0s</strong>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Current shear time:</span>
+              <strong id="currentShear">0.0s</strong>
+            </div>
           </div>
-          <div class="metric-row">
-            <span class="metric-label">Current catch time:</span>
-            <strong id="currentCatch">0.0s</strong>
+          <div class="timing-group">
+            <h3 class="timing-group-heading">Run timing</h3>
+            <div class="metric-row">
+              <span class="metric-label">Run clock:</span>
+              <strong id="runClock">00:00</strong>
+            </div>
+            <div class="metric-row run-countdown-row">
+              <span class="metric-label">Run countdown:</span>
+              <span class="run-countdown-value-wrap">
+                <strong id="runCountdown">00:00</strong>
+              </span>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Day clock:</span>
+              <strong id="dayClock">00:00:00</strong>
+            </div>
           </div>
-          <div class="metric-row">
-            <span class="metric-label">Current shear time:</span>
-            <strong id="currentShear">0.0s</strong>
+          <div class="timing-group">
+            <h3 class="timing-group-heading">Quarter tracking</h3>
+            <div class="metric-row">
+              <span class="metric-label">Quarter:</span>
+              <strong id="currentQuarter">—</strong>
+            </div>
+            <div class="metric-row">
+              <span class="metric-label">Quarter clock:</span>
+              <strong id="quarterClock">00:00</strong>
+            </div>
           </div>
-          <div class="metric-row">
-            <span class="metric-label">Run clock:</span>
-            <strong id="runClock">00:00</strong>
-          </div>
-          <div class="metric-row run-countdown-row">
-            <span class="metric-label">Run countdown:</span>
-            <span class="run-countdown-value-wrap">
-              <strong id="runCountdown">00:00</strong>
-            </span>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Quarter:</span>
-            <strong id="currentQuarter">—</strong>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Quarter clock:</span>
-            <strong id="quarterClock">00:00</strong>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Timing alert:</span>
-            <strong id="timingAlert">—</strong>
-          </div>
-          <div class="metric-row">
-            <span class="metric-label">Day clock:</span>
-            <strong id="dayClock">00:00:00</strong>
+          <div class="timing-group">
+            <h3 class="timing-group-heading">Alerts</h3>
+            <div class="metric-row">
+              <span class="metric-label">Timing alert:</span>
+              <strong id="timingAlert">—</strong>
+            </div>
           </div>
         </div>
       </div>

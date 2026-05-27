@@ -2077,11 +2077,17 @@ function updateTimingAlertDisplay() {
   const isCadenceAlertActive = (intervalSeconds) => {
     if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return false;
     const previousEventMultiple = Math.floor(elapsedSeconds / intervalSeconds);
+    const previousEventTime = previousEventMultiple * intervalSeconds;
     const nextEventTime = (previousEventMultiple + 1) * intervalSeconds;
     const secondsUntilNextEvent = nextEventTime - elapsedSeconds;
-    const secondsSincePreviousEvent = elapsedSeconds - (previousEventMultiple * intervalSeconds);
-    return (secondsUntilNextEvent >= 0 && secondsUntilNextEvent <= ALERT_LEAD_SECONDS)
-      || (secondsSincePreviousEvent >= 0 && secondsSincePreviousEvent <= ALERT_GRACE_SECONDS);
+    const secondsSincePreviousEvent = elapsedSeconds - previousEventTime;
+    const canShowPreEventWarning = nextEventTime > 0
+      && secondsUntilNextEvent >= 0
+      && secondsUntilNextEvent <= ALERT_LEAD_SECONDS;
+    const canShowPostEventGrace = previousEventTime > 0
+      && secondsSincePreviousEvent >= 0
+      && secondsSincePreviousEvent <= ALERT_GRACE_SECONDS;
+    return canShowPreEventWarning || canShowPostEventGrace;
   };
 
   const remainingSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
