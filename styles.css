@@ -59,6 +59,14 @@ body {
   color: #ffffff;
 }
 
+.app-tabs .connection-help-open-btn {
+  margin-bottom: 0;
+}
+
+.top-nav-help-btn {
+  justify-self: auto;
+}
+
 .settings-panel {
   padding: 0.8rem;
   display: grid;
