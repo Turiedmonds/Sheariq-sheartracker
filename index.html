@@ -97,47 +97,75 @@
         </div>
       </div>
       <div class="panel-body sim-controls-body">
-        <section class="sim-controls-section" aria-label="Simulation Mode section">
-          <h3 class="sim-controls-section-title">Simulation Mode</h3>
-          <div class="form-grid single-row sim-toggle-row">
+        <section class="sim-controls-section" data-section-id="simulationMode" aria-label="Simulation Mode section">
+          <div class="sim-controls-section-header">
+            <h3 class="sim-controls-section-title">Simulation Mode</h3>
+            <div class="sim-controls-section-actions">
+              <button class="sim-controls-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Simulation Mode section">−</button>
+            </div>
+          </div>
+          <div class="sim-controls-section-content">
+            <div class="form-grid single-row sim-toggle-row">
             <label for="simulationModeToggle">Simulation Mode</label>
             <input id="simulationModeToggle" type="checkbox" />
-          </div>
-          <div id="simulationBanner" class="sim-banner" hidden>
-            Simulation active: Shelly polling is paused.
-          </div>
-          <div id="simulationControls" class="button-row" hidden>
-            <button id="simMotorOnBtn" type="button">Motor ON</button>
-            <button id="simMotorOffBtn" type="button">Motor OFF</button>
+            </div>
+            <div id="simulationBanner" class="sim-banner" hidden>
+              Simulation active: Shelly polling is paused.
+            </div>
+            <div id="simulationControls" class="button-row" hidden>
+              <button id="simMotorOnBtn" type="button">Motor ON</button>
+              <button id="simMotorOffBtn" type="button">Motor OFF</button>
+            </div>
           </div>
         </section>
 
-        <section class="sim-controls-section" aria-label="Run Controls section">
-          <h3 class="sim-controls-section-title">Run Controls</h3>
-          <div class="button-row">
+        <section class="sim-controls-section" data-section-id="runControls" aria-label="Run Controls section">
+          <div class="sim-controls-section-header">
+            <h3 class="sim-controls-section-title">Run Controls</h3>
+            <div class="sim-controls-section-actions">
+              <button class="sim-controls-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Run Controls section">−</button>
+            </div>
+          </div>
+          <div class="sim-controls-section-content">
+            <div class="button-row">
             <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
             <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
             <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
             <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
             <button id="loadLastSaveBtn" type="button">Load Last Save</button>
             <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
+            </div>
           </div>
         </section>
 
-        <section class="sim-controls-section" aria-label="Autosave section">
-          <h3 class="sim-controls-section-title">Autosave</h3>
-          <div class="form-grid single-row sim-setting-row">
+        <section class="sim-controls-section" data-section-id="autosave" aria-label="Autosave section">
+          <div class="sim-controls-section-header">
+            <h3 class="sim-controls-section-title">Autosave</h3>
+            <div class="sim-controls-section-actions">
+              <button class="sim-controls-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Autosave section">−</button>
+            </div>
+          </div>
+          <div class="sim-controls-section-content">
+            <div class="form-grid single-row sim-setting-row">
             <label for="autosaveToggle">Autosave</label>
             <input id="autosaveToggle" type="checkbox" checked />
+            </div>
+            <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
           </div>
-          <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
         </section>
 
-        <section class="sim-controls-section" aria-label="Status section">
-          <h3 class="sim-controls-section-title">Status</h3>
-          <div class="sim-status-row">
-            <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
-            <div class="status-box minimal-status">Run Status: <strong id="runStatus">Idle</strong></div>
+        <section class="sim-controls-section" data-section-id="status" aria-label="Status section">
+          <div class="sim-controls-section-header">
+            <h3 class="sim-controls-section-title">Status</h3>
+            <div class="sim-controls-section-actions">
+              <button class="sim-controls-section-toggle" type="button" aria-expanded="true" aria-label="Collapse Status section">−</button>
+            </div>
+          </div>
+          <div class="sim-controls-section-content">
+            <div class="sim-status-row">
+              <div id="connectionSummary" class="status-box minimal-status">Shelly: unknown • Response: n/a</div>
+              <div class="status-box minimal-status">Run Status: <strong id="runStatus">Idle</strong></div>
+            </div>
           </div>
         </section>
       </div>

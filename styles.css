@@ -637,11 +637,40 @@ button:disabled {
   background: #fcfcfd;
 }
 
+.sim-controls-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
 .sim-controls-section-title {
-  margin: 0 0 0.45rem;
+  margin: 0;
   font-size: 0.9rem;
   font-weight: 600;
   color: #374151;
+}
+
+.sim-controls-section-actions {
+  display: flex;
+  align-items: center;
+}
+
+.sim-controls-section-toggle {
+  width: 1.6rem;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sim-controls-section-content {
+  margin-top: 0.45rem;
+}
+
+.sim-controls-section.is-collapsed .sim-controls-section-content {
+  display: none;
 }
 
 .button-row {

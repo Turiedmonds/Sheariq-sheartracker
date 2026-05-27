@@ -15,6 +15,7 @@ const SNAP_GRID_SIZE_STORAGE_KEY = "sheariq.snapGridSize";
 const PANEL_LOCKS_STORAGE_KEY = "sheariq.panelLocks";
 const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder";
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
+const SIM_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.simSectionsCollapsed";
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
@@ -529,6 +530,46 @@ function initTargetPaceSections() {
   });
   updateMoveButtons();
   persistState();
+}
+
+function initializeSimulationSections() {
+  const sections = Array.from(document.querySelectorAll("#panel-sim .sim-controls-section"));
+  if (!sections.length) return;
+  let storedCollapsed = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(SIM_SECTIONS_COLLAPSED_STORAGE_KEY) || "{}");
+    storedCollapsed = raw && typeof raw === "object" ? raw : {};
+  } catch (error) {
+    storedCollapsed = {};
+  }
+
+  const persistState = () => {
+    const collapsed = {};
+    sections.forEach((section) => {
+      const sectionId = section.dataset.sectionId;
+      if (!sectionId) return;
+      collapsed[sectionId] = section.classList.contains("is-collapsed");
+    });
+    localStorage.setItem(SIM_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  sections.forEach((section) => {
+    const sectionId = section.dataset.sectionId;
+    const toggleBtn = section.querySelector(".sim-controls-section-toggle");
+    if (!sectionId || !toggleBtn) return;
+    if (storedCollapsed[sectionId]) section.classList.add("is-collapsed");
+    const updateToggleState = () => {
+      const isCollapsed = section.classList.contains("is-collapsed");
+      toggleBtn.textContent = isCollapsed ? "+" : "−";
+      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    };
+    updateToggleState();
+    toggleBtn.addEventListener("click", () => {
+      section.classList.toggle("is-collapsed");
+      updateToggleState();
+      persistState();
+    });
+  });
 }
 
 const METRIC_VALUE_IDS = new Set([
@@ -4193,6 +4234,7 @@ function bindEvents() {
       elements.targetPaceSettingsToggle.setAttribute("aria-expanded", String(!isOpen));
     });
   }
+  initializeSimulationSections();
   initTargetPaceSections();
   if (elements.controlsDockToggle) {
     elements.controlsDockToggle.addEventListener("click", () => {
