@@ -345,7 +345,9 @@ body.layout-edit-on .panel-dragging {
 }
 
 .panel-section-header {
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.4rem;
 }
 
@@ -566,11 +568,7 @@ body.layout-edit-on .resize-handle {
 }
 
 .target-pace-grid .target-section-title {
-  font-size: 0.87rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  color: #374151;
+  margin: 0;
 }
 
 .target-panel-section {
@@ -694,9 +692,6 @@ button:disabled {
 
 .sim-controls-section-title {
   margin: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #374151;
 }
 
 .sim-controls-section-actions {
@@ -1313,14 +1308,6 @@ td {
   gap: 0.28rem;
 }
 
-#panel-performance .perf-section-header {
-  display: block;
-}
-
-.panel-section-header {
-  display: block;
-}
-
 #panel-performance .perf-section-title {
   margin: 0.15rem 0 0.05rem;
   font-size: 0.73rem;
@@ -1331,12 +1318,12 @@ td {
 }
 
 .panel-section-title {
-  margin: 0.15rem 0 0.05rem;
-  font-size: 0.73rem;
+  margin: 0;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #4b5563;
+  color: #1f2937;
 }
 
 #panel-performance .perf-section-content {
@@ -1421,12 +1408,7 @@ td {
 }
 
 #panel-cycle .timing-group-heading {
-  margin: 0.15rem 0 0.05rem;
-  font-size: 0.73rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  color: #4b5563;
+  margin: 0;
 }
 
 #panel-performance .perf-section-header {
@@ -1444,6 +1426,8 @@ td {
 .panel-section-actions {
   display: inline-flex;
   align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 #panel-performance .perf-section-move-up,
