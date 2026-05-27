@@ -229,6 +229,9 @@ const elements = {
   shortcutMotorOn: document.getElementById("shortcutMotorOn"),
   shortcutMotorOff: document.getElementById("shortcutMotorOff"),
   resetShortcutsBtn: document.getElementById("resetShortcutsBtn"),
+  shortcutSettingsBtn: document.getElementById("shortcutSettingsBtn"),
+  shortcutSettingsModalOverlay: document.getElementById("shortcutSettingsModalOverlay"),
+  shortcutSettingsModalCloseBtn: document.getElementById("shortcutSettingsModalCloseBtn"),
   farmDropdown: document.getElementById("farmDropdown"),
   farmDropdownToggle: document.getElementById("farmDropdownToggle"),
   farmDropdownMenu: document.getElementById("farmDropdownMenu"),
@@ -295,10 +298,37 @@ const SHORTCUT_ACTIONS = [
   { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only" }
 ];
 
+const SPECIAL_SHORTCUT_KEYS = Object.freeze({
+  " ": "SPACE",
+  Spacebar: "SPACE",
+  Enter: "ENTER",
+  Escape: "ESCAPE",
+  Esc: "ESCAPE",
+  ArrowUp: "ARROWUP",
+  ArrowDown: "ARROWDOWN",
+  ArrowLeft: "ARROWLEFT",
+  ArrowRight: "ARROWRIGHT"
+});
+
+const SHORTCUT_KEY_DISPLAY = Object.freeze({
+  SPACE: "Space",
+  ENTER: "Enter",
+  ESCAPE: "Esc",
+  ARROWUP: "↑",
+  ARROWDOWN: "↓",
+  ARROWLEFT: "←",
+  ARROWRIGHT: "→"
+});
+
 function sanitizeShortcutKey(value) {
   if (typeof value !== "string") return "";
+  if (Object.prototype.hasOwnProperty.call(SPECIAL_SHORTCUT_KEYS, value)) return SPECIAL_SHORTCUT_KEYS[value];
   const trimmed = value.trim().toUpperCase();
   return trimmed.length === 1 ? trimmed : "";
+}
+
+function formatShortcutLabel(value) {
+  return SHORTCUT_KEY_DISPLAY[value] || value;
 }
 
 function getFallbackShortcuts() {
@@ -345,13 +375,13 @@ function setShortcutMessage(message) {
 function renderShortcutSettings() {
   SHORTCUT_ACTIONS.forEach((action) => {
     const input = elements[action.elementKey];
-    if (input) input.value = appState.keyboardShortcuts[action.key];
+    if (input) input.value = formatShortcutLabel(appState.keyboardShortcuts[action.key]);
     const button = elements[action.buttonKey];
-    if (button) button.title = `Shortcut: ${appState.keyboardShortcuts[action.key]}${action.titleSuffix}`;
+    if (button) button.title = `Shortcut: ${formatShortcutLabel(appState.keyboardShortcuts[action.key])}${action.titleSuffix}`;
   });
   if (elements.shortcutHintLine) {
     const s = appState.keyboardShortcuts;
-    elements.shortcutHintLine.textContent = `Shortcuts: ${s.startRun} Start, ${s.stopRun} Stop, ${s.pauseRun} Pause, ${s.resetRun} Reset, ${s.motorOn} Motor ON, ${s.motorOff} Motor OFF`;
+    elements.shortcutHintLine.textContent = `Shortcuts: ${formatShortcutLabel(s.startRun)} Start, ${formatShortcutLabel(s.stopRun)} Stop, ${formatShortcutLabel(s.pauseRun)} Pause, ${formatShortcutLabel(s.resetRun)} Reset, ${formatShortcutLabel(s.motorOn)} Motor ON, ${formatShortcutLabel(s.motorOff)} Motor OFF`;
   }
 }
 
@@ -365,7 +395,7 @@ function isTypingTarget(target) {
 function applyShortcutAssignment(actionKey, proposedValue) {
   const value = sanitizeShortcutKey(proposedValue);
   if (!value) {
-    setShortcutMessage("Press one key (letter/number/symbol).");
+    setShortcutMessage("Press one key (letter/number/symbol/special key).");
     renderShortcutSettings();
     return;
   }
@@ -393,6 +423,24 @@ function handleShortcutKeydown(event) {
     event.preventDefault();
     button.click();
     return;
+  }
+}
+
+function openShortcutSettingsModal() {
+  if (!elements.shortcutSettingsModalOverlay) return;
+  elements.shortcutSettingsModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeShortcutSettingsModal() {
+  if (!elements.shortcutSettingsModalOverlay) return;
+  elements.shortcutSettingsModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
   }
 }
 
@@ -3818,6 +3866,7 @@ function closeConnectionHelpModal() {
   if (
     elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -3836,6 +3885,7 @@ function closeSheepLogHelpModal() {
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4020,6 +4070,13 @@ function bindEvents() {
   }
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  if (elements.shortcutSettingsBtn) elements.shortcutSettingsBtn.addEventListener("click", openShortcutSettingsModal);
+  if (elements.shortcutSettingsModalCloseBtn) elements.shortcutSettingsModalCloseBtn.addEventListener("click", closeShortcutSettingsModal);
+  if (elements.shortcutSettingsModalOverlay) {
+    elements.shortcutSettingsModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.shortcutSettingsModalOverlay) closeShortcutSettingsModal();
+    });
+  }
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.addEventListener("click", handleMotorOff);
   SHORTCUT_ACTIONS.forEach((action) => {
     const input = elements[action.elementKey];
@@ -4027,11 +4084,7 @@ function bindEvents() {
     input.addEventListener("keydown", (event) => {
       if (event.key === "Tab") return;
       event.preventDefault();
-      if (event.key === "Escape") {
-        renderShortcutSettings();
-        setShortcutMessage("");
-        return;
-      }
+      event.stopPropagation();
       applyShortcutAssignment(action.key, event.key);
     });
     input.addEventListener("input", () => {
@@ -4074,6 +4127,7 @@ function bindEvents() {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
       closeTimingPanelHelpModal();
+      closeShortcutSettingsModal();
     }
   });
   if (elements.autosaveToggle) {

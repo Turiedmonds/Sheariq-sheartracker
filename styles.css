@@ -192,23 +192,27 @@ body {
   margin-top: 0.45rem;
 }
 
-.shortcut-settings-group {
+.shortcut-settings-btn {
   margin-top: 0.45rem;
+}
+
+.shortcut-settings-modal {
+  max-width: 420px;
 }
 
 .shortcut-grid {
   display: grid;
-  grid-template-columns: auto 72px;
+  grid-template-columns: auto 92px;
   gap: 0.35rem 0.6rem;
   align-items: center;
-  max-width: 320px;
+  max-width: 360px;
 }
 
 .shortcut-input {
-  text-transform: uppercase;
   text-align: center;
   font-weight: 700;
   padding: 0.2rem 0.35rem;
+  cursor: pointer;
 }
 
 .top-card-group {
