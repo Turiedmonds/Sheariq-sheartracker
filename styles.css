@@ -296,6 +296,16 @@ body.layout-edit-on .panel-dragging {
   min-width: 2rem;
 }
 
+.sheep-log-help-btn {
+  font-size: 0.82rem;
+  padding: 0.2rem 0.45rem;
+  min-width: auto;
+}
+
+.sheep-log-help-content p {
+  margin: 0.35rem 0 0.55rem;
+}
+
 .panel-body {
   padding: 0.8rem;
   color: #4b5563;
