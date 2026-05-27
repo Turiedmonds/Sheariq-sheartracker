@@ -141,8 +141,11 @@ body {
 }
 
 .connection-help-subtitle {
-  margin: 0.8rem 0 0.45rem;
-  font-size: 0.96rem;
+  margin: 1.05rem 0 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid #e5e7eb;
+  font-size: 1.04rem;
+  font-weight: 700;
   color: #111827;
 }
 
@@ -155,6 +158,14 @@ body {
 .connection-help-step-copy {
   margin: 0.2rem 0 0;
   color: #6b7280;
+  font-size: 0.93rem;
+}
+
+.connection-help-values {
+  margin: 0.35rem 0 0;
+  display: grid;
+  gap: 0.25rem;
+  color: #374151;
   font-size: 0.93rem;
 }
 
