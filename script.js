@@ -166,6 +166,7 @@ const elements = {
   runBadge: document.getElementById("runBadge"),
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
+  timingAlert: document.getElementById("timingAlert"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -2051,6 +2052,55 @@ function updateQuarterDisplay() {
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
 }
 
+function updateTimingAlertDisplay() {
+  const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+  if (!hasRunStarted) {
+    setText(elements.timingAlert, "—");
+    return;
+  }
+
+  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
+  const runComplete = runDurationSeconds > 0 && elapsedSeconds >= runDurationSeconds;
+  if (runComplete) {
+    setText(elements.timingAlert, "—");
+    return;
+  }
+
+  const DRINK_INTERVAL_SECONDS = 450;
+  const CUTTER_INTERVAL_SECONDS = 900;
+  const COMB_INTERVAL_SECONDS = 3600;
+  const ALERT_LEAD_SECONDS = 60;
+  const ALERT_GRACE_SECONDS = 10;
+  const LAST_QUARTER_SECONDS = 900;
+
+  const isCadenceAlertActive = (intervalSeconds) => {
+    if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return false;
+    const previousEventMultiple = Math.floor(elapsedSeconds / intervalSeconds);
+    const nextEventTime = (previousEventMultiple + 1) * intervalSeconds;
+    const secondsUntilNextEvent = nextEventTime - elapsedSeconds;
+    const secondsSincePreviousEvent = elapsedSeconds - (previousEventMultiple * intervalSeconds);
+    return (secondsUntilNextEvent >= 0 && secondsUntilNextEvent <= ALERT_LEAD_SECONDS)
+      || (secondsSincePreviousEvent >= 0 && secondsSincePreviousEvent <= ALERT_GRACE_SECONDS);
+  };
+
+  const remainingSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
+  const inLastQuarter = runDurationSeconds > 0 && remainingSeconds <= LAST_QUARTER_SECONDS;
+
+  let alertText = "—";
+  if (isCadenceAlertActive(COMB_INTERVAL_SECONDS)) {
+    alertText = "Comb/handpiece change in 1 min";
+  } else if (isCadenceAlertActive(CUTTER_INTERVAL_SECONDS)) {
+    alertText = "Cutter change in 1 min";
+  } else if (isCadenceAlertActive(DRINK_INTERVAL_SECONDS)) {
+    alertText = "Drink break in 1 min";
+  } else if (inLastQuarter) {
+    alertText = "Last quarter";
+  }
+
+  setText(elements.timingAlert, alertText);
+}
+
 function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -2067,6 +2117,7 @@ function updateLivePanel() {
   setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateQuarterDisplay();
+  updateTimingAlertDisplay();
   updateRunBadge();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
