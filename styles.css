@@ -1331,6 +1331,38 @@ td {
   color: #4b5563;
 }
 
+#panel-performance .perf-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+#panel-performance .perf-section-actions {
+  display: inline-flex;
+  align-items: center;
+}
+
+#panel-performance .perf-section-toggle {
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#panel-performance .perf-section-toggle:hover {
+  background: #f1f5f9;
+}
+
+#panel-performance .perf-section.is-collapsed .perf-section-content {
+  display: none;
+}
+
 #panel-cycle .run-countdown-value-wrap {
   display: inline-flex;
   align-items: center;

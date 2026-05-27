@@ -17,6 +17,7 @@ const TARGET_PACE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.targetPaceSectionsOrder"
 const TARGET_PACE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.targetPaceSectionsCollapsed";
 const SIM_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.simSectionsCollapsed";
 const SIM_SECTIONS_ORDER_STORAGE_KEY = "sheariq.simSectionsOrder";
+const PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.performanceSectionsCollapsed";
 const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
@@ -644,6 +645,55 @@ function initializeSimulationSections() {
   });
 
   updateSimulationSectionMoveButtons();
+  persistState();
+}
+
+function initializePerformanceSections() {
+  const container = document.querySelector("#panel-performance .perf-sections");
+  if (!container) return;
+  const sections = Array.from(container.querySelectorAll(".perf-section"));
+  if (!sections.length) return;
+
+  let storedCollapsed = {};
+  try {
+    const raw = JSON.parse(localStorage.getItem(PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY) || "{}");
+    storedCollapsed = raw && typeof raw === "object" ? raw : {};
+  } catch (error) {
+    storedCollapsed = {};
+  }
+
+  const persistState = () => {
+    const collapsed = {};
+    sections.forEach((section) => {
+      const sectionId = section.dataset.sectionId;
+      if (!sectionId) return;
+      collapsed[sectionId] = section.classList.contains("is-collapsed");
+    });
+    localStorage.setItem(PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  };
+
+  sections.forEach((section) => {
+    const sectionId = section.dataset.sectionId;
+    const toggleBtn = section.querySelector(".perf-section-toggle");
+    if (!sectionId || !toggleBtn) return;
+    if (storedCollapsed[sectionId] === true) {
+      section.classList.add("is-collapsed");
+    } else {
+      section.classList.remove("is-collapsed");
+    }
+    const updateToggleState = () => {
+      const isCollapsed = section.classList.contains("is-collapsed");
+      toggleBtn.textContent = isCollapsed ? "+" : "−";
+      toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+    };
+    updateToggleState();
+    toggleBtn.addEventListener("click", () => {
+      section.classList.toggle("is-collapsed");
+      updateToggleState();
+      persistState();
+    });
+  });
+
   persistState();
 }
 
@@ -4340,6 +4390,7 @@ function bindEvents() {
     });
   }
   initializeSimulationSections();
+  initializePerformanceSections();
   initTargetPaceSections();
   if (elements.controlsDockToggle) {
     elements.controlsDockToggle.addEventListener("click", () => {
