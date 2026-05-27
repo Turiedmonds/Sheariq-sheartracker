@@ -236,6 +236,7 @@
           <button class="panel-move-up" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+          <button id="performancePanelHelpBtn" class="sheep-log-help-btn" type="button" aria-label="Open Performance Panel help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
@@ -820,6 +821,43 @@
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 3 sheep are left. That means the alert is based on every 7 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="performancePanelHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="performancePanelHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="performancePanelHelpModalTitle">Performance Panel Help</h3>
+        <button id="performancePanelHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Performance Panel help">✕</button>
+      </div>
+      <div class="connection-help-modal-content performance-panel-help-content">
+        <h4 class="connection-help-title">What this panel is for</h4>
+        <p>The Performance Panel shows the current run performance. It helps you see sheep counts, average times, sheep per hour, and the fastest, slowest, and latest sheep times.</p>
+
+        <h4 class="connection-help-title">Sheep Count</h4>
+        <p><strong>Total Sheep Shorn:</strong><br />Shows how many sheep have been fully completed in the current session/run.</p>
+        <p><strong>Current Sheep Number:</strong><br />Shows the sheep number currently being worked through. This may be one ahead of completed sheep when a sheep is on the board.</p>
+
+        <h4 class="connection-help-title">Averages</h4>
+        <p><strong>Average shear time:</strong><br />The average time spent shearing each completed sheep.</p>
+        <p><strong>Average catch time:</strong><br />The average time between finishing one sheep and starting the next sheep.</p>
+        <p><strong>Average catch-to-release time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
+        <p><strong>Sheep per hour:</strong><br />The current average number of sheep being completed per hour.</p>
+
+        <h4 class="connection-help-title">Average catch-to-release colour</h4>
+        <p>The catch-to-release value may show a coloured outline or background.</p>
+        <p>The colour helps show whether the average full cycle time is on pace, close to target, or falling behind.</p>
+
+        <h4 class="connection-help-title">Latest &amp; Extremes</h4>
+        <p><strong>Last sheep time:</strong><br />The full cycle time for the most recently completed sheep.</p>
+        <p><strong>Fastest sheep today:</strong><br />The quickest completed sheep so far.</p>
+        <p><strong>Slowest sheep today:</strong><br />The slowest completed sheep so far.</p>
+
+        <h4 class="connection-help-title">Section layout</h4>
+        <p>Each section can be collapsed with the +/− button.</p>
+        <p>Use the ↑ and ↓ buttons to move sections into the order you prefer.</p>
+        <p>The app remembers your section order and collapsed sections after reload.</p>
       </div>
     </div>
   </div>
