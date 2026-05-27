@@ -1,0 +1,169 @@
+/*
+  SHEΔR iQ Red/Black Preview Theme
+  Scoped preview theme.
+  Remove body.theme-red-black or unlink this file to return to the base theme.
+*/
+
+body.theme-red-black {
+  --app-bg: #121417;
+  --header-bg: #171A1F;
+  --panel-bg: #1A1D21;
+  --panel-header-bg: #222831;
+  --panel-border: #2F3742;
+  --section-bg: #20252D;
+  --text-main: #E5E7EB;
+  --text-muted: #9CA3AF;
+  --accent-red: #C1121F;
+  --accent-red-dark: #8E0D18;
+  --accent-red-soft: #3A151A;
+  --button-bg: #252B35;
+  --button-border: #394354;
+
+  background: var(--app-bg);
+  color: var(--text-main);
+}
+
+body.theme-red-black,
+body.theme-red-black main,
+body.theme-red-black .dashboard {
+  background: var(--app-bg);
+  color: var(--text-main);
+}
+
+body.theme-red-black .app-header,
+body.theme-red-black .title-card {
+  background: var(--header-bg);
+  color: var(--text-main);
+  border-color: var(--panel-border);
+}
+
+body.theme-red-black .logo-header {
+  border-bottom: 1px solid var(--panel-border);
+}
+
+body.theme-red-black .app-tabs {
+  border-top: 1px solid var(--panel-border);
+}
+
+body.theme-red-black .app-tab {
+  background: var(--button-bg);
+  color: var(--text-main);
+  border-color: var(--button-border);
+}
+
+body.theme-red-black .app-tab:hover,
+body.theme-red-black .app-tab:focus-visible {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 2px var(--accent-red-soft);
+}
+
+body.theme-red-black .app-tab.is-active,
+body.theme-red-black .app-tab[aria-selected="true"] {
+  border-color: var(--accent-red);
+  box-shadow: inset 0 -2px 0 var(--accent-red);
+}
+
+body.theme-red-black .panel,
+body.theme-red-black .settings-panel,
+body.theme-red-black .top-card-group {
+  background: var(--panel-bg);
+  color: var(--text-main);
+  border-color: var(--panel-border);
+}
+
+body.theme-red-black .panel-header,
+body.theme-red-black .top-card-group > summary {
+  background: var(--panel-header-bg);
+  color: var(--text-main);
+  border-color: var(--panel-border);
+}
+
+body.theme-red-black .panel-header h2,
+body.theme-red-black .panel-section-title,
+body.theme-red-black .sim-controls-section-title,
+body.theme-red-black .top-card-group > summary {
+  color: var(--text-main);
+}
+
+body.theme-red-black .panel-body,
+body.theme-red-black .top-card-group-body,
+body.theme-red-black .panel-body p,
+body.theme-red-black .panel-body label,
+body.theme-red-black .panel-body li,
+body.theme-red-black .status-box,
+body.theme-red-black .debug-box {
+  color: var(--text-main);
+}
+
+body.theme-red-black .panel-section,
+body.theme-red-black .sim-controls-section,
+body.theme-red-black .day-config-section,
+body.theme-red-black .timer-section,
+body.theme-red-black .top-card-group-body {
+  background: var(--section-bg);
+  border-color: var(--panel-border);
+}
+
+body.theme-red-black .panel-section-header,
+body.theme-red-black .sim-controls-section-header {
+  border-bottom: 1px solid var(--panel-border);
+}
+
+body.theme-red-black hr,
+body.theme-red-black .divider,
+body.theme-red-black .panel + .panel,
+body.theme-red-black .panel-header,
+body.theme-red-black .panel-body,
+body.theme-red-black .panel-section,
+body.theme-red-black .status-box,
+body.theme-red-black .debug-box {
+  border-color: var(--panel-border);
+}
+
+body.theme-red-black input,
+body.theme-red-black select,
+body.theme-red-black textarea,
+body.theme-red-black button {
+  background: var(--button-bg);
+  color: var(--text-main);
+  border-color: var(--button-border);
+}
+
+body.theme-red-black input::placeholder,
+body.theme-red-black textarea::placeholder {
+  color: var(--text-muted);
+}
+
+body.theme-red-black input:focus,
+body.theme-red-black select:focus,
+body.theme-red-black textarea:focus,
+body.theme-red-black button:focus-visible {
+  outline: none;
+  border-color: var(--accent-red);
+  box-shadow: 0 0 0 2px var(--accent-red-soft);
+}
+
+body.theme-red-black .panel-icon-btn,
+body.theme-red-black .section-icon-btn,
+body.theme-red-black .panel-help-btn,
+body.theme-red-black .panel-settings-btn,
+body.theme-red-black .panel-dock-btn {
+  background: var(--button-bg);
+  border-color: var(--button-border);
+  color: var(--text-main);
+}
+
+body.theme-red-black .panel-icon-btn:hover,
+body.theme-red-black .section-icon-btn:hover,
+body.theme-red-black .panel-help-btn:hover,
+body.theme-red-black .panel-settings-btn:hover,
+body.theme-red-black .panel-dock-btn:hover {
+  border-color: var(--accent-red);
+}
+
+body.theme-red-black .muted,
+body.theme-red-black .help-text,
+body.theme-red-black .offline-help-copy,
+body.theme-red-black small {
+  color: var(--text-muted);
+}
