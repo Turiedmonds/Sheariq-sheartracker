@@ -239,16 +239,66 @@
         </div>
       </div>
       <div class="panel-body">
-        <div class="metrics-grid">
-          <div>Total Sheep Shorn: <strong id="totalSheep">0</strong></div>
-          <div>Current Sheep Number: <strong id="currentSheepNumber">0</strong></div>
-          <div>Average shear time: <strong id="avgShear">0.0s</strong></div>
-          <div>Average catch time: <strong id="avgCatch">0.0s</strong></div>
-          <div>Average catch-to-release time: <strong id="avgCycle">0.0s</strong></div>
-          <div>Sheep per hour: <strong id="sheepPerHour">0.00</strong></div>
-          <div>Fastest sheep today: <strong id="fastestSheepToday">—</strong></div>
-          <div>Slowest sheep today: <strong id="slowestSheepToday">—</strong></div>
-          <div>Last sheep time: <strong id="lastSheepTime">—</strong></div>
+        <div class="perf-sections">
+          <section class="perf-section" aria-labelledby="perf-section-count-title">
+            <header class="perf-section-header">
+              <h3 id="perf-section-count-title" class="perf-section-title">Sheep Count</h3>
+            </header>
+            <div class="perf-section-content">
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Total Sheep Shorn</span>
+                <strong id="totalSheep" class="perf-metric-value">0</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Current Sheep Number</span>
+                <strong id="currentSheepNumber" class="perf-metric-value">0</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="perf-section" aria-labelledby="perf-section-avg-title">
+            <header class="perf-section-header">
+              <h3 id="perf-section-avg-title" class="perf-section-title">Averages</h3>
+            </header>
+            <div class="perf-section-content">
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Average shear time</span>
+                <strong id="avgShear" class="perf-metric-value">0.0s</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Average catch time</span>
+                <strong id="avgCatch" class="perf-metric-value">0.0s</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Average catch-to-release time</span>
+                <strong id="avgCycle" class="perf-metric-value">0.0s</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Sheep per hour</span>
+                <strong id="sheepPerHour" class="perf-metric-value">0.00</strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="perf-section" aria-labelledby="perf-section-latest-title">
+            <header class="perf-section-header">
+              <h3 id="perf-section-latest-title" class="perf-section-title">Latest &amp; Extremes</h3>
+            </header>
+            <div class="perf-section-content">
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Last sheep time</span>
+                <strong id="lastSheepTime" class="perf-metric-value">—</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Fastest sheep today</span>
+                <strong id="fastestSheepToday" class="perf-metric-value">—</strong>
+              </div>
+              <div class="perf-metric-row">
+                <span class="perf-metric-label">Slowest sheep today</span>
+                <strong id="slowestSheepToday" class="perf-metric-value">—</strong>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </section>
