@@ -1129,6 +1129,15 @@ td {
   white-space: nowrap;
 }
 
+#panel-cycle .run-badge-row {
+  grid-template-columns: 1fr;
+  margin-bottom: 0.15rem;
+}
+
+#panel-cycle .run-badge-row .run-badge {
+  justify-self: start;
+}
+
 #panel-cycle .run-countdown-row {
   align-items: center;
 }

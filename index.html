@@ -204,23 +204,25 @@
       </div>
       <div class="panel-body">
         <div class="metrics-grid">
-          <div class="metric-row">
-            <span class="metric-label">Trigger state:</span>
-            <strong id="motorState">OFF</strong>
+          <div class="metric-row run-badge-row">
+            <span id="runBadge" class="run-badge">Run 1</span>
           </div>
           <div class="metric-row">
-            <span class="metric-label">Current shear time:</span>
-            <strong id="currentShear">0.0s</strong>
+            <span class="metric-label">Motor state <span class="help-tip" tabindex="0" title="Live ON/OFF from Shelly. ON means the Evo motor is running. OFF means the Evo motor is stopped. This is used to start and stop sheep timing.">ⓘ</span>:</span>
+            <strong id="motorState">OFF</strong>
           </div>
           <div class="metric-row">
             <span class="metric-label">Current catch time:</span>
             <strong id="currentCatch">0.0s</strong>
           </div>
+          <div class="metric-row">
+            <span class="metric-label">Current shear time:</span>
+            <strong id="currentShear">0.0s</strong>
+          </div>
           <div class="metric-row run-countdown-row">
             <span class="metric-label">Run countdown:</span>
             <span class="run-countdown-value-wrap">
               <strong id="runCountdown">00:00</strong>
-              <span id="runBadge" class="run-badge">Run 1</span>
             </span>
           </div>
           <div class="metric-row">
