@@ -680,7 +680,8 @@ body.layout-edit-on .panel:hover .resize-handle {
 #panel-target #estimatedLastCatchTime,
 #panel-target #maxCatchTime,
 #panel-target #catchPrediction,
-#panel-target #timeSpareToBell {
+#panel-target #timeSpareToBell,
+#panel-target #currentSheepTimeLeft {
   font-size: 1rem;
   font-weight: 700;
 }
@@ -1697,7 +1698,8 @@ td {
 }
 
 #avgCycle.on-pace-good,
-#lastSheepTime.on-pace-good {
+#lastSheepTime.on-pace-good,
+#currentSheepTimeLeft.on-pace-good {
   background: #ecfdf5;
   border: 1px solid #16a34a;
   border-radius: 4px;
@@ -1705,7 +1707,8 @@ td {
 }
 
 #avgCycle.on-pace-bad,
-#lastSheepTime.on-pace-bad {
+#lastSheepTime.on-pace-bad,
+#currentSheepTimeLeft.on-pace-bad {
   background: #fef2f2;
   border: 1px solid #dc2626;
   border-radius: 4px;
@@ -1713,12 +1716,48 @@ td {
 }
 
 #avgCycle.on-pace-neutral,
-#lastSheepTime.on-pace-neutral {
+#lastSheepTime.on-pace-neutral,
+#currentSheepTimeLeft.on-pace-neutral {
   background: #f9fafb;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   padding: 0.08rem 0.3rem;
 }
+
+
+@keyframes sheep-time-over-flash {
+  0%, 100% {
+    background: #fef2f2;
+    border-color: #dc2626;
+    color: #991b1b;
+  }
+  50% {
+    background: #fee2e2;
+    border-color: #991b1b;
+    color: #7f1d1d;
+  }
+}
+
+#currentSheepTimeLeft.sheep-time-over-slow {
+  animation: sheep-time-over-flash 1.6s ease-in-out infinite;
+}
+
+#currentSheepTimeLeft.sheep-time-over-medium {
+  animation: sheep-time-over-flash 1s ease-in-out infinite;
+}
+
+#currentSheepTimeLeft.sheep-time-over-fast {
+  animation: sheep-time-over-flash 0.55s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #currentSheepTimeLeft.sheep-time-over-slow,
+  #currentSheepTimeLeft.sheep-time-over-medium,
+  #currentSheepTimeLeft.sheep-time-over-fast {
+    animation: none;
+  }
+}
+
 
 td.pace-good {
   background: #ecfdf5;
