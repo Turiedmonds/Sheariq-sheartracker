@@ -295,6 +295,9 @@ const elements = {
   dayConfigHelpModalOverlay: document.getElementById("dayConfigHelpModalOverlay"),
   dayConfigHelpModalCloseBtn: document.getElementById("dayConfigHelpModalCloseBtn"),
   sheepLogHelpBtn: document.getElementById("sheepLogHelpBtn"),
+  sheepLogSettingsToggle: document.getElementById("sheepLogSettingsToggle"),
+  sheepLogSettingsModalOverlay: document.getElementById("sheepLogSettingsModalOverlay"),
+  sheepLogSettingsModalCloseBtn: document.getElementById("sheepLogSettingsModalCloseBtn"),
   sheepLogHelpModalOverlay: document.getElementById("sheepLogHelpModalOverlay"),
   sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn"),
   timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
@@ -4339,12 +4342,36 @@ function openSheepLogHelpModal() {
   document.body.classList.add("layout-scroll-lock");
 }
 
+function openSheepLogSettingsModal() {
+  if (!elements.sheepLogSettingsModalOverlay) return;
+  elements.sheepLogSettingsModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeSheepLogSettingsModal() {
+  if (!elements.sheepLogSettingsModalOverlay) return;
+  elements.sheepLogSettingsModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
 function closeSheepLogHelpModal() {
   if (!elements.sheepLogHelpModalOverlay) return;
   elements.sheepLogHelpModalOverlay.hidden = true;
   if (
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4370,6 +4397,7 @@ function closeTimingPanelHelpModal() {
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4392,6 +4420,7 @@ function closePerformancePanelHelpModal() {
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4413,6 +4442,7 @@ function closeSimulationControlsHelpModal() {
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
   ) {
     document.body.classList.remove("layout-scroll-lock");
   }
@@ -4625,6 +4655,13 @@ function bindEvents() {
     });
   }
   if (elements.sheepLogHelpBtn) elements.sheepLogHelpBtn.addEventListener("click", openSheepLogHelpModal);
+  if (elements.sheepLogSettingsToggle) elements.sheepLogSettingsToggle.addEventListener("click", openSheepLogSettingsModal);
+  if (elements.sheepLogSettingsModalCloseBtn) elements.sheepLogSettingsModalCloseBtn.addEventListener("click", closeSheepLogSettingsModal);
+  if (elements.sheepLogSettingsModalOverlay) {
+    elements.sheepLogSettingsModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.sheepLogSettingsModalOverlay) closeSheepLogSettingsModal();
+    });
+  }
   if (elements.sheepLogHelpModalCloseBtn) elements.sheepLogHelpModalCloseBtn.addEventListener("click", closeSheepLogHelpModal);
   if (elements.sheepLogHelpModalOverlay) {
     elements.sheepLogHelpModalOverlay.addEventListener("click", (event) => {
@@ -4658,6 +4695,7 @@ function bindEvents() {
       closeDayConfigHelpModal();
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
+      closeSheepLogSettingsModal();
       closeTimingPanelHelpModal();
       closePerformancePanelHelpModal();
       closeSimulationControlsHelpModal();
