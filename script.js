@@ -206,6 +206,7 @@ const elements = {
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   estimatedLastCatchTimeLabel: document.getElementById("estimatedLastCatchTimeLabel"),
   timeSpareToBell: document.getElementById("timeSpareToBell"),
+  currentSheepTimeLeft: document.getElementById("currentSheepTimeLeft"),
   maxCatchTime: document.getElementById("maxCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
   blockMinutes: document.getElementById("blockMinutes"),
@@ -285,6 +286,7 @@ const elements = {
   targetPaceSections: document.getElementById("targetPaceSections"),
   predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
   timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel"),
+  currentSheepTimeLeftLabel: document.getElementById("currentSheepTimeLeftLabel"),
   dashboardConnectionHelpBtn: document.getElementById("dashboardConnectionHelpBtn"),
   settingsConnectionHelpBtn: document.getElementById("settingsConnectionHelpBtn"),
   connectionHelpModalOverlay: document.getElementById("connectionHelpModalOverlay"),
@@ -860,6 +862,7 @@ const METRIC_VALUE_IDS = new Set([
   "requiredRunTotalSheep",
   "estimatedLastCatchTime",
   "timeSpareToBell",
+  "currentSheepTimeLeft",
   "maxCatchTime",
   "catchPrediction",
   "motorState",
@@ -1592,12 +1595,12 @@ function calculateTargetMetrics() {
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
-      ? `${formatCountdown(timeDifference)} spare`
-      : `${formatCountdown(Math.abs(timeDifference))} short`;
+      ? `Run target reached ${formatCountdown(timeDifference)} before end of run`
+      : `Run target will be missed by ${formatCountdown(Math.abs(timeDifference))} at end of run`;
     timeSpareIsAhead = timeDifference >= 0;
   }
 
-  // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the bell.
+  // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the run ends.
   let maxCatchRunSeconds = 0;
   if (avgCycleSeconds > 0 && runLengthSeconds > 0) {
     const maxExtraSheep = Math.floor(runRemainingSeconds / avgCycleSeconds);
@@ -2826,6 +2829,62 @@ function updatePenRefillAlertDisplay() {
   setPenRefillAlertDisplay("none", "—");
 }
 
+function getCurrentSheepRuntimeSeconds() {
+  if (!appState.runActive || !appState.currentCycle.catchStart) return null;
+
+  const now = Date.now();
+  const catchStart = appState.currentCycle.catchStart;
+  if (appState.currentCycle.motorOn && appState.currentCycle.shearStart) {
+    const catchDuration = Math.max((appState.currentCycle.shearStart - catchStart) / 1000, 0);
+    const shearDuration = Math.max((now - appState.currentCycle.shearStart) / 1000, 0);
+    return catchDuration + shearDuration;
+  }
+
+  return Math.max((now - catchStart) / 1000, 0);
+}
+
+function updateCurrentSheepTimeLeft(requiredCycle) {
+  if (!elements.currentSheepTimeLeft) return;
+
+  elements.currentSheepTimeLeft.classList.remove(
+    "on-pace-good",
+    "on-pace-bad",
+    "on-pace-neutral",
+    "sheep-time-over-slow",
+    "sheep-time-over-medium",
+    "sheep-time-over-fast"
+  );
+
+  if (elements.currentSheepTimeLeftLabel) {
+    setText(elements.currentSheepTimeLeftLabel, "Current sheep time left");
+  }
+
+  const currentSheepRuntime = getCurrentSheepRuntimeSeconds();
+  if (!Number.isFinite(requiredCycle) || requiredCycle <= 0 || !Number.isFinite(currentSheepRuntime)) {
+    setText(elements.currentSheepTimeLeft, "—");
+    elements.currentSheepTimeLeft.classList.add("on-pace-neutral");
+    return;
+  }
+
+  const timeLeft = requiredCycle - currentSheepRuntime;
+  if (timeLeft >= 0) {
+    setText(elements.currentSheepTimeLeft, `${formatSeconds(timeLeft)} remaining`);
+    elements.currentSheepTimeLeft.classList.add("on-pace-good");
+    return;
+  }
+
+  const overtime = Math.abs(timeLeft);
+  setText(elements.currentSheepTimeLeft, `Over time by ${formatSeconds(overtime)}`);
+  elements.currentSheepTimeLeft.classList.add("on-pace-bad");
+  if (overtime < 5) {
+    elements.currentSheepTimeLeft.classList.add("sheep-time-over-slow");
+  } else if (overtime < 10) {
+    elements.currentSheepTimeLeft.classList.add("sheep-time-over-medium");
+  } else {
+    elements.currentSheepTimeLeft.classList.add("sheep-time-over-fast");
+  }
+}
+
 function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -2849,6 +2908,7 @@ function updateLivePanel() {
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
   setText(elements.currentSheepNumber, String(currentSheepNumber));
+  updateCurrentSheepTimeLeft(calculateTargetMetrics().requiredCycle);
 }
 
 function updateStatsPanel() {
@@ -2902,15 +2962,15 @@ function updateStatsPanel() {
     elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
     elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
     if (target.timeSpareIsAhead === true) {
-      setText(elements.timeSpareToBellLabel, "Time to Spare");
+      setText(elements.timeSpareToBellLabel, "Run target timing");
       elements.timeSpareToBell.classList.add("target-status-ahead");
       elements.timeSpareToBellLabel.classList.add("target-status-ahead");
     } else if (target.timeSpareIsAhead === false) {
-      setText(elements.timeSpareToBellLabel, "Time Behind Run Target");
+      setText(elements.timeSpareToBellLabel, "Run target timing");
       elements.timeSpareToBell.classList.add("target-status-behind");
       elements.timeSpareToBellLabel.classList.add("target-status-behind");
     } else {
-      setText(elements.timeSpareToBellLabel, "Time to Spare");
+      setText(elements.timeSpareToBellLabel, "Run target timing");
     }
   }
   updateTrendFlags();
