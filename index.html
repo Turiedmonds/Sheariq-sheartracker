@@ -325,7 +325,15 @@
             </header>
             <div class="perf-section-content panel-section-content">
               <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Last sheep time</span>
+                <span id="lastCatchTimeLabel" class="perf-metric-label panel-metric-label">Last catch time:</span>
+                <strong id="lastCatchTime" class="perf-metric-value panel-metric-value">—</strong>
+              </div>
+              <div class="perf-metric-row panel-metric-row">
+                <span id="lastShearTimeLabel" class="perf-metric-label panel-metric-label">Last shear time:</span>
+                <strong id="lastShearTime" class="perf-metric-value panel-metric-value">—</strong>
+              </div>
+              <div class="perf-metric-row panel-metric-row">
+                <span id="lastSheepTimeLabel" class="perf-metric-label panel-metric-label">Last total sheep time:</span>
                 <strong id="lastSheepTime" class="perf-metric-value panel-metric-value">—</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
@@ -468,7 +476,7 @@
               <div class="panel-metric-row"><span class="panel-metric-label">Predicted 15-minute total:</span> <strong id="predictedQuarterTotal" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Predicted hour total:</span> <strong id="predictedHourTotal" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Predicted run total:</span> <strong id="projectedTotal" class="panel-metric-value">0</strong></div>
-              <div class="panel-metric-row"><span id="estimatedLastCatchTimeLabel" class="panel-metric-label">Predicted time to reach target run total:</span> <strong id="estimatedLastCatchTime" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span id="estimatedLastCatchTimeLabel" class="panel-metric-label">Predicted time to reach run target:</span> <strong id="estimatedLastCatchTime" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Predicted final catch of run:</span> <strong id="maxCatchTime" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Catch prediction:</span> <strong id="catchPrediction" class="panel-metric-value">Set target and start run.</strong></div>
             </div>
@@ -966,7 +974,11 @@
         <p>The colour helps show whether the average full cycle time is on pace, close to target, or falling behind.</p>
 
         <h4 class="connection-help-title">Sheep Times</h4>
-        <p><strong>Last sheep time:</strong><br />The full cycle time for the most recently completed sheep.</p>
+        <p><strong>Last catch time:</strong><br />Catch/transition time for the most recently completed sheep.</p>
+        <p><strong>Last shear time:</strong><br />Shearing time for the most recently completed sheep.</p>
+        <p><strong>Last total sheep time:</strong><br />Catch time plus shear time (full cycle) for the most recently completed sheep.</p>
+        <p>The sheep number in brackets shows which sheep each value belongs to.</p>
+        <p>Last total sheep time may highlight green/red based on pace against required average total time per sheep.</p>
         <p><strong>Fastest sheep today:</strong><br />The quickest completed sheep so far.</p>
         <p><strong>Slowest sheep today:</strong><br />The slowest completed sheep so far.</p>
 

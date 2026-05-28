@@ -178,7 +178,12 @@ const elements = {
   sheepPerHour: document.getElementById("sheepPerHour"),
   fastestSheepToday: document.getElementById("fastestSheepToday"),
   slowestSheepToday: document.getElementById("slowestSheepToday"),
+  lastCatchTime: document.getElementById("lastCatchTime"),
+  lastCatchTimeLabel: document.getElementById("lastCatchTimeLabel"),
+  lastShearTime: document.getElementById("lastShearTime"),
+  lastShearTimeLabel: document.getElementById("lastShearTimeLabel"),
   lastSheepTime: document.getElementById("lastSheepTime"),
+  lastSheepTimeLabel: document.getElementById("lastSheepTimeLabel"),
   motorState: document.getElementById("motorState"),
   currentShear: document.getElementById("currentShear"),
   currentCatch: document.getElementById("currentCatch"),
@@ -1337,9 +1342,9 @@ function updateTargetPacePredictionSnapshot(liveValues) {
 
 function getTargetRunTotalPredictionLabel(requiredRunTotalSheep) {
   if (requiredRunTotalSheep === null) {
-    return "Predicted time to reach target run total:";
+    return "Predicted time to reach run target:";
   }
-  return `Predicted time to reach target run total (${requiredRunTotalSheep}):`;
+  return `Predicted time to reach run target (${requiredRunTotalSheep}):`;
 }
 
 function startRun() {
@@ -2801,7 +2806,6 @@ function updateLivePanel() {
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
   setText(elements.currentSheepNumber, String(currentSheepNumber));
-  setText(elements.projectedTotal, String(calculateTargetMetrics().projectedTotal));
 }
 
 function updateStatsPanel() {
@@ -2818,6 +2822,18 @@ function updateStatsPanel() {
   setText(elements.sheepPerHour, appState.currentStats.sheepPerHour.toFixed(2));
   setText(elements.fastestSheepToday, fastest ? `#${fastest.number} — ${fastest.fullCycle.toFixed(3)}s` : "—");
   setText(elements.slowestSheepToday, slowest ? `#${slowest.number} — ${slowest.fullCycle.toFixed(3)}s` : "—");
+  const lastSheepNumberText = last ? ` (Sheep ${last.number})` : "";
+  if (elements.lastCatchTimeLabel) {
+    setText(elements.lastCatchTimeLabel, `Last catch time${lastSheepNumberText}:`);
+  }
+  if (elements.lastShearTimeLabel) {
+    setText(elements.lastShearTimeLabel, `Last shear time${lastSheepNumberText}:`);
+  }
+  if (elements.lastSheepTimeLabel) {
+    setText(elements.lastSheepTimeLabel, `Last total sheep time${lastSheepNumberText}:`);
+  }
+  setText(elements.lastCatchTime, last ? `${last.catch.toFixed(3)}s` : "—");
+  setText(elements.lastShearTime, last ? `${last.shear.toFixed(3)}s` : "—");
   setText(elements.lastSheepTime, last ? `${last.fullCycle.toFixed(3)}s` : "—");
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
@@ -2831,7 +2847,7 @@ function updateStatsPanel() {
     : buildTargetPacePredictionSnapshot(livePredictions);
   setText(elements.predictedQuarterTotal, displayPredictions.predictedQuarterTotal === null ? "—" : String(displayPredictions.predictedQuarterTotal));
   setText(elements.predictedHourTotal, displayPredictions.predictedHourTotal === null ? "—" : String(displayPredictions.predictedHourTotal));
-  setText(elements.projectedTotal, String(displayPredictions.projectedTotal));
+  setText(elements.projectedTotal, displayPredictions.projectedTotal === null ? "—" : String(displayPredictions.projectedTotal));
   if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
     const diff = target.projectedTotal - requiredRunTotalSheep;
     if (diff > 0) {
@@ -2872,6 +2888,8 @@ function updateStatsPanel() {
     elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
     if (last && target.requiredCycle > 0 && Number.isFinite(last.fullCycle)) {
       elements.lastSheepTime.classList.add(last.fullCycle <= target.requiredCycle ? "on-pace-good" : "on-pace-bad");
+    } else {
+      elements.lastSheepTime.classList.add("on-pace-neutral");
     }
   }
 
