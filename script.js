@@ -300,6 +300,9 @@ const elements = {
   sheepLogSettingsModalCloseBtn: document.getElementById("sheepLogSettingsModalCloseBtn"),
   sheepLogHelpModalOverlay: document.getElementById("sheepLogHelpModalOverlay"),
   sheepLogHelpModalCloseBtn: document.getElementById("sheepLogHelpModalCloseBtn"),
+  targetPaceHelpBtn: document.getElementById("targetPaceHelpBtn"),
+  targetPaceHelpModalOverlay: document.getElementById("targetPaceHelpModalOverlay"),
+  targetPaceHelpModalCloseBtn: document.getElementById("targetPaceHelpModalCloseBtn"),
   timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
   timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
   timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn"),
@@ -1654,12 +1657,12 @@ function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
     if (hasOutcomeContext) {
       const sheepDiff = projectedTotal - requiredRunSheep;
       if (sheepDiff > 0) {
-        return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+        return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
       }
       if (sheepDiff < 0) {
-        return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+        return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
       }
-      return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, on target.`;
+      return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, on target.`;
     }
     return `On pace — ${paceDiff}s spare per sheep.`;
   }
@@ -1669,12 +1672,12 @@ function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
     if (hasOutcomeContext) {
       const sheepDiff = projectedTotal - requiredRunSheep;
       if (sheepDiff > 0) {
-        return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+        return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
       }
       if (sheepDiff < 0) {
-        return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+        return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
       }
-      return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, on target.`;
+      return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, on target.`;
     }
     return `Behind — ${paceDiff}s slow per sheep.`;
   }
@@ -2758,8 +2761,8 @@ function updateTimingAlertDisplay() {
     setTimingAlertDisplay("cutter", alertText);
   } else if (drinkAlert) {
     const alertText = drinkAlert.mode === "now"
-      ? "Drink break now"
-      : `Drink break in ${drinkAlert.seconds}s`;
+      ? "Drink now"
+      : `Drink in ${drinkAlert.seconds}s`;
     setTimingAlertDisplay("drink", alertText);
   } else if (inLastQuarter) {
     setTimingAlertDisplay("last-quarter", "Last quarter");
@@ -4391,6 +4394,7 @@ function closeSheepLogSettingsModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
+    && elements.targetPaceHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
@@ -4420,6 +4424,29 @@ function openTimingPanelHelpModal() {
   if (!elements.timingPanelHelpModalOverlay) return;
   elements.timingPanelHelpModalOverlay.hidden = false;
   document.body.classList.add("layout-scroll-lock");
+}
+
+function openTargetPaceHelpModal() {
+  if (!elements.targetPaceHelpModalOverlay) return;
+  elements.targetPaceHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeTargetPaceHelpModal() {
+  if (!elements.targetPaceHelpModalOverlay) return;
+  elements.targetPaceHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
 }
 
 function closeTimingPanelHelpModal() {
@@ -4703,6 +4730,13 @@ function bindEvents() {
       if (event.target === elements.sheepLogHelpModalOverlay) closeSheepLogHelpModal();
     });
   }
+  if (elements.targetPaceHelpBtn) elements.targetPaceHelpBtn.addEventListener("click", openTargetPaceHelpModal);
+  if (elements.targetPaceHelpModalCloseBtn) elements.targetPaceHelpModalCloseBtn.addEventListener("click", closeTargetPaceHelpModal);
+  if (elements.targetPaceHelpModalOverlay) {
+    elements.targetPaceHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.targetPaceHelpModalOverlay) closeTargetPaceHelpModal();
+    });
+  }
   if (elements.timingPanelHelpBtn) elements.timingPanelHelpBtn.addEventListener("click", openTimingPanelHelpModal);
   if (elements.timingPanelHelpModalCloseBtn) elements.timingPanelHelpModalCloseBtn.addEventListener("click", closeTimingPanelHelpModal);
   if (elements.timingPanelHelpModalOverlay) {
@@ -4731,6 +4765,7 @@ function bindEvents() {
       closeConnectionHelpModal();
       closeSheepLogHelpModal();
       closeSheepLogSettingsModal();
+      closeTargetPaceHelpModal();
       closeTimingPanelHelpModal();
       closePerformancePanelHelpModal();
       closeSimulationControlsHelpModal();

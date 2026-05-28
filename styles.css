@@ -673,6 +673,19 @@ body.layout-edit-on .panel:hover .resize-handle {
   padding-right: 0.35rem;
 }
 
+#panel-target .target-section-content .panel-metric-value,
+#panel-target #projectedTotal,
+#panel-target #predictedQuarterTotal,
+#panel-target #predictedHourTotal,
+#panel-target #estimatedLastCatchTime,
+#panel-target #maxCatchTime,
+#panel-target #catchPrediction,
+#panel-target #projectedRunVsRequired,
+#panel-target #timeSpareToBell {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 #panel-target #catchPrediction.panel-metric-value {
   white-space: normal;
   overflow-wrap: anywhere;
