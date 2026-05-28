@@ -296,12 +296,12 @@
             </header>
             <div class="perf-section-content panel-section-content">
               <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Average shear time</span>
-                <strong id="avgShear" class="perf-metric-value panel-metric-value">0.0s</strong>
-              </div>
-              <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Average catch time</span>
                 <strong id="avgCatch" class="perf-metric-value panel-metric-value">0.0s</strong>
+              </div>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Average shear time</span>
+                <strong id="avgShear" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Average catch-to-release time</span>
@@ -546,95 +546,11 @@
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+          <button id="sheepLogSettingsToggle" class="panel-settings-btn" type="button" aria-label="Open Sheep Log settings">⚙</button>
           <button id="sheepLogHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Sheep Log help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
-        <div class="sheep-log-sort-controls panel-section" aria-label="Sheep log sorting controls">
-          <div class="sheep-log-sort-control">
-            <label for="sheepLogSortBy">Sort:</label>
-            <select id="sheepLogSortBy">
-            <option value="number">Sheep number</option>
-            <option value="shearDuration">Shear time</option>
-            <option value="catchDuration">Catch time</option>
-            <option value="fullCycle">Catch-to-release time</option>
-            </select>
-          </div>
-          <div class="sheep-log-sort-control">
-            <label for="sheepLogSortOrder">Order:</label>
-            <select id="sheepLogSortOrder">
-            <option value="asc">Fastest first</option>
-            <option value="desc">Slowest first</option>
-            </select>
-          </div>
-                    <div class="sheep-log-sort-control">
-            <label for="sheepLogFillDirection">Fill:</label>
-            <select id="sheepLogFillDirection">
-            <option value="latestFirst">Latest first</option>
-            <option value="oldestFirst">Oldest first</option>
-            </select>
-          </div>
-          <div class="sheep-log-sort-control">
-            <button id="markerSettingsToggle" class="marker-settings-toggle panel-settings-btn" type="button" aria-expanded="false">⚙ Marker Settings</button>
-          </div>
-        </div>
-        <div id="markerSettingsPanel" class="marker-settings-panel panel-section" hidden>
-          <div class="marker-settings-top panel-section-header">
-            <label class="sheep-log-markers-toggle" for="showPlannedDelayMarkers">
-              <span>Automatic markers</span>
-              <span class="marker-help" title="These are suggestions only. They help explain likely planned delays, but you can still add your own note to the sheep row.">ⓘ</span>
-              <input id="showPlannedDelayMarkers" type="checkbox" checked />
-            </label>
-            <button id="resetMarkerSettingsBtn" class="marker-settings-reset" type="button">Reset marker settings</button>
-          </div>
-          <div class="marker-settings-grid panel-section-content">
-            <div class="marker-settings-group">
-              <h3>Drink break marker</h3>
-              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
-                <input id="drinkTimingMinutes" type="number" min="0.1" step="0.1" />
-                <span class="marker-unit">minutes</span>
-              </label>
-              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
-                <input id="drinkWindowSeconds" type="number" min="1" step="1" />
-                <span class="marker-unit">seconds</span>
-              </label>
-              <label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span>
-                <input id="drinkExtraSeconds" type="number" min="0" step="1" />
-                <span class="marker-unit">seconds over average</span>
-              </label>
-            </div>
-            <div class="marker-settings-group">
-              <h3>Cutter change marker</h3>
-              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
-                <input id="cutterTimingMinutes" type="number" min="0.1" step="0.1" />
-                <span class="marker-unit">minutes</span>
-              </label>
-              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
-                <input id="cutterWindowSeconds" type="number" min="1" step="1" />
-                <span class="marker-unit">seconds</span>
-              </label>
-              <label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span>
-                <input id="cutterExtraSeconds" type="number" min="0" step="1" />
-                <span class="marker-unit">seconds over average</span>
-              </label>
-            </div>
-            <div class="marker-settings-group">
-              <h3>Comb/handpiece change marker</h3>
-              <label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span>
-                <input id="combTimingMinutes" type="number" min="0.1" step="0.1" />
-                <span class="marker-unit">minutes</span>
-              </label>
-              <label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span>
-                <input id="combWindowSeconds" type="number" min="1" step="1" />
-                <span class="marker-unit">seconds</span>
-              </label>
-              <label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span>
-                <input id="combExtraSeconds" type="number" min="0" step="1" />
-                <span class="marker-unit">seconds over average</span>
-              </label>
-            </div>
-          </div>
-        </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">
           <table>
             <thead>
@@ -855,8 +771,8 @@
         <p><strong>Comb:</strong><br />Likely comb/handpiece change.</p>
         <p>A marker appears only when the sheep is near the planned timing window and the catch time is long enough compared with the average catch time per sheep.</p>
 
-        <h4 class="connection-help-title">Marker Settings</h4>
-        <p>Marker Settings lets you adjust when the automatic markers appear.</p>
+        <h4 class="connection-help-title">Settings</h4>
+        <p>Use the ⚙ button in the Sheep Log header to open Sort, Order, Fill, and Marker Settings.</p>
         <p><strong>Planned timing:</strong><br />How often the planned delay usually happens.</p>
         <p><strong>Time window:</strong><br />How many seconds before or after the planned time the app should check.</p>
         <p><strong>Extra seconds over average catch time:</strong><br />How many seconds longer than the average catch time per sheep the catch must be before a marker appears.</p>
@@ -867,6 +783,30 @@
 
         <h4 class="connection-help-title">Sorting</h4>
         <p>Sorting only changes how the table is displayed. It does not change the sheep numbers or the stored sheep records.</p>
+      </div>
+    </div>
+  </div>
+  <div id="sheepLogSettingsModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal sheep-log-settings-modal" role="dialog" aria-modal="true" aria-labelledby="sheepLogSettingsModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="sheepLogSettingsModalTitle">Sheep Log Settings</h3>
+        <button id="sheepLogSettingsModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Sheep Log settings">✕</button>
+      </div>
+      <div class="connection-help-modal-content">
+        <div class="sheep-log-sort-controls panel-section" aria-label="Sheep log sorting controls">
+          <div class="sheep-log-sort-control"><label for="sheepLogSortBy">Sort:</label><select id="sheepLogSortBy"><option value="number">Sheep number</option><option value="shearDuration">Shear time</option><option value="catchDuration">Catch time</option><option value="fullCycle">Catch-to-release time</option></select></div>
+          <div class="sheep-log-sort-control"><label for="sheepLogSortOrder">Order:</label><select id="sheepLogSortOrder"><option value="asc">Fastest first</option><option value="desc">Slowest first</option></select></div>
+          <div class="sheep-log-sort-control"><label for="sheepLogFillDirection">Fill:</label><select id="sheepLogFillDirection"><option value="latestFirst">Latest first</option><option value="oldestFirst">Oldest first</option></select></div>
+          <div class="sheep-log-sort-control"><button id="markerSettingsToggle" class="marker-settings-toggle panel-settings-btn" type="button" aria-expanded="false">⚙ Marker Settings</button></div>
+        </div>
+        <div id="markerSettingsPanel" class="marker-settings-panel panel-section" hidden>
+          <div class="marker-settings-top panel-section-header"><label class="sheep-log-markers-toggle" for="showPlannedDelayMarkers"><span>Automatic markers</span><span class="marker-help" title="These are suggestions only. They help explain likely planned delays, but you can still add your own note to the sheep row.">ⓘ</span><input id="showPlannedDelayMarkers" type="checkbox" checked /></label><button id="resetMarkerSettingsBtn" class="marker-settings-reset" type="button">Reset marker settings</button></div>
+          <div class="marker-settings-grid panel-section-content">
+            <div class="marker-settings-group"><h3>Drink break marker</h3><label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span><input id="drinkTimingMinutes" type="number" min="0.1" step="0.1" /><span class="marker-unit">minutes</span></label><label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span><input id="drinkWindowSeconds" type="number" min="1" step="1" /><span class="marker-unit">seconds</span></label><label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span><input id="drinkExtraSeconds" type="number" min="0" step="1" /><span class="marker-unit">seconds over average</span></label></div>
+            <div class="marker-settings-group"><h3>Cutter change marker</h3><label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span><input id="cutterTimingMinutes" type="number" min="0.1" step="0.1" /><span class="marker-unit">minutes</span></label><label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span><input id="cutterWindowSeconds" type="number" min="1" step="1" /><span class="marker-unit">seconds</span></label><label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span><input id="cutterExtraSeconds" type="number" min="0" step="1" /><span class="marker-unit">seconds over average</span></label></div>
+            <div class="marker-settings-group"><h3>Comb/handpiece change marker</h3><label>Planned timing <span class="marker-help" title="How often this planned delay usually happens during the run.">ⓘ</span><input id="combTimingMinutes" type="number" min="0.1" step="0.1" /><span class="marker-unit">minutes</span></label><label>Time window <span class="marker-help" title="The app checks a few seconds before and after the planned time. Example: if the cutter change is expected at 15:00 and the window is 25 seconds, the app checks from 14:35 to 15:25.">ⓘ</span><input id="combWindowSeconds" type="number" min="1" step="1" /><span class="marker-unit">seconds</span></label><label>Extra seconds over average catch time <span class="marker-help" title="This controls how much longer than the average catch time per sheep the catch must be before the app adds a marker. Example: if the average catch time is 7 seconds and this is set to 5 seconds, the app marks catches of 12 seconds or longer.">ⓘ</span><input id="combExtraSeconds" type="number" min="0" step="1" /><span class="marker-unit">seconds over average</span></label></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
