@@ -929,6 +929,10 @@ function formatSeconds(seconds) {
   return `${seconds.toFixed(3)}s`;
 }
 
+function formatDurationValue(value) {
+  return Number.isFinite(value) ? `${value.toFixed(3)}s` : "—";
+}
+
 function formatCountdown(totalSeconds) {
   const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -2832,9 +2836,9 @@ function updateStatsPanel() {
   if (elements.lastSheepTimeLabel) {
     setText(elements.lastSheepTimeLabel, `Last total sheep time${lastSheepNumberText}:`);
   }
-  setText(elements.lastCatchTime, last ? `${last.catch.toFixed(3)}s` : "—");
-  setText(elements.lastShearTime, last ? `${last.shear.toFixed(3)}s` : "—");
-  setText(elements.lastSheepTime, last ? `${last.fullCycle.toFixed(3)}s` : "—");
+  setText(elements.lastCatchTime, formatDurationValue(last?.catchDuration));
+  setText(elements.lastShearTime, formatDurationValue(last?.shearDuration));
+  setText(elements.lastSheepTime, formatDurationValue(last?.fullCycle));
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
