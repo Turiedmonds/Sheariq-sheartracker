@@ -429,6 +429,7 @@
         <div class="panel-header-actions">
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
+          <button id="targetPaceHelpBtn" class="panel-help-btn" type="button" aria-label="Open Target / Pace help">? Help</button>
           <button id="targetPaceSettingsToggle" class="target-pace-settings-toggle panel-settings-btn" type="button" aria-expanded="false" aria-controls="targetPaceSettings" aria-label="Open Target / Pace settings">⚙</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
@@ -838,6 +839,43 @@
     </div>
   </div>
 
+  <div id="targetPaceHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="targetPaceHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="targetPaceHelpModalTitle">Target / Pace Panel Help</h3>
+        <button id="targetPaceHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Target / Pace help">✕</button>
+      </div>
+      <div class="connection-help-modal-content target-pace-help-content">
+        <h4>What this panel is for</h4>
+        <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
+        <h4>Required section</h4>
+        <ul>
+          <li><strong>Required average total time per sheep:</strong> Average catch-to-release time needed to hit the run target.</li>
+          <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
+          <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
+          <li><strong>Required run total:</strong> Target sheep count for this run.</li>
+          <li><strong>Required daily total:</strong> Overall daily target.</li>
+        </ul>
+        <h4>Predicted section</h4>
+        <ul>
+          <li><strong>Predicted 15-minute total:</strong> Expected total for the current quarter if pace continues.</li>
+          <li><strong>Predicted hour total:</strong> Expected hourly total at current pace.</li>
+          <li><strong>Predicted run total:</strong> Expected run total at current pace.</li>
+          <li><strong>Predicted time to reach run target:</strong> Estimated time the run target will be reached.</li>
+          <li><strong>Predicted final catch of run:</strong> Estimated final catch time before the run ends.</li>
+          <li><strong>Pace difference per sheep:</strong> Shows whether pace is ahead or behind and what that means for projected run total.</li>
+        </ul>
+        <h4>Run Target Status section</h4>
+        <ul>
+          <li><strong>Ahead / Behind target:</strong> Compares projected run total against required run total.</li>
+          <li><strong>Time to Spare / Time Behind Run Target:</strong> Shows time buffer or shortfall for reaching run target.</li>
+        </ul>
+        <h4>Prediction update behaviour</h4>
+        <p>Predicted values may hold steady while motor is ON and refresh after each sheep is completed, so you can read a stable snapshot during shearing.</p>
+      </div>
+    </div>
+  </div>
+
   <div id="timingPanelHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="timingPanelHelpModalTitle">
       <div class="connection-help-modal-header">
@@ -870,12 +908,12 @@
         <p>Alerts help you see what is coming up. They are reminders only. They do not mean the shearer must act at that exact second.</p>
         <p><strong>Timing alert:</strong><br />Shows planned timing reminders such as drink break, cutter change, comb/handpiece change, or last quarter.</p>
         <ul class="connection-help-list">
-          <li><strong>Drink break:</strong> blue</li>
+          <li><strong>Drink:</strong> blue</li>
           <li><strong>Cutter change:</strong> purple</li>
           <li><strong>Comb/handpiece change:</strong> indigo</li>
           <li><strong>Last quarter:</strong> slate/grey</li>
         </ul>
-        <p>Timing alert uses the Planned timing values from Sheep Log → Marker Settings for Drink break, Cutter change, and Comb/handpiece change.</p>
+        <p>Timing alert uses the Planned timing values from Sheep Log → Marker Settings for Drink, Cutter change, and Comb/handpiece change.</p>
         <p>If you change Drink planned timing in Marker Settings, the Timing Panel drink alert will follow that timing too.</p>
 
         <h4 class="connection-help-title">Pen refill</h4>
