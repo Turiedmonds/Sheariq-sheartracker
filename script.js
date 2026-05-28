@@ -203,7 +203,6 @@ const elements = {
   requiredDayTotalSheep: document.getElementById("requiredDayTotalSheep"),
   requiredRunTotalSheep: document.getElementById("requiredRunTotalSheep"),
   requiredQuarterTotal: document.getElementById("requiredQuarterTotal"),
-  projectedRunVsRequired: document.getElementById("projectedRunVsRequired"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   estimatedLastCatchTimeLabel: document.getElementById("estimatedLastCatchTimeLabel"),
   timeSpareToBell: document.getElementById("timeSpareToBell"),
@@ -859,7 +858,6 @@ const METRIC_VALUE_IDS = new Set([
   "projectedTotal",
   "requiredDayTotalSheep",
   "requiredRunTotalSheep",
-  "projectedRunVsRequired",
   "estimatedLastCatchTime",
   "timeSpareToBell",
   "maxCatchTime",
@@ -2893,18 +2891,6 @@ function updateStatsPanel() {
   setText(elements.predictedQuarterTotal, displayPredictions.predictedQuarterTotal === null ? "—" : String(displayPredictions.predictedQuarterTotal));
   setText(elements.predictedHourTotal, displayPredictions.predictedHourTotal === null ? "—" : String(displayPredictions.predictedHourTotal));
   setText(elements.projectedTotal, displayPredictions.projectedTotal === null ? "—" : String(displayPredictions.projectedTotal));
-  if (requiredRunTotalSheep !== null && Number.isFinite(target.projectedTotal)) {
-    const diff = target.projectedTotal - requiredRunTotalSheep;
-    if (diff > 0) {
-      setText(elements.projectedRunVsRequired, `Ahead ${diff} sheep`);
-    } else if (diff < 0) {
-      setText(elements.projectedRunVsRequired, `Behind ${Math.abs(diff)} sheep`);
-    } else {
-      setText(elements.projectedRunVsRequired, "On target");
-    }
-  } else {
-    setText(elements.projectedRunVsRequired, "—");
-  }
   setText(elements.estimatedLastCatchTime, displayPredictions.estimatedLastCatchTime);
   setText(elements.timeSpareToBell, target.timeSpareText);
   setText(elements.maxCatchTime, displayPredictions.maxCatchTime);
