@@ -1634,21 +1634,56 @@ function calculateRequiredRunTotalSheep() {
   return getRequiredRunSheep(dayTarget, getScheduleSeconds(), appState.currentRunIndex);
 }
 
-function predictCatch() {
-  const { requiredCycle } = calculateTargetMetrics();
+function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
+  const target = targetMetrics ?? calculateTargetMetrics();
+  const requiredCycle = target.requiredCycle;
 
   if (!appState.runActive || appState.target.sheep <= 0 || appState.target.runLengthSeconds <= 0) {
-    return "Set a target and start a run.";
+    return "Set target and start run.";
   }
 
   const avgCycle = appState.currentStats.avgCycle;
-  if (avgCycle <= 0 || requiredCycle <= 0) return "Set a target and start a run.";
+  if (avgCycle <= 0 || requiredCycle <= 0) return "Waiting for completed sheep.";
 
-  if (avgCycle <= requiredCycle) {
-    return `On pace — you have ${(requiredCycle - avgCycle).toFixed(3)}s to spare per sheep.`;
+  const projectedTotal = Number.isFinite(target.projectedTotal) ? target.projectedTotal : null;
+  const requiredRunSheep = Number.isFinite(requiredRunTotalSheep) ? requiredRunTotalSheep : null;
+  const hasOutcomeContext = projectedTotal !== null && requiredRunSheep !== null;
+
+  if (avgCycle < requiredCycle) {
+    const paceDiff = (requiredCycle - avgCycle).toFixed(2);
+    if (hasOutcomeContext) {
+      const sheepDiff = projectedTotal - requiredRunSheep;
+      if (sheepDiff > 0) {
+        return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+      }
+      if (sheepDiff < 0) {
+        return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+      }
+      return `On pace — ${paceDiff}s spare per sheep. Projected finish: ${projectedTotal} sheep, on target.`;
+    }
+    return `On pace — ${paceDiff}s spare per sheep.`;
   }
 
-  return `Behind pace — you are ${(avgCycle - requiredCycle).toFixed(3)}s over per sheep.`;
+  if (avgCycle > requiredCycle) {
+    const paceDiff = (avgCycle - requiredCycle).toFixed(2);
+    if (hasOutcomeContext) {
+      const sheepDiff = projectedTotal - requiredRunSheep;
+      if (sheepDiff > 0) {
+        return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+      }
+      if (sheepDiff < 0) {
+        return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+      }
+      return `Behind — ${paceDiff}s slow per sheep. Projected finish: ${projectedTotal} sheep, on target.`;
+    }
+    return `Behind — ${paceDiff}s slow per sheep.`;
+  }
+
+  if (hasOutcomeContext) {
+    return `On target — projected finish: ${projectedTotal} sheep.`;
+  }
+
+  return "On target.";
 }
 
 function calculateBlockData(minutes) {
@@ -2921,7 +2956,7 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
     projectedTotal: target.projectedTotal,
     estimatedLastCatchTime: formatPredictedCatchTime(target.targetCatchRunSeconds),
     maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
-    catchPrediction: predictCatch()
+    catchPrediction: predictCatch(target, calculateRequiredRunTotalSheep())
   };
 }
 
