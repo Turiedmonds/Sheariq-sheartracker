@@ -66,6 +66,46 @@ function getPenRule(recordType) {
   return PEN_RULES_BY_RECORD_TYPE[recordType] || null;
 }
 
+const SHEEP_STATUS = {
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+  PENDING: "pending"
+};
+
+function getSheepStatus(entry) {
+  return entry && entry.status ? entry.status : SHEEP_STATUS.ACCEPTED;
+}
+
+function isOfficialCounted(entry) {
+  return getSheepStatus(entry) !== SHEEP_STATUS.REJECTED;
+}
+
+// Physical counts are used for timing, pen movement, and refill planning.
+function getPhysicalRunSheepCount() {
+  return appState.sheep.length;
+}
+
+function getPhysicalDaySheepCount() {
+  return appState.daySheep.length;
+}
+
+// Official counts exclude rejected sheep for future record target progress.
+function getOfficialRunSheepCount() {
+  return appState.sheep.filter(isOfficialCounted).length;
+}
+
+function getOfficialDaySheepCount() {
+  return appState.daySheep.filter(isOfficialCounted).length;
+}
+
+function getRejectedRunSheepCount() {
+  return appState.sheep.filter((entry) => getSheepStatus(entry) === SHEEP_STATUS.REJECTED).length;
+}
+
+function getRejectedDaySheepCount() {
+  return appState.daySheep.filter((entry) => getSheepStatus(entry) === SHEEP_STATUS.REJECTED).length;
+}
+
 const appState = {
   runActive: false,
   runStartTime: null,
@@ -1511,7 +1551,10 @@ function handleMotorOff() {
 
   const effectiveElapsedSeconds = getEffectiveElapsedSeconds();
   const dayNumber = appState.daySheep.length + 1;
+  const sheepId = `sheep-${Date.now()}-${dayNumber}`;
   const runEntry = {
+    id: sheepId,
+    status: SHEEP_STATUS.ACCEPTED,
     number: appState.sheep.length + 1,
     dayNumber,
     startTime: appState.currentCycle.shearStart,
