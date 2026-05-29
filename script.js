@@ -47,6 +47,11 @@ const DAY_SCHEDULES = {
   "8": [7200, 7200, 7200, 7200]
 };
 
+const FINAL_FILL_IDEAL_BEFORE_END_SECONDS = 180;
+const FINAL_FILL_MIN_BEFORE_END_SECONDS = 120;
+const FINAL_FILL_MAX_BEFORE_END_SECONDS = 240;
+const FINAL_FILL_ANALYSIS_START_SECONDS = 1800;
+
 const PEN_RULES_BY_RECORD_TYPE = {
   strongWoolLambs: {
     label: "Strong wool lambs",
@@ -344,6 +349,7 @@ const elements = {
   penFillForecastNext: document.getElementById("penFillForecastNext"),
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
+  penFillForecastStatus: document.getElementById("penFillForecastStatus"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -2983,11 +2989,102 @@ function formatFinalPenFillForecastPoint(point) {
   return `${point.label} — ${formatCountdown(point.secondsBeforeRunEnd)} before end of run`;
 }
 
+function analyzeFinalFillWindow(forecastPoints, options = {}) {
+  const minBeforeEndSeconds = Number.isFinite(options.minBeforeEndSeconds)
+    ? options.minBeforeEndSeconds
+    : FINAL_FILL_MIN_BEFORE_END_SECONDS;
+  const maxBeforeEndSeconds = Number.isFinite(options.maxBeforeEndSeconds)
+    ? options.maxBeforeEndSeconds
+    : FINAL_FILL_MAX_BEFORE_END_SECONDS;
+  const analysisStartSeconds = Number.isFinite(options.analysisStartSeconds)
+    ? options.analysisStartSeconds
+    : FINAL_FILL_ANALYSIS_START_SECONDS;
+  const remainingRunSeconds = Number(options.remainingRunSeconds);
+
+  if (Number.isFinite(remainingRunSeconds) && remainingRunSeconds > analysisStartSeconds) {
+    return {
+      status: "waiting",
+      message: `Monitoring — planning starts at ${formatCountdown(analysisStartSeconds)} remaining`,
+      secondsBeforeRunEnd: null,
+      finalFill: null
+    };
+  }
+
+  if (!Array.isArray(forecastPoints) || forecastPoints.length === 0) {
+    return {
+      status: "none",
+      message: "No more projected fills before end of run",
+      secondsBeforeRunEnd: null,
+      finalFill: null
+    };
+  }
+
+  const finalFill = forecastPoints[forecastPoints.length - 1];
+  const secondsBeforeRunEnd = Number(finalFill?.secondsBeforeRunEnd);
+  if (!Number.isFinite(secondsBeforeRunEnd)) {
+    return {
+      status: "waiting",
+      message: "—",
+      secondsBeforeRunEnd: null,
+      finalFill: null
+    };
+  }
+
+  if (secondsBeforeRunEnd > maxBeforeEndSeconds) {
+    return {
+      status: "tooEarly",
+      message: `Too early — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+      secondsBeforeRunEnd,
+      finalFill
+    };
+  }
+
+  if (secondsBeforeRunEnd < minBeforeEndSeconds) {
+    return {
+      status: "tooLate",
+      message: `Too late — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+      secondsBeforeRunEnd,
+      finalFill
+    };
+  }
+
+  return {
+    status: "onTarget",
+    message: `On target — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+    secondsBeforeRunEnd,
+    finalFill
+  };
+}
+
 function updatePenFillForecastDisplay() {
-  const setForecastDisplay = (nextText, finalText, assumptionText) => {
+  const statusClassNames = [
+    "pen-fill-status-on-target",
+    "pen-fill-status-too-early",
+    "pen-fill-status-too-late",
+    "pen-fill-status-neutral"
+  ];
+
+  const setForecastStatus = (analysis) => {
+    if (elements.penFillForecastStatus) {
+      elements.penFillForecastStatus.classList.remove(...statusClassNames);
+      const statusClassByType = {
+        onTarget: "pen-fill-status-on-target",
+        tooEarly: "pen-fill-status-too-early",
+        tooLate: "pen-fill-status-too-late",
+        none: "pen-fill-status-neutral",
+        waiting: "pen-fill-status-neutral"
+      };
+      const statusClass = statusClassByType[analysis?.status];
+      if (statusClass) elements.penFillForecastStatus.classList.add(statusClass);
+    }
+    setText(elements.penFillForecastStatus, analysis?.message || "—");
+  };
+
+  const setForecastDisplay = (nextText, finalText, assumptionText, analysis = { status: "waiting", message: "—" }) => {
     setText(elements.penFillForecastNext, nextText);
     setText(elements.penFillForecastFinal, finalText);
     setText(elements.penFillForecastAssumption, assumptionText);
+    setForecastStatus(analysis);
   };
 
   if (!appState.recordType || appState.recordType === "none" || !getPenRule(appState.recordType)) {
@@ -3007,8 +3104,13 @@ function updatePenFillForecastDisplay() {
   }
 
   const forecastPoints = forecastFullFillRefillPoints();
+  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
+  const remainingRunSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
+  const finalFillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
+
   if (forecastPoints.length === 0) {
-    setForecastDisplay("No more projected fills", "—", "Full fills");
+    setForecastDisplay("No more projected fills", "—", "Full fills", finalFillAnalysis);
     return;
   }
 
@@ -3017,7 +3119,8 @@ function updatePenFillForecastDisplay() {
   setForecastDisplay(
     formatPenFillForecastPoint(nextFill),
     formatFinalPenFillForecastPoint(finalFill),
-    "Full fills"
+    "Full fills",
+    finalFillAnalysis
   );
 }
 
