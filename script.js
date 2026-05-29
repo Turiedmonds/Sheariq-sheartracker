@@ -47,6 +47,25 @@ const DAY_SCHEDULES = {
   "8": [7200, 7200, 7200, 7200]
 };
 
+const PEN_RULES_BY_RECORD_TYPE = {
+  strongWoolLambs: {
+    label: "Strong wool lambs",
+    maxPen: 20,
+    refillTriggerLeft: 5,
+    defaultRefillAmount: 15
+  },
+  strongWoolEwes: {
+    label: "Strong wool ewes",
+    maxPen: 10,
+    refillTriggerLeft: 2,
+    defaultRefillAmount: 8
+  }
+};
+
+function getPenRule(recordType) {
+  return PEN_RULES_BY_RECORD_TYPE[recordType] || null;
+}
+
 const appState = {
   runActive: false,
   runStartTime: null,
@@ -2790,12 +2809,8 @@ function updatePenRefillAlertDisplay() {
     setText(elements.penRefillAlert, alertText);
   };
 
-  const cycleSizeByRecordType = {
-    strongWoolLambs: 15,
-    strongWoolEwes: 8
-  };
-
-  const cycleSize = cycleSizeByRecordType[appState.recordType];
+  const rule = getPenRule(appState.recordType);
+  const cycleSize = rule ? rule.defaultRefillAmount : null;
   if (!Number.isFinite(cycleSize) || cycleSize <= 0) {
     setPenRefillAlertDisplay("none", "—");
     return;
