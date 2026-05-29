@@ -341,6 +341,9 @@ const elements = {
   quarterClock: document.getElementById("quarterClock"),
   timingAlert: document.getElementById("timingAlert"),
   penRefillAlert: document.getElementById("penRefillAlert"),
+  penFillForecastNext: document.getElementById("penFillForecastNext"),
+  penFillForecastFinal: document.getElementById("penFillForecastFinal"),
+  penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -2972,6 +2975,52 @@ function updatePenRefillAlertDisplay() {
   setPenRefillAlertDisplay("none", "—");
 }
 
+function formatPenFillForecastPoint(point) {
+  return `${point.label} — in ${formatCountdown(point.secondsFromNow)}`;
+}
+
+function formatFinalPenFillForecastPoint(point) {
+  return `${point.label} — ${formatCountdown(point.secondsBeforeRunEnd)} before end of run`;
+}
+
+function updatePenFillForecastDisplay() {
+  const setForecastDisplay = (nextText, finalText, assumptionText) => {
+    setText(elements.penFillForecastNext, nextText);
+    setText(elements.penFillForecastFinal, finalText);
+    setText(elements.penFillForecastAssumption, assumptionText);
+  };
+
+  if (!appState.recordType || appState.recordType === "none" || !getPenRule(appState.recordType)) {
+    setForecastDisplay("—", "—", "Select record type");
+    return;
+  }
+
+  if (!appState.runActive) {
+    setForecastDisplay("—", "—", "Start run");
+    return;
+  }
+
+  const avgCycleSeconds = appState.currentStats.avgCycle;
+  if (!Number.isFinite(avgCycleSeconds) || avgCycleSeconds <= 0) {
+    setForecastDisplay("—", "—", "Waiting for pace data");
+    return;
+  }
+
+  const forecastPoints = forecastFullFillRefillPoints();
+  if (forecastPoints.length === 0) {
+    setForecastDisplay("No more projected fills", "—", "Full fills");
+    return;
+  }
+
+  const nextFill = forecastPoints[0];
+  const finalFill = forecastPoints[forecastPoints.length - 1];
+  setForecastDisplay(
+    formatPenFillForecastPoint(nextFill),
+    formatFinalPenFillForecastPoint(finalFill),
+    "Full fills"
+  );
+}
+
 function getCurrentSheepRuntimeSeconds() {
   if (!appState.runActive || !appState.currentCycle.catchStart) return null;
 
@@ -3117,6 +3166,7 @@ function updateStatsPanel() {
     }
   }
   updateTrendFlags();
+  updatePenFillForecastDisplay();
 
   if (elements.lastSheepTime) {
     elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");

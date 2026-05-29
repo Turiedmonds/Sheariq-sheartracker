@@ -418,6 +418,19 @@
               <span class="metric-label panel-metric-label">Pen refill:</span>
               <strong id="penRefillAlert" class="panel-metric-value">—</strong>
             </div>
+            <h4 class="timing-group-heading panel-section-title">Pen fill forecast</h4>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Next fill:</span>
+              <strong id="penFillForecastNext" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Final projected fill:</span>
+              <strong id="penFillForecastFinal" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Assumption:</span>
+              <strong id="penFillForecastAssumption" class="panel-metric-value">Select record type</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -922,6 +935,7 @@
         <p><strong>Strong wool lambs:</strong><br />Pen starts with 20 sheep. Refill is allowed when 5 sheep are left. That means the alert is based on every 15 sheep taken from the pen.</p>
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 2 sheep are left. That means the alert is based on every 8 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
+        <p><strong>Pen fill forecast:</strong><br />Shows the next and final projected refill points assuming full fills. It uses physical sheep taken from the pen, not official count.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>
