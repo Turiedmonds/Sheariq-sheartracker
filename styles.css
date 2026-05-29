@@ -1926,3 +1926,19 @@ td.pace-neutral {
   background: #fbcfe8;
   box-shadow: inset 0 0 0 1px #ec4899;
 }
+
+#panel-cycle .pen-fill-status-on-target {
+  color: #15803d;
+}
+
+#panel-cycle .pen-fill-status-too-early {
+  color: #a16207;
+}
+
+#panel-cycle .pen-fill-status-too-late {
+  color: #b91c1c;
+}
+
+#panel-cycle .pen-fill-status-neutral {
+  color: #4b5563;
+}
