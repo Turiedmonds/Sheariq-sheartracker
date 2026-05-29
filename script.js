@@ -89,6 +89,94 @@ function getPhysicalDaySheepCount() {
   return appState.daySheep.length;
 }
 
+function getPhysicalSheepTakenFromPen() {
+  const sheepCompletedCount = getPhysicalRunSheepCount();
+  const hasActiveSheepOnBoard = Boolean(
+    appState.runActive
+    && appState.currentCycle.motorOn
+    && appState.currentCycle.shearStart
+  );
+  return sheepCompletedCount + (hasActiveSheepOnBoard ? 1 : 0);
+}
+
+function getPenCycleSnapshot(recordType = appState.recordType) {
+  const rule = getPenRule(recordType);
+  if (!rule) return null;
+
+  const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const cycleSize = rule.defaultRefillAmount;
+  if (!Number.isFinite(cycleSize) || cycleSize <= 0) return null;
+
+  const sheepIntoCycle = sheepTakenFromPen % cycleSize;
+  const sheepUntilRefill = sheepIntoCycle === 0 ? 0 : cycleSize - sheepIntoCycle;
+
+  return {
+    rule,
+    sheepTakenFromPen,
+    cycleSize,
+    sheepIntoCycle,
+    sheepUntilRefill,
+    refillAllowed: sheepTakenFromPen > 0 && sheepIntoCycle === 0
+  };
+}
+
+function forecastFullFillRefillPoints(options = {}) {
+  const maxForecastPoints = Number.isFinite(options.maxForecastPoints)
+    ? Math.max(Math.floor(options.maxForecastPoints), 0)
+    : 10;
+  if (maxForecastPoints <= 0) return [];
+
+  const recordType = options.recordType || appState.recordType;
+  const rule = getPenRule(recordType);
+  if (!recordType || recordType === "none" || !rule) return [];
+  if (!appState.runActive) return [];
+
+  const cycleSize = rule.defaultRefillAmount;
+  const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const avgCycleSeconds = appState.currentStats.avgCycle;
+  const elapsedSeconds = getEffectiveElapsedSeconds();
+  const runDurationSeconds = getCurrentRunDurationSeconds();
+
+  if (
+    !Number.isFinite(cycleSize)
+    || cycleSize <= 0
+    || !Number.isFinite(sheepTakenFromPen)
+    || sheepTakenFromPen <= 0
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(elapsedSeconds)
+    || elapsedSeconds <= 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+  ) {
+    return [];
+  }
+
+  const points = [];
+  const sheepIntoCycle = sheepTakenFromPen % cycleSize;
+  let nextRefillSheepNumber = sheepTakenFromPen + (sheepIntoCycle === 0 ? cycleSize : cycleSize - sheepIntoCycle);
+
+  while (points.length < maxForecastPoints) {
+    const sheepUntilRefill = nextRefillSheepNumber - sheepTakenFromPen;
+    const secondsFromNow = sheepUntilRefill * avgCycleSeconds;
+    const effectiveElapsedSeconds = elapsedSeconds + secondsFromNow;
+    if (effectiveElapsedSeconds > runDurationSeconds) break;
+
+    points.push({
+      refillNumber: points.length + 1,
+      sheepNumber: nextRefillSheepNumber,
+      secondsFromNow,
+      effectiveElapsedSeconds,
+      secondsBeforeRunEnd: Math.max(runDurationSeconds - effectiveElapsedSeconds, 0),
+      label: `Sheep ${nextRefillSheepNumber}`
+    });
+
+    nextRefillSheepNumber += cycleSize;
+  }
+
+  return points;
+}
+
 // Official counts exclude rejected sheep for future record target progress.
 function getOfficialRunSheepCount() {
   return appState.sheep.filter(isOfficialCounted).length;
@@ -2853,32 +2941,29 @@ function updatePenRefillAlertDisplay() {
   };
 
   const rule = getPenRule(appState.recordType);
-  const cycleSize = rule ? rule.defaultRefillAmount : null;
-  if (!Number.isFinite(cycleSize) || cycleSize <= 0) {
+  if (!rule) {
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
-  const sheepCompletedCount = appState.sheep.length;
-  const hasActiveSheepOnBoard = Boolean(
-    appState.runActive
-    && appState.currentCycle.motorOn
-    && appState.currentCycle.shearStart
-  );
-  const sheepTakenFromPen = sheepCompletedCount + (hasActiveSheepOnBoard ? 1 : 0);
-
+  const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
   if (!Number.isFinite(sheepTakenFromPen) || sheepTakenFromPen <= 0) {
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
-  const sheepIntoCycle = sheepTakenFromPen % cycleSize;
-  if (sheepIntoCycle === 0) {
+  const cycleSnapshot = getPenCycleSnapshot(appState.recordType);
+  if (!cycleSnapshot) {
+    setPenRefillAlertDisplay("none", "—");
+    return;
+  }
+
+  if (cycleSnapshot.refillAllowed) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
   }
 
-  const sheepUntilRefill = cycleSize - sheepIntoCycle;
+  const sheepUntilRefill = cycleSnapshot.sheepUntilRefill;
   if (sheepUntilRefill === 2 || sheepUntilRefill === 1) {
     setPenRefillAlertDisplay("soon", `${sheepUntilRefill} sheep until pen refill`);
     return;
