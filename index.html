@@ -324,23 +324,19 @@
                 <span class="perf-metric-label panel-metric-label">Sheep per hour</span>
                 <strong id="sheepPerHour" class="perf-metric-value panel-metric-value">0.00</strong>
               </div>
-              <div class="perf-marker-averages" aria-label="Marker average catch time">
-                <h4 class="perf-subsection-title">Marker averages</h4>
+              <div class="perf-marker-averages" aria-label="Secondary average catch times">
+                <h4 class="perf-subsection-title">Secondary averages</h4>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Drink break catch avg</span>
+                  <span class="perf-metric-label panel-metric-label">Drink average</span>
                   <strong id="markerAvgDrink" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Cutter change catch avg</span>
+                  <span class="perf-metric-label panel-metric-label">Cutter change average</span>
                   <strong id="markerAvgCutter" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Comb/handpiece change catch avg</span>
+                  <span class="perf-metric-label panel-metric-label">Comb/handpiece change average</span>
                   <strong id="markerAvgComb" class="perf-metric-value panel-metric-value">—</strong>
-                </div>
-                <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Custom marker catch avg</span>
-                  <strong id="markerAvgCustom" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
               </div>
             </div>
@@ -1090,10 +1086,12 @@
         <p><strong>Average Total Time Per Sheep:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
         <p><strong>Sheep per hour:</strong><br />The current average number of sheep being completed per hour.</p>
 
-        <h4 class="connection-help-title">Marker averages</h4>
-        <p>Marker averages show the average catch duration when each marker happened, not extra time over a normal catch.</p>
-        <p>Manual or confirmed markers and automatic suggestions are treated as one resolved marker system for stats. A manual marker wins over an automatic suggestion.</p>
-        <p>Notes alone do not count as markers for these averages.</p>
+        <h4 class="connection-help-title">Secondary averages</h4>
+        <p>Secondary averages show average catch times for common marker events.</p>
+        <p><strong>Drink average:</strong> average catch duration when a Drink marker is recorded.</p>
+        <p><strong>Cutter change average:</strong> average catch duration when a Cutter marker is recorded.</p>
+        <p><strong>Comb/handpiece change average:</strong> average catch duration when a Comb marker is recorded.</p>
+        <p>Custom markers are still tracked in the log and Run Review, but are not shown here because they can mean different things.</p>
 
         <h4 class="connection-help-title">Average Total Time Per Sheep colour</h4>
         <p>The Total Time Per Sheep value may show a coloured outline or background.</p>

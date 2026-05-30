@@ -2073,7 +2073,6 @@ const elements = {
   markerAvgDrink: document.getElementById("markerAvgDrink"),
   markerAvgCutter: document.getElementById("markerAvgCutter"),
   markerAvgComb: document.getElementById("markerAvgComb"),
-  markerAvgCustom: document.getElementById("markerAvgCustom"),
   sheepPerHour: document.getElementById("sheepPerHour"),
   fastestSheepToday: document.getElementById("fastestSheepToday"),
   slowestSheepToday: document.getElementById("slowestSheepToday"),
@@ -5742,7 +5741,6 @@ function updateMarkerAverageDisplays() {
   setText(elements.markerAvgDrink, formatMarkerAverageCatch(stats.buckets.drink));
   setText(elements.markerAvgCutter, formatMarkerAverageCatch(stats.buckets.cutter));
   setText(elements.markerAvgComb, formatMarkerAverageCatch(stats.buckets.comb));
-  setText(elements.markerAvgCustom, formatMarkerAverageCatch(stats.buckets[MANUAL_MARKER_CUSTOM_TYPE]));
 }
 
 function updateStatsPanel() {
