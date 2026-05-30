@@ -452,6 +452,23 @@
               <span class="metric-label panel-metric-label">Fill strategy:</span>
               <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
             </div>
+            <h4 class="timing-group-heading panel-section-title">Pen state</h4>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Pen count:</span>
+              <strong id="penStateCurrentCount" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Refill status:</span>
+              <strong id="penStateRefillStatus" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Last confirmed fill:</span>
+              <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Pen model:</span>
+              <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
+            </div>
           </div>
         </div>
       </div>
@@ -959,6 +976,7 @@
         <p><strong>Pen fill forecast:</strong><br />Shows the next and final projected refill points assuming full fills. It uses physical sheep taken from the pen, not official count.</p>
         <p><strong>Final fill status:</strong><br />Shows whether the final projected fill is too early, on target, or too late. The target window is around 2–4 minutes before end of run.</p>
         <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version and assumes previous fills were full.</p>
+        <p><strong>Pen state:</strong><br />Shows the current estimated sheep left in the pen, whether a refill is due, and whether the app is assuming full fills or using confirmed fills.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>

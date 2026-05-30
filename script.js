@@ -1095,6 +1095,10 @@ const elements = {
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
+  penStateCurrentCount: document.getElementById("penStateCurrentCount"),
+  penStateRefillStatus: document.getElementById("penStateRefillStatus"),
+  penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
+  penStateModel: document.getElementById("penStateModel"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -3905,6 +3909,102 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   };
 }
 
+function formatPenStateCurrentCount(penState) {
+  const rawCurrentPenCount = Number(penState?.currentPenCount);
+  if (!Number.isFinite(rawCurrentPenCount)) return "—";
+  const currentPenCount = Math.max(Math.floor(rawCurrentPenCount), 0);
+  const refillTriggerLeft = Number(penState?.rule?.refillTriggerLeft);
+  return Number.isFinite(refillTriggerLeft) && currentPenCount <= refillTriggerLeft
+    ? `${currentPenCount} left`
+    : `${currentPenCount} in pen`;
+}
+
+function formatPenStateRefillStatus(penState) {
+  if (penState?.refillAllowedNow) return "Refill now";
+  const nextRefillAllowedInSheep = Number(penState?.nextRefillAllowedInSheep);
+  if (nextRefillAllowedInSheep === 1) return "1 sheep until refill";
+  if (nextRefillAllowedInSheep === 2) return "2 sheep until refill";
+  return "Not due yet";
+}
+
+function formatPenStateLastConfirmedFill(penState) {
+  const lastFillEvent = penState?.lastFillEvent;
+  if (!lastFillEvent) return "—";
+  const sheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
+  const fillAmount = Number(lastFillEvent.actualFillAmount);
+  if (!Number.isFinite(sheepNumber) || !Number.isFinite(fillAmount)) return "—";
+  return `Sheep ${sheepNumber} — added ${fillAmount}`;
+}
+
+function formatPenStateModel(penState) {
+  if (penState?.source === "confirmed") return "Using confirmed fills";
+  if (penState?.source === "assumedFull") return "Assuming full fills";
+  return "—";
+}
+
+function updatePenStateDisplay() {
+  const refillStatusClassNames = ["pen-state-refill-now", "pen-state-refill-neutral"];
+  const modelClassNames = ["pen-state-model-confirmed", "pen-state-model-assumed", "pen-state-model-neutral"];
+
+  const setRefillStatus = (text, className = "pen-state-refill-neutral") => {
+    if (elements.penStateRefillStatus) {
+      elements.penStateRefillStatus.classList.remove(...refillStatusClassNames);
+      elements.penStateRefillStatus.classList.add(className);
+    }
+    setText(elements.penStateRefillStatus, text);
+  };
+
+  const setModel = (text, className = "pen-state-model-neutral") => {
+    if (elements.penStateModel) {
+      elements.penStateModel.classList.remove(...modelClassNames);
+      elements.penStateModel.classList.add(className);
+    }
+    setText(elements.penStateModel, text);
+  };
+
+  const setUnavailableDisplay = (modelText) => {
+    setText(elements.penStateCurrentCount, "—");
+    setRefillStatus("—");
+    setText(elements.penStateLastConfirmedFill, "—");
+    setModel(modelText);
+  };
+
+  const rule = getPenRule(appState.recordType);
+  if (!appState.recordType || appState.recordType === "none" || !rule) {
+    setUnavailableDisplay("Select record type");
+    return;
+  }
+
+  if (!appState.runActive) {
+    setUnavailableDisplay("Start run");
+    return;
+  }
+
+  const penState = getCurrentPenStateFromEvents({
+    recordType: appState.recordType,
+    rule,
+    physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen()
+  });
+
+  if (!penState) {
+    setUnavailableDisplay("—");
+    return;
+  }
+
+  setText(elements.penStateCurrentCount, formatPenStateCurrentCount(penState));
+  setRefillStatus(
+    formatPenStateRefillStatus(penState),
+    penState.refillAllowedNow ? "pen-state-refill-now" : "pen-state-refill-neutral"
+  );
+  setText(elements.penStateLastConfirmedFill, formatPenStateLastConfirmedFill(penState));
+  setModel(
+    formatPenStateModel(penState),
+    penState.source === "confirmed"
+      ? "pen-state-model-confirmed"
+      : (penState.source === "assumedFull" ? "pen-state-model-assumed" : "pen-state-model-neutral")
+  );
+}
+
 function updatePenFillForecastDisplay() {
   const statusClassNames = [
     "pen-fill-status-on-target",
@@ -4163,6 +4263,7 @@ function updateStatsPanel() {
   }
   updateTrendFlags();
   updatePenFillForecastDisplay();
+  updatePenStateDisplay();
 
   if (elements.lastSheepTime) {
     elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
