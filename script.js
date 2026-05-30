@@ -2039,9 +2039,9 @@ const appState = {
   showPlannedDelayMarkers: true,
   markerSettingsOpen: false,
   markerSettings: {
-    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, extraSecondsOverAverage: 3 },
-    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, extraSecondsOverAverage: 5 },
-    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, extraSecondsOverAverage: 8 }
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, minExtraSeconds: 2, maxExtraSeconds: 4 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, minExtraSeconds: 4, maxExtraSeconds: 7 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, minExtraSeconds: 7, maxExtraSeconds: null }
   },
   keyboardShortcuts: {
     startRun: "S",
@@ -2135,13 +2135,16 @@ const elements = {
   resetMarkerSettingsBtn: document.getElementById("resetMarkerSettingsBtn"),
   drinkTimingMinutes: document.getElementById("drinkTimingMinutes"),
   drinkWindowSeconds: document.getElementById("drinkWindowSeconds"),
-  drinkExtraSeconds: document.getElementById("drinkExtraSeconds"),
+  drinkMinExtraSeconds: document.getElementById("drinkMinExtraSeconds"),
+  drinkMaxExtraSeconds: document.getElementById("drinkMaxExtraSeconds"),
   cutterTimingMinutes: document.getElementById("cutterTimingMinutes"),
   cutterWindowSeconds: document.getElementById("cutterWindowSeconds"),
-  cutterExtraSeconds: document.getElementById("cutterExtraSeconds"),
+  cutterMinExtraSeconds: document.getElementById("cutterMinExtraSeconds"),
+  cutterMaxExtraSeconds: document.getElementById("cutterMaxExtraSeconds"),
   combTimingMinutes: document.getElementById("combTimingMinutes"),
   combWindowSeconds: document.getElementById("combWindowSeconds"),
-  combExtraSeconds: document.getElementById("combExtraSeconds"),
+  combMinExtraSeconds: document.getElementById("combMinExtraSeconds"),
+  combMaxExtraSeconds: document.getElementById("combMaxExtraSeconds"),
   shellyIpInput: document.getElementById("shellyIpInput"),
   endpointMode: document.getElementById("endpointMode"),
   pollIntervalInput: document.getElementById("pollIntervalInput"),
@@ -4480,11 +4483,19 @@ function getPlannedDelayMarkersBySheepNumber() {
     const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
     const markers = [];
     const { drink, cutter, comb } = appState.markerSettings;
-    const isComb = catchDuration >= catchAverage + comb.extraSecondsOverAverage
+    const extraSeconds = catchDuration - catchAverage;
+    const matchesMarkerRange = (rule) => {
+      const min = Number(rule?.minExtraSeconds);
+      const max = rule?.maxExtraSeconds;
+      return Number.isFinite(min)
+        && extraSeconds >= min
+        && (max === null || extraSeconds < max);
+    };
+    const isComb = matchesMarkerRange(comb)
       && isNearCadence(elapsedSeconds, comb.plannedTimingMinutes * 60, comb.timeWindowSeconds);
-    const isCutter = catchDuration >= catchAverage + cutter.extraSecondsOverAverage
+    const isCutter = matchesMarkerRange(cutter)
       && isNearCadence(elapsedSeconds, cutter.plannedTimingMinutes * 60, cutter.timeWindowSeconds);
-    const isDrink = catchDuration >= catchAverage + drink.extraSecondsOverAverage
+    const isDrink = matchesMarkerRange(drink)
       && isNearCadence(elapsedSeconds, drink.plannedTimingMinutes * 60, drink.timeWindowSeconds);
 
     if (isComb) {
@@ -4504,34 +4515,83 @@ function getPlannedDelayMarkersBySheepNumber() {
 
 function getDefaultMarkerSettings() {
   return {
-    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, extraSecondsOverAverage: 3 },
-    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, extraSecondsOverAverage: 5 },
-    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, extraSecondsOverAverage: 8 }
+    drink: { plannedTimingMinutes: 7.5, timeWindowSeconds: 25, minExtraSeconds: 2, maxExtraSeconds: 4 },
+    cutter: { plannedTimingMinutes: 15, timeWindowSeconds: 25, minExtraSeconds: 4, maxExtraSeconds: 7 },
+    comb: { plannedTimingMinutes: 60, timeWindowSeconds: 30, minExtraSeconds: 7, maxExtraSeconds: null }
+  };
+}
+
+function getFixedMarkerExtraSeconds(rawRule) {
+  const extraSecondsOverAverage = Number(rawRule?.extraSecondsOverAverage);
+  if (Number.isFinite(extraSecondsOverAverage) && extraSecondsOverAverage >= 0) return extraSecondsOverAverage;
+  const catchLongerThanAverage = Number(rawRule?.catchLongerThanAverage);
+  const migratedExtraSecondsOverAverage = (catchLongerThanAverage - 1) * 10;
+  return Number.isFinite(migratedExtraSecondsOverAverage) && migratedExtraSecondsOverAverage >= 0
+    ? migratedExtraSecondsOverAverage
+    : null;
+}
+
+function getMigratedMarkerRangesFromFixedSettings(rawSettings, defaults) {
+  const fixedSettings = {
+    drink: getFixedMarkerExtraSeconds(rawSettings?.drink),
+    cutter: getFixedMarkerExtraSeconds(rawSettings?.cutter),
+    comb: getFixedMarkerExtraSeconds(rawSettings?.comb)
+  };
+  if (!Object.values(fixedSettings).every((value) => Number.isFinite(value))) return null;
+  const matchesOldDefaults = fixedSettings.drink === 3 && fixedSettings.cutter === 5 && fixedSettings.comb === 8;
+  if (matchesOldDefaults) {
+    return {
+      drink: { minExtraSeconds: defaults.drink.minExtraSeconds, maxExtraSeconds: defaults.drink.maxExtraSeconds },
+      cutter: { minExtraSeconds: defaults.cutter.minExtraSeconds, maxExtraSeconds: defaults.cutter.maxExtraSeconds },
+      comb: { minExtraSeconds: defaults.comb.minExtraSeconds, maxExtraSeconds: defaults.comb.maxExtraSeconds }
+    };
+  }
+  if (!(fixedSettings.drink < fixedSettings.cutter && fixedSettings.cutter < fixedSettings.comb)) return null;
+  return {
+    drink: { minExtraSeconds: fixedSettings.drink, maxExtraSeconds: fixedSettings.cutter },
+    cutter: { minExtraSeconds: fixedSettings.cutter, maxExtraSeconds: fixedSettings.comb },
+    comb: { minExtraSeconds: fixedSettings.comb, maxExtraSeconds: null }
   };
 }
 
 function sanitizeMarkerSettings(rawSettings) {
   const defaults = getDefaultMarkerSettings();
-  const sanitizeRule = (rawRule, fallbackRule) => {
+  const migratedRanges = getMigratedMarkerRangesFromFixedSettings(rawSettings, defaults);
+  const sanitizeMaxExtraSeconds = (rawMaxExtraSeconds, minExtraSeconds) => {
+    if (rawMaxExtraSeconds === null || (typeof rawMaxExtraSeconds === "string" && rawMaxExtraSeconds.trim() === "")) return null;
+    const maxExtraSeconds = Number(rawMaxExtraSeconds);
+    return Number.isFinite(maxExtraSeconds) && maxExtraSeconds > minExtraSeconds ? maxExtraSeconds : null;
+  };
+  const sanitizeRange = (rawRule, fallbackRule, migratedRange) => {
+    const rawMinExtraSeconds = Number(rawRule?.minExtraSeconds);
+    const hasValidRawMin = Number.isFinite(rawMinExtraSeconds) && rawMinExtraSeconds >= 0;
+    if (hasValidRawMin) {
+      const rawMax = sanitizeMaxExtraSeconds(rawRule?.maxExtraSeconds, rawMinExtraSeconds);
+      const hasValidRawMax = rawRule?.maxExtraSeconds === null
+        || (typeof rawRule?.maxExtraSeconds === "string" && rawRule.maxExtraSeconds.trim() === "")
+        || rawMax !== null;
+      if (hasValidRawMax) {
+        return { minExtraSeconds: rawMinExtraSeconds, maxExtraSeconds: rawMax };
+      }
+    }
+    if (migratedRange) return migratedRange;
+    return { minExtraSeconds: fallbackRule.minExtraSeconds, maxExtraSeconds: fallbackRule.maxExtraSeconds };
+  };
+  const sanitizeRule = (rawRule, fallbackRule, migratedRange) => {
     const plannedTimingMinutes = Number(rawRule?.plannedTimingMinutes);
     const timeWindowSeconds = Number(rawRule?.timeWindowSeconds);
-    const extraSecondsOverAverage = Number(rawRule?.extraSecondsOverAverage);
-    const catchLongerThanAverage = Number(rawRule?.catchLongerThanAverage);
-    const migratedExtraSecondsOverAverage = Number.isFinite(extraSecondsOverAverage)
-      ? extraSecondsOverAverage
-      : (Number.isFinite(catchLongerThanAverage) ? (catchLongerThanAverage - 1) * 10 : NaN);
+    const range = sanitizeRange(rawRule, fallbackRule, migratedRange);
     return {
       plannedTimingMinutes: Number.isFinite(plannedTimingMinutes) && plannedTimingMinutes > 0 ? plannedTimingMinutes : fallbackRule.plannedTimingMinutes,
       timeWindowSeconds: Number.isFinite(timeWindowSeconds) && timeWindowSeconds > 0 ? timeWindowSeconds : fallbackRule.timeWindowSeconds,
-      extraSecondsOverAverage: Number.isFinite(migratedExtraSecondsOverAverage) && migratedExtraSecondsOverAverage >= 0
-        ? migratedExtraSecondsOverAverage
-        : fallbackRule.extraSecondsOverAverage
+      minExtraSeconds: range.minExtraSeconds,
+      maxExtraSeconds: range.maxExtraSeconds
     };
   };
   return {
-    drink: sanitizeRule(rawSettings?.drink, defaults.drink),
-    cutter: sanitizeRule(rawSettings?.cutter, defaults.cutter),
-    comb: sanitizeRule(rawSettings?.comb, defaults.comb)
+    drink: sanitizeRule(rawSettings?.drink, defaults.drink, migratedRanges?.drink),
+    cutter: sanitizeRule(rawSettings?.cutter, defaults.cutter, migratedRanges?.cutter),
+    comb: sanitizeRule(rawSettings?.comb, defaults.comb, migratedRanges?.comb)
   };
 }
 
@@ -4539,13 +4599,16 @@ function syncMarkerSettingsInputs() {
   const { drink, cutter, comb } = appState.markerSettings;
   if (elements.drinkTimingMinutes) elements.drinkTimingMinutes.value = String(drink.plannedTimingMinutes);
   if (elements.drinkWindowSeconds) elements.drinkWindowSeconds.value = String(drink.timeWindowSeconds);
-  if (elements.drinkExtraSeconds) elements.drinkExtraSeconds.value = String(drink.extraSecondsOverAverage);
+  if (elements.drinkMinExtraSeconds) elements.drinkMinExtraSeconds.value = String(drink.minExtraSeconds);
+  if (elements.drinkMaxExtraSeconds) elements.drinkMaxExtraSeconds.value = drink.maxExtraSeconds === null ? "" : String(drink.maxExtraSeconds);
   if (elements.cutterTimingMinutes) elements.cutterTimingMinutes.value = String(cutter.plannedTimingMinutes);
   if (elements.cutterWindowSeconds) elements.cutterWindowSeconds.value = String(cutter.timeWindowSeconds);
-  if (elements.cutterExtraSeconds) elements.cutterExtraSeconds.value = String(cutter.extraSecondsOverAverage);
+  if (elements.cutterMinExtraSeconds) elements.cutterMinExtraSeconds.value = String(cutter.minExtraSeconds);
+  if (elements.cutterMaxExtraSeconds) elements.cutterMaxExtraSeconds.value = cutter.maxExtraSeconds === null ? "" : String(cutter.maxExtraSeconds);
   if (elements.combTimingMinutes) elements.combTimingMinutes.value = String(comb.plannedTimingMinutes);
   if (elements.combWindowSeconds) elements.combWindowSeconds.value = String(comb.timeWindowSeconds);
-  if (elements.combExtraSeconds) elements.combExtraSeconds.value = String(comb.extraSecondsOverAverage);
+  if (elements.combMinExtraSeconds) elements.combMinExtraSeconds.value = String(comb.minExtraSeconds);
+  if (elements.combMaxExtraSeconds) elements.combMaxExtraSeconds.value = comb.maxExtraSeconds === null ? "" : String(comb.maxExtraSeconds);
 }
 
 function saveMarkerSettings() {
@@ -4570,22 +4633,30 @@ function setMarkerSettingsOpen(isOpen) {
   if (elements.markerSettingsToggle) elements.markerSettingsToggle.setAttribute("aria-expanded", String(appState.markerSettingsOpen));
 }
 
+function getMarkerSettingsMaxInputValue(input) {
+  const value = input?.value;
+  return typeof value === "string" && value.trim() === "" ? null : value;
+}
+
 function applyMarkerSettingsFromInputs() {
   appState.markerSettings = sanitizeMarkerSettings({
     drink: {
       plannedTimingMinutes: elements.drinkTimingMinutes?.value,
       timeWindowSeconds: elements.drinkWindowSeconds?.value,
-      extraSecondsOverAverage: elements.drinkExtraSeconds?.value
+      minExtraSeconds: elements.drinkMinExtraSeconds?.value,
+      maxExtraSeconds: getMarkerSettingsMaxInputValue(elements.drinkMaxExtraSeconds)
     },
     cutter: {
       plannedTimingMinutes: elements.cutterTimingMinutes?.value,
       timeWindowSeconds: elements.cutterWindowSeconds?.value,
-      extraSecondsOverAverage: elements.cutterExtraSeconds?.value
+      minExtraSeconds: elements.cutterMinExtraSeconds?.value,
+      maxExtraSeconds: getMarkerSettingsMaxInputValue(elements.cutterMaxExtraSeconds)
     },
     comb: {
       plannedTimingMinutes: elements.combTimingMinutes?.value,
       timeWindowSeconds: elements.combWindowSeconds?.value,
-      extraSecondsOverAverage: elements.combExtraSeconds?.value
+      minExtraSeconds: elements.combMinExtraSeconds?.value,
+      maxExtraSeconds: getMarkerSettingsMaxInputValue(elements.combMaxExtraSeconds)
     }
   });
   syncMarkerSettingsInputs();
@@ -7599,13 +7670,16 @@ function bindEvents() {
   [
     elements.drinkTimingMinutes,
     elements.drinkWindowSeconds,
-    elements.drinkExtraSeconds,
+    elements.drinkMinExtraSeconds,
+    elements.drinkMaxExtraSeconds,
     elements.cutterTimingMinutes,
     elements.cutterWindowSeconds,
-    elements.cutterExtraSeconds,
+    elements.cutterMinExtraSeconds,
+    elements.cutterMaxExtraSeconds,
     elements.combTimingMinutes,
     elements.combWindowSeconds,
-    elements.combExtraSeconds
+    elements.combMinExtraSeconds,
+    elements.combMaxExtraSeconds
   ].filter(Boolean).forEach((input) => {
     input.addEventListener("change", applyMarkerSettingsFromInputs);
   });
