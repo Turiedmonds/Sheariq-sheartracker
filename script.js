@@ -1067,7 +1067,7 @@ function getPenFillInstructionModel(options = {}) {
   if (!canUseFullFill || !recordType || recordType === "none" || !appState.runActive) {
     lastFullFillMessage = "—";
   } else if (isLastFullFill) {
-    lastFullFillMessage = `This fill — add ${recommendedFillAmount}`;
+    lastFullFillMessage = `This refill — add ${recommendedFillAmount}`;
   } else if (isFullFill && planner?.status === "noFutureFill") {
     lastFullFillMessage = "Already passed";
   } else if (["onTarget", "tooLate", "noGoodPlan"].includes(planner?.status)) {
@@ -1325,7 +1325,7 @@ async function maybeShowPenFillConfirmationPrompt() {
     }
 
     appState.dismissedPenFillPromptKey = promptKey;
-    updatePenFillConfirmationControls({ statusOverride: "Fill not confirmed." });
+    updatePenFillConfirmationControls({ statusOverride: "Refill not confirmed." });
   } finally {
     if (appState.pendingPenFillPromptKey === promptKey) {
       appState.pendingPenFillPromptKey = null;
@@ -1339,8 +1339,8 @@ async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey)
     const rawAmount = promptForCustomPenFillAmount(promptMessage);
     if (rawAmount === null) {
       appState.dismissedPenFillPromptKey = promptKey;
-      updatePenFillConfirmationControls({ statusOverride: "Fill not confirmed." });
-      return { success: false, message: "Fill not confirmed." };
+      updatePenFillConfirmationControls({ statusOverride: "Refill not confirmed." });
+      return { success: false, message: "Refill not confirmed." };
     }
 
     if (!/^\d+$/.test(rawAmount)) {
@@ -1363,7 +1363,7 @@ async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey)
     updatePenFillConfirmationControls({ statusOverride: message });
     promptMessage = `${message}\n\nWhat amount was actually added to the pen?`;
   }
-  return { success: false, message: "Fill not confirmed." };
+  return { success: false, message: "Refill not confirmed." };
 }
 
 function simulatePenFillPlan(options = {}) {
@@ -1716,7 +1716,7 @@ function planFinalFillStrategy(options = {}) {
   if (!recordType || recordType === "none" || !rule) {
     return buildFinalFillPlannerResult({
       message: "Select record type.",
-      reason: "Pen fill planning needs a record type with pen rules."
+      reason: "Pen refill planning needs a record type with pen rules."
     });
   }
 
@@ -1724,7 +1724,7 @@ function planFinalFillStrategy(options = {}) {
     return buildFinalFillPlannerResult({
       message: "Start run.",
       fullFillAmount,
-      reason: "Pen fill planning starts when the run is active."
+      reason: "Pen refill planning starts when the run is active."
     });
   }
 
@@ -1749,7 +1749,7 @@ function planFinalFillStrategy(options = {}) {
       status: "notPlanningYet",
       message: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
       fullFillAmount,
-      reason: "Outside the final-fill planning window."
+      reason: "Outside the final refill planning window."
     });
   }
 
