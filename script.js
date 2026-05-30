@@ -696,6 +696,8 @@ const appState = {
   },
   connection: { ...DEFAULT_CONNECTION_SETTINGS },
   simulationMode: false,
+  simulationRunLengthMode: "real",
+  simulationCustomMinutes: 10,
   currentMotorDisplay: "OFF",
   connectionDebug: "",
   lastResponseTimeMs: null,
@@ -866,6 +868,10 @@ const elements = {
   simulationModeToggle: document.getElementById("simulationModeToggle"),
   simulationBanner: document.getElementById("simulationBanner"),
   simulationControls: document.getElementById("simulationControls"),
+  simulationRunLengthMode: document.getElementById("simulationRunLengthMode"),
+  simulationCustomMinutes: document.getElementById("simulationCustomMinutes"),
+  simulationCustomMinutesLabel: document.getElementById("simulationCustomMinutesLabel"),
+  simulationRunLengthIndicator: document.getElementById("simulationRunLengthIndicator"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
   shortcutMessage: document.getElementById("shortcutMessage"),
@@ -1896,7 +1902,102 @@ function getScheduleForCurrentType() {
   return DAY_SCHEDULES[elements.runType.value] || DAY_SCHEDULES["8"];
 }
 
+function sanitizeSimulationCustomMinutes(value) {
+  const minutes = Math.trunc(Number(value));
+  if (!Number.isFinite(minutes)) return 10;
+  return Math.min(Math.max(minutes, 1), 60);
+}
+
+function getSimulationTestRunDurationSeconds() {
+  if (!appState.simulationMode) return null;
+
+  switch (appState.simulationRunLengthMode) {
+    case "test5":
+      return 300;
+    case "test10":
+      return 600;
+    case "test15":
+      return 900;
+    case "custom":
+      return sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes) * 60;
+    default:
+      return null;
+  }
+}
+
+function getSimulationRunLengthMinutesLabel() {
+  const testDurationSeconds = getSimulationTestRunDurationSeconds();
+  if (!Number.isFinite(testDurationSeconds) || testDurationSeconds <= 0) return null;
+  return Math.round(testDurationSeconds / 60);
+}
+
+function updateSimulationRunLengthControls() {
+  const simulationEnabled = Boolean(appState.simulationMode);
+  const runActive = Boolean(appState.runActive);
+  const mode = simulationEnabled ? appState.simulationRunLengthMode : "real";
+  const customMode = simulationEnabled && mode === "custom";
+
+  if (elements.simulationRunLengthMode) {
+    elements.simulationRunLengthMode.value = mode;
+    elements.simulationRunLengthMode.disabled = !simulationEnabled || runActive;
+  }
+
+  if (elements.simulationCustomMinutes) {
+    elements.simulationCustomMinutes.value = String(sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes));
+    elements.simulationCustomMinutes.hidden = !customMode;
+    elements.simulationCustomMinutes.disabled = !customMode || runActive;
+  }
+
+  if (elements.simulationCustomMinutesLabel) {
+    elements.simulationCustomMinutesLabel.hidden = !customMode;
+  }
+
+  const activeMinutes = getSimulationRunLengthMinutesLabel();
+  if (elements.simulationRunLengthIndicator) {
+    if (simulationEnabled && activeMinutes !== null) {
+      elements.simulationRunLengthIndicator.textContent = `TEST RUN LENGTH ACTIVE — ${activeMinutes} min simulation run`;
+      elements.simulationRunLengthIndicator.hidden = false;
+    } else {
+      elements.simulationRunLengthIndicator.textContent = "";
+      elements.simulationRunLengthIndicator.hidden = true;
+    }
+  }
+}
+
+function getValidSimulationRunLengthMode(mode) {
+  return ["real", "test5", "test10", "test15", "custom"].includes(mode) ? mode : "real";
+}
+
+function setSimulationRunLengthMode(mode) {
+  if (appState.runActive) {
+    updateSimulationRunLengthControls();
+    return;
+  }
+
+  appState.simulationRunLengthMode = appState.simulationMode ? getValidSimulationRunLengthMode(mode) : "real";
+  updateSimulationRunLengthControls();
+  updateLivePanel();
+  updateStatsPanel();
+}
+
+function setSimulationCustomMinutes(value) {
+  if (appState.runActive) {
+    updateSimulationRunLengthControls();
+    return;
+  }
+
+  appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(value);
+  updateSimulationRunLengthControls();
+  updateLivePanel();
+  updateStatsPanel();
+}
+
 function getCurrentRunDurationSeconds() {
+  const simulationTestDurationSeconds = getSimulationTestRunDurationSeconds();
+  if (Number.isFinite(simulationTestDurationSeconds) && simulationTestDurationSeconds > 0) {
+    return simulationTestDurationSeconds;
+  }
+
   const schedule = getScheduleForCurrentType();
   const index = Math.min(appState.currentRunIndex, schedule.length - 1);
   return schedule[Math.max(index, 0)] || 0;
@@ -2026,6 +2127,7 @@ function startRun() {
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
+  updateSimulationRunLengthControls();
 
   setPaused(false);
   elements.runStatus.textContent = "Running";
@@ -2055,6 +2157,7 @@ function stopRun() {
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
+  updateSimulationRunLengthControls();
 
   setPaused(false);
   elements.runStatus.textContent = "Stopped";
@@ -2073,6 +2176,7 @@ function resetRun() {
   resetRunState();
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
+  updateSimulationRunLengthControls();
 
   setPaused(false);
   elements.runStatus.textContent = "Idle";
@@ -4632,7 +4736,10 @@ function getAutosavePayload() {
       trendFlags: appState.trendFlags,
       panelCollapsed: appState.panelCollapsed,
       effectiveElapsedBeforePauseMs: appState.effectiveElapsedBeforePauseMs,
-      effectiveResumeRealMs: appState.effectiveResumeRealMs
+      effectiveResumeRealMs: appState.effectiveResumeRealMs,
+      simulationMode: appState.simulationMode,
+      simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
+      simulationCustomMinutes: sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes)
     },
     panelOrder: getPanelElements().map((panel) => panel.id),
     panelSizes: appState.panelSizes,
@@ -4762,6 +4869,13 @@ function loadLastSave() {
     const raw = JSON.parse(localStorage.getItem(autosaveKey) || localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
     if (!raw || !raw.state) return;
     Object.assign(appState, raw.state);
+    appState.simulationMode = Boolean(appState.simulationMode);
+    appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
+    if (!appState.simulationMode) {
+      appState.simulationRunLengthMode = "real";
+    } else {
+      appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
+    }
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
     appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
     if (elements.recordType) elements.recordType.value = appState.recordType;
@@ -4791,6 +4905,10 @@ function loadLastSave() {
     if (elements.runStatus) elements.runStatus.textContent = appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped';
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
+    if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
+    if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
+    if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
+    updateSimulationRunLengthControls();
     renderLogTable();
     renderReviewList();
     drawTrendGraph();
@@ -5123,9 +5241,18 @@ function applyConnectionSettingsFromUI() {
 
 function setSimulationMode(enabled) {
   appState.simulationMode = Boolean(enabled);
+  if (!appState.simulationMode) {
+    appState.simulationRunLengthMode = "real";
+  } else {
+    appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
+  }
+  appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
   if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
   if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
   if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
+  updateSimulationRunLengthControls();
+  updateLivePanel();
+  updateStatsPanel();
 
   if (appState.simulationMode) {
     appState.lastMotorState = null;
@@ -5525,6 +5652,22 @@ function bindEvents() {
     });
   }
 
+  if (elements.simulationRunLengthMode) {
+    elements.simulationRunLengthMode.addEventListener("change", () => {
+      setSimulationRunLengthMode(elements.simulationRunLengthMode.value);
+    });
+  }
+  if (elements.simulationCustomMinutes) {
+    elements.simulationCustomMinutes.addEventListener("change", () => {
+      setSimulationCustomMinutes(elements.simulationCustomMinutes.value);
+    });
+    elements.simulationCustomMinutes.addEventListener("input", () => {
+      if (appState.simulationRunLengthMode === "custom" && !appState.runActive) {
+        setSimulationCustomMinutes(elements.simulationCustomMinutes.value);
+      }
+    });
+  }
+
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.shortcutSettingsBtn) elements.shortcutSettingsBtn.addEventListener("click", openShortcutSettingsModal);
   if (elements.shortcutSettingsModalCloseBtn) elements.shortcutSettingsModalCloseBtn.addEventListener("click", closeShortcutSettingsModal);
@@ -5893,6 +6036,7 @@ function initialize() {
   }
 
   setSimulationMode(false);
+  updateSimulationRunLengthControls();
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes);
 
   if (elements.blockMinutes) {
