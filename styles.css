@@ -945,6 +945,21 @@ button:disabled {
   font-weight: 600;
 }
 
+.simulation-run-length-row {
+  margin-top: 0.6rem;
+}
+
+.sim-test-length-indicator {
+  margin-top: 0.5rem;
+  border: 1px solid #f59e0b;
+  background: #fff7ed;
+  color: #9a3412;
+  padding: 0.45rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .table-wrap {
   overflow-x: auto;
   overflow-y: auto;

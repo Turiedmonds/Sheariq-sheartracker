@@ -115,6 +115,19 @@
             <div id="simulationBanner" class="sim-banner" hidden>
               Simulation active: Shelly polling is paused.
             </div>
+            <div class="form-grid single-row sim-setting-row simulation-run-length-row">
+              <label for="simulationRunLengthMode">Simulation run length:</label>
+              <select id="simulationRunLengthMode" disabled>
+                <option value="real" selected>Real run</option>
+                <option value="test5">5 min test</option>
+                <option value="test10">10 min test</option>
+                <option value="test15">15 min test</option>
+                <option value="custom">Custom test minutes</option>
+              </select>
+              <label id="simulationCustomMinutesLabel" for="simulationCustomMinutes" hidden>Custom test minutes</label>
+              <input id="simulationCustomMinutes" type="number" min="1" max="60" step="1" value="10" hidden disabled />
+            </div>
+            <div id="simulationRunLengthIndicator" class="sim-test-length-indicator" hidden></div>
             <div id="simulationControls" class="button-row" hidden>
               <button id="simMotorOnBtn" type="button">Motor ON</button>
               <button id="simMotorOffBtn" type="button">Motor OFF</button>
@@ -1004,6 +1017,7 @@
 
         <h4 class="connection-help-title">Simulation Mode</h4>
         <p>Use Simulation Mode when testing the app without the real Evo/Shelly signal.</p>
+        <p>Simulation run length lets you test the app with a short run such as 5, 10, or 15 minutes. It only works in Simulation Mode and resets to Real run when Simulation Mode is turned off.</p>
         <p>When Simulation Mode is ON:</p>
         <ul class="connection-help-list">
           <li>Shelly polling is paused.</li>
