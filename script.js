@@ -145,10 +145,18 @@ function forecastFullFillRefillPoints(options = {}) {
   if (!appState.runActive) return [];
 
   const cycleSize = rule.defaultRefillAmount;
-  const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
-  const avgCycleSeconds = appState.currentStats.avgCycle;
-  const elapsedSeconds = getEffectiveElapsedSeconds();
-  const runDurationSeconds = getCurrentRunDurationSeconds();
+  const sheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  const avgCycleSeconds = Object.prototype.hasOwnProperty.call(options, "avgCycleSeconds")
+    ? Number(options.avgCycleSeconds)
+    : Number(appState.currentStats.avgCycle);
+  const elapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const runDurationSeconds = Object.prototype.hasOwnProperty.call(options, "runDurationSeconds")
+    ? Number(options.runDurationSeconds)
+    : Number(getCurrentRunDurationSeconds());
 
   if (
     !Number.isFinite(cycleSize)
@@ -224,6 +232,201 @@ function getCurrentPenFillOpportunityPoint(recordType = appState.recordType) {
     label: `Sheep ${sheepTakenFromPen}`,
     isCurrentFill: true
   };
+}
+
+function buildPenFillForecastPoint(sheepNumber, physicalSheepTakenFromPen, avgCycleSeconds, effectiveElapsedSeconds, runDurationSeconds, overrides = {}) {
+  const normalizedSheepNumber = Number(sheepNumber);
+  const currentPhysicalSheep = Number(physicalSheepTakenFromPen);
+  const cycleSeconds = Number(avgCycleSeconds);
+  const elapsedSeconds = Number(effectiveElapsedSeconds);
+  const durationSeconds = Number(runDurationSeconds);
+  if (
+    !Number.isFinite(normalizedSheepNumber)
+    || !Number.isFinite(currentPhysicalSheep)
+    || !Number.isFinite(cycleSeconds)
+    || !Number.isFinite(elapsedSeconds)
+    || !Number.isFinite(durationSeconds)
+  ) {
+    return null;
+  }
+
+  const sheepUntilRefill = Math.max(normalizedSheepNumber - currentPhysicalSheep, 0);
+  const secondsFromNow = sheepUntilRefill * cycleSeconds;
+  const pointElapsedSeconds = elapsedSeconds + secondsFromNow;
+  if (pointElapsedSeconds > durationSeconds) return null;
+
+  return {
+    refillNumber: 0,
+    sheepNumber: normalizedSheepNumber,
+    secondsFromNow,
+    effectiveElapsedSeconds: pointElapsedSeconds,
+    secondsBeforeRunEnd: Math.max(durationSeconds - pointElapsedSeconds, 0),
+    label: `Sheep ${normalizedSheepNumber}`,
+    ...overrides
+  };
+}
+
+function getPenFillUnconfirmedAssumptionState(penState, options = {}) {
+  const rule = options.rule || penState?.rule || getPenRule(options.recordType || appState.recordType);
+  if (!rule || !penState) return false;
+
+  const physicalSheepTakenFromPen = Number(penState.physicalSheepTakenFromPen ?? options.physicalSheepTakenFromPen);
+  const fullFillAmount = Number(rule.defaultRefillAmount);
+  const refillTriggerLeft = Number(rule.refillTriggerLeft);
+  const currentPenCount = Number(penState.currentPenCount);
+  const hasConfirmedEvents = Boolean(options.hasConfirmedEvents ?? penState.source === "confirmed");
+
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return false;
+  if (!Number.isFinite(fullFillAmount) || fullFillAmount <= 0) return false;
+
+  if (!hasConfirmedEvents) {
+    return physicalSheepTakenFromPen > fullFillAmount && physicalSheepTakenFromPen % fullFillAmount !== 0;
+  }
+
+  return Number.isFinite(currentPenCount)
+    && Number.isFinite(refillTriggerLeft)
+    && currentPenCount < refillTriggerLeft
+    && !findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+}
+
+function forecastPenFillPointsFromEvents(options = {}) {
+  const maxForecastPoints = Number.isFinite(options.maxForecastPoints)
+    ? Math.max(Math.floor(options.maxForecastPoints), 0)
+    : 10;
+  if (maxForecastPoints <= 0) return [];
+
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  if (!recordType || recordType === "none" || !rule) return [];
+
+  const runActive = Object.prototype.hasOwnProperty.call(options, "runActive") ? Boolean(options.runActive) : Boolean(appState.runActive);
+  if (!runActive) return [];
+
+  const avgCycleSeconds = Object.prototype.hasOwnProperty.call(options, "avgCycleSeconds")
+    ? Number(options.avgCycleSeconds)
+    : Number(appState.currentStats.avgCycle);
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const runDurationSeconds = Object.prototype.hasOwnProperty.call(options, "runDurationSeconds")
+    ? Number(options.runDurationSeconds)
+    : Number(getCurrentRunDurationSeconds());
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+
+  if (
+    !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+    || !Number.isFinite(physicalSheepTakenFromPen)
+    || physicalSheepTakenFromPen < 0
+  ) {
+    return [];
+  }
+
+  const events = Object.prototype.hasOwnProperty.call(options, "events")
+    ? getCurrentRunPenFillEvents(options.events)
+    : getCurrentRunPenFillEvents();
+  if (!events.length) {
+    return forecastFullFillRefillPoints({
+      ...options,
+      recordType,
+      rule,
+      maxForecastPoints,
+      avgCycleSeconds,
+      effectiveElapsedSeconds,
+      runDurationSeconds,
+      physicalSheepTakenFromPen
+    });
+  }
+
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    events,
+    physicalSheepTakenFromPen
+  });
+  if (!penState) return [];
+
+  const defaultRefillAmount = Number(rule.defaultRefillAmount);
+  const nextRefillAllowedInSheep = Number(penState.nextRefillAllowedInSheep);
+  if (!Number.isFinite(defaultRefillAmount) || defaultRefillAmount <= 0 || !Number.isFinite(nextRefillAllowedInSheep)) return [];
+
+  const alreadyConfirmedAtCurrentPoint = events.some((event) => Number(event.physicalSheepTakenFromPen) === physicalSheepTakenFromPen);
+  let nextRefillSheepNumber = null;
+  if (penState.refillAllowedNow && !alreadyConfirmedAtCurrentPoint) {
+    nextRefillSheepNumber = physicalSheepTakenFromPen;
+  } else if (nextRefillAllowedInSheep > 0) {
+    nextRefillSheepNumber = physicalSheepTakenFromPen + nextRefillAllowedInSheep;
+  }
+
+  if (!Number.isFinite(nextRefillSheepNumber)) return [];
+
+  const points = [];
+  while (points.length < maxForecastPoints) {
+    const point = buildPenFillForecastPoint(
+      nextRefillSheepNumber,
+      physicalSheepTakenFromPen,
+      avgCycleSeconds,
+      effectiveElapsedSeconds,
+      runDurationSeconds,
+      {
+        refillNumber: points.length + 1,
+        fullFillAmount: defaultRefillAmount,
+        fillAmount: defaultRefillAmount,
+        source: points.length === 0 ? "confirmedState" : "projectedFullFill",
+        isCurrentFill: nextRefillSheepNumber === physicalSheepTakenFromPen
+      }
+    );
+    if (!point) break;
+    points.push(point);
+    nextRefillSheepNumber += defaultRefillAmount;
+  }
+
+  return points;
+}
+
+function getPenFillForecastPoints(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  const events = Object.prototype.hasOwnProperty.call(options, "events")
+    ? getCurrentRunPenFillEvents(options.events)
+    : getCurrentRunPenFillEvents();
+  const hasConfirmedEvents = events.length > 0;
+  const penState = getCurrentPenStateFromEvents({ recordType, rule, events, physicalSheepTakenFromPen });
+  const fillNotConfirmed = getPenFillUnconfirmedAssumptionState(penState, { rule, hasConfirmedEvents, physicalSheepTakenFromPen });
+
+  if (hasConfirmedEvents) {
+    return {
+      points: forecastPenFillPointsFromEvents({ ...options, recordType, rule, events, physicalSheepTakenFromPen }),
+      assumption: fillNotConfirmed ? "Fill not confirmed — assuming full fills" : "Using confirmed fills",
+      hasConfirmedEvents,
+      fillNotConfirmed,
+      penState
+    };
+  }
+
+  const fullFillPoints = forecastFullFillRefillPoints({ ...options, recordType, rule });
+  const currentFillPoint = getCurrentPenFillOpportunityPoint(recordType);
+  const points = currentFillPoint ? [currentFillPoint, ...fullFillPoints] : fullFillPoints;
+  return {
+    points,
+    assumption: fillNotConfirmed ? "Fill not confirmed — assuming full fills" : "Assuming full fills",
+    hasConfirmedEvents,
+    fillNotConfirmed,
+    penState
+  };
+}
+
+function getPenFillForecastAssumption(options = {}) {
+  return getPenFillForecastPoints(options).assumption;
 }
 
 function getMinimumRecommendedFillAmount(rule) {
@@ -476,6 +679,8 @@ function getPenFillPlannerRecommendation(options = {}) {
   }
   if (Array.isArray(options.forecastPoints)) {
     plannerOptions.forecastPoints = options.forecastPoints;
+  } else {
+    plannerOptions.forecastPoints = getPenFillForecastPoints(plannerOptions).points;
   }
   return planFinalFillStrategy(plannerOptions);
 }
@@ -494,6 +699,7 @@ function findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen = getPhy
 function refreshPenFillConfirmationDisplays(message = "") {
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
+  updatePenFillEarlyReminderDisplay();
   updatePenFillConfirmationControls({ statusOverride: message });
   maybeShowPenFillConfirmationPrompt();
 }
@@ -689,6 +895,79 @@ function getPenFillInstructionModel(options = {}) {
     planner,
     validation
   };
+}
+
+function updatePenFillEarlyReminderDisplay() {
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const setReminder = (text) => setText(elements.penFillEarlyReminder, text);
+
+  if (!recordType || recordType === "none") {
+    setReminder("Select record type");
+    return;
+  }
+  if (!appState.runActive) {
+    setReminder("Start run");
+    return;
+  }
+  if (appState.paused) {
+    setReminder("Run paused");
+    return;
+  }
+  if (!rule) {
+    setReminder("Select record type");
+    return;
+  }
+
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+  if (!penState) {
+    setReminder("—");
+    return;
+  }
+
+  if (findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)) {
+    setReminder("Fill already confirmed");
+    return;
+  }
+
+  const instructionModel = getPenFillInstructionModel({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen,
+    penState
+  });
+  const instructionAmount = Number(instructionModel?.recommendedFillAmount);
+  const fallbackAmount = Number(rule.defaultRefillAmount);
+  const recommendedFillAmount = Number.isInteger(instructionAmount) && instructionAmount > 0
+    ? instructionAmount
+    : (Number.isInteger(fallbackAmount) && fallbackAmount > 0 ? fallbackAmount : null);
+
+  if (!Number.isInteger(recommendedFillAmount) || recommendedFillAmount <= 0) {
+    setReminder("—");
+    return;
+  }
+
+  if (penState.refillAllowedNow) {
+    setReminder(`Refill now — add ${recommendedFillAmount}`);
+    return;
+  }
+
+  const nextRefillAllowedInSheep = Number(penState.nextRefillAllowedInSheep);
+  if (nextRefillAllowedInSheep === 1) {
+    setReminder(`Next fill in 1 sheep — get ready to add ${recommendedFillAmount}`);
+    return;
+  }
+  if (nextRefillAllowedInSheep === 2) {
+    setReminder(`Next fill in 2 sheep — likely add ${recommendedFillAmount}`);
+    return;
+  }
+
+  setReminder("—");
 }
 
 function updatePenFillConfirmationControls(options = {}) {
@@ -1489,6 +1768,7 @@ const elements = {
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
+  penFillEarlyReminder: document.getElementById("penFillEarlyReminder"),
   penStateCurrentCount: document.getElementById("penStateCurrentCount"),
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
@@ -4491,19 +4771,24 @@ function updatePenFillForecastDisplay() {
     return;
   }
 
-  const futureForecastPoints = forecastFullFillRefillPoints();
-  const currentFillPoint = getCurrentPenFillOpportunityPoint();
-  const displayForecastPoints = currentFillPoint
-    ? [currentFillPoint, ...futureForecastPoints]
-    : futureForecastPoints;
   const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const remainingRunSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
+  const routedForecast = getPenFillForecastPoints({
+    recordType: appState.recordType,
+    rule: getPenRule(appState.recordType),
+    physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen(),
+    avgCycleSeconds,
+    effectiveElapsedSeconds: elapsedSeconds,
+    runDurationSeconds
+  });
+  const displayForecastPoints = routedForecast.points;
+  const assumptionText = routedForecast.assumption;
   const finalFillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
   const planner = buildPlanner(displayForecastPoints, remainingRunSeconds);
 
   if (displayForecastPoints.length === 0) {
-    setForecastDisplay("No more projected fills", "—", "Full fills", finalFillAnalysis, planner);
+    setForecastDisplay("No more projected fills", "—", assumptionText, finalFillAnalysis, planner);
     return;
   }
 
@@ -4512,7 +4797,7 @@ function updatePenFillForecastDisplay() {
   setForecastDisplay(
     formatPenFillForecastPoint(nextFill),
     formatFinalPenFillForecastPoint(finalFill),
-    "Full fills",
+    assumptionText,
     finalFillAnalysis,
     planner
   );
@@ -4665,6 +4950,7 @@ function updateStatsPanel() {
   updateTrendFlags();
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
+  updatePenFillEarlyReminderDisplay();
   updatePenFillConfirmationControls();
   maybeShowPenFillConfirmationPrompt();
 
