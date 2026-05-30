@@ -324,22 +324,22 @@
                 <span class="perf-metric-label panel-metric-label">Sheep per hour</span>
                 <strong id="sheepPerHour" class="perf-metric-value panel-metric-value">0.00</strong>
               </div>
-              <div class="perf-marker-averages" aria-label="Marker average extra catch time">
+              <div class="perf-marker-averages" aria-label="Marker average catch time">
                 <h4 class="perf-subsection-title">Marker averages</h4>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Drink</span>
+                  <span class="perf-metric-label panel-metric-label">Drink break catch avg</span>
                   <strong id="markerAvgDrink" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Cutter</span>
+                  <span class="perf-metric-label panel-metric-label">Cutter change catch avg</span>
                   <strong id="markerAvgCutter" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Comb</span>
+                  <span class="perf-metric-label panel-metric-label">Comb/handpiece change catch avg</span>
                   <strong id="markerAvgComb" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
                 <div class="perf-metric-row panel-metric-row">
-                  <span class="perf-metric-label panel-metric-label">Custom</span>
+                  <span class="perf-metric-label panel-metric-label">Custom marker catch avg</span>
                   <strong id="markerAvgCustom" class="perf-metric-value panel-metric-value">—</strong>
                 </div>
               </div>
@@ -849,8 +849,8 @@
           <li>Sheep number</li>
           <li>Start time</li>
           <li>End time</li>
-          <li>Shear duration</li>
-          <li>Catch duration</li>
+          <li>Catch Duration</li>
+          <li>Shear Duration</li>
           <li>Total Time Per Sheep</li>
           <li>Marker / Note</li>
         </ul>
@@ -884,7 +884,7 @@
         <p>The colour does not automatically mean something went wrong. It is only a quick way to spot times worth checking.</p>
 
         <h4 class="connection-help-title">Markers</h4>
-        <p>Automatic markers are suggestions only. Manual markers and notes can be added from the Marker / Note column when extra detail is needed.</p>
+        <p>Automatic marker suggestions can be edited or confirmed from the Marker / Note column. A manual marker overrides the automatic suggestion for that sheep.</p>
         <p><strong>Drink?:</strong><br />Possible drink break.</p>
         <p><strong>Cutter:</strong><br />Likely cutter change.</p>
         <p><strong>Comb:</strong><br />Likely comb/handpiece change.</p>
@@ -897,8 +897,8 @@
         <p><strong>Extra seconds over average catch time:</strong><br />Marker ranges use the current-run average catch time. A marker appears when the catch is at or above the Min seconds over average and below the Max seconds over average. Leave Max blank for open-ended ranges.</p>
 
         <h4 class="connection-help-title">Notes</h4>
-        <p>Notes are entered by the user in the Marker / Note column. Use notes to record the real reason for a delay, such as a stitch, gear issue, sheep issue, board delay, drink, or cutter change.</p>
-        <p>Automatic markers do not overwrite manual markers or notes.</p>
+        <p>Notes are entered by the user in the Marker / Note column. Use notes to record detail such as a stitch, gear issue, sheep issue, board delay, drink, or cutter change.</p>
+        <p>Notes alone are for detail only and do not count as markers unless a marker is selected. Automatic markers do not overwrite manual markers or notes.</p>
 
         <h4 class="connection-help-title">Sorting</h4>
         <p>Sorting only changes how the table is displayed. It does not change the sheep numbers or the stored sheep records.</p>
@@ -968,7 +968,7 @@
         <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
         <h4>Required section</h4>
         <ul>
-          <li><strong>Required average total time per sheep:</strong> Average Total Time Per Sheep time needed to hit the run target.</li>
+          <li><strong>Required average total time per sheep:</strong> Required Total Time Per Sheep needed to hit the run target.</li>
           <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
           <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
           <li><strong>Required run total:</strong> Target sheep count for this run.</li>
@@ -1011,6 +1011,8 @@
         <p><strong>Motor state:</strong><br />Shows the live ON/OFF signal from the Shelly/Evo. ON means the motor is running. OFF means the motor is stopped. The app uses this to start and stop sheep timing.</p>
         <p><strong>Current catch time:</strong><br />Shows how long it has been since the last sheep finished and the next sheep started.</p>
         <p><strong>Current shear time:</strong><br />Shows how long the current sheep has been getting shorn while the motor is ON.</p>
+        <p><strong>Total time per sheep:</strong><br />Shows the live running total for the current sheep while it is being shorn, using the current catch time plus the current shear time. Before there is valid timing data it shows —. After a sheep is logged it shows the final Total Time Per Sheep for the last logged sheep.</p>
+        <p><strong>Green/red Total time per sheep:</strong><br />Green means the live or final total is under or equal to the required time per sheep. Red means it is over the required time per sheep.</p>
 
         <h4 class="connection-help-title">Run timing</h4>
         <p><strong>Run clock:</strong><br />Counts forward from the start of the run.</p>
@@ -1059,7 +1061,8 @@
         <p><strong>Pen state:</strong><br />Shows pen count, refill status, last confirmed refill, and whether the model is using confirmed or assumed full refills.</p>
         <p><strong>Average refill interval:</strong><br />Shows the average time between confirmed pen refills.</p>
         <p><strong>Recent refill spacing:</strong><br />Shows the last few confirmed refill intervals.</p>
-        <p><strong>Next refill:</strong><br />Shows the next projected refill sheep and a short live reminder.</p>
+        <p><strong>Next refill:</strong><br />Shows the next projected refill sheep, minutes from now, and an approximate clock time when available.</p>
+        <p><strong>Refill status:</strong><br />Shows where the current pen state sits, including whether a refill is allowed now or still upcoming.</p>
         <p><strong>Final refill forecast:</strong><br />Shows the last projected refill before the run ends and whether it is early, on target, or late.</p>
         <p><strong>Strategy:</strong><br />Shows whether to keep full refills or use a smaller recommended refill.</p>
         <p><strong>Confirmation:</strong><br />Only appears when a smaller-than-full refill needs confirmation.</p>
@@ -1084,8 +1087,13 @@
         <h4 class="connection-help-title">Averages</h4>
         <p><strong>Average shear time:</strong><br />The average time spent shearing each completed sheep.</p>
         <p><strong>Average catch time:</strong><br />The average time between finishing one sheep and starting the next sheep.</p>
-        <p><strong>Average Total Time Per Sheep time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
+        <p><strong>Average Total Time Per Sheep:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
         <p><strong>Sheep per hour:</strong><br />The current average number of sheep being completed per hour.</p>
+
+        <h4 class="connection-help-title">Marker averages</h4>
+        <p>Marker averages show the average catch duration when each marker happened, not extra time over a normal catch.</p>
+        <p>Manual or confirmed markers and automatic suggestions are treated as one resolved marker system for stats. A manual marker wins over an automatic suggestion.</p>
+        <p>Notes alone do not count as markers for these averages.</p>
 
         <h4 class="connection-help-title">Average Total Time Per Sheep colour</h4>
         <p>The Total Time Per Sheep value may show a coloured outline or background.</p>

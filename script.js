@@ -4661,16 +4661,16 @@ function calculateAverageCatchDuration(entries) {
   return catchDurations.reduce((sum, duration) => sum + duration, 0) / catchDurations.length;
 }
 
-function getMarkerAverageExtraCatchSeconds(bucket, baselineCatchAverage) {
-  if (!bucket || bucket.catchCount <= 0 || !Number.isFinite(baselineCatchAverage)) return null;
-  return (bucket.catchTotal / bucket.catchCount) - baselineCatchAverage;
+function getMarkerAverageCatchSeconds(bucket) {
+  if (!bucket || bucket.catchCount <= 0) return null;
+  const averageCatchSeconds = bucket.catchTotal / bucket.catchCount;
+  return Number.isFinite(averageCatchSeconds) ? averageCatchSeconds : null;
 }
 
-function formatMarkerAverageExtra(bucket, baselineCatchAverage) {
-  const extraSeconds = getMarkerAverageExtraCatchSeconds(bucket, baselineCatchAverage);
-  if (!Number.isFinite(extraSeconds)) return "—";
-  const sign = extraSeconds >= 0 ? "+" : "−";
-  return `${sign}${Math.abs(extraSeconds).toFixed(1)}s over normal catch`;
+function formatMarkerAverageCatch(bucket) {
+  const averageCatchSeconds = getMarkerAverageCatchSeconds(bucket);
+  if (!Number.isFinite(averageCatchSeconds)) return "—";
+  return `${averageCatchSeconds.toFixed(1)}s avg`;
 }
 
 function formatMarkerStatLine(label, bucket) {
@@ -5691,16 +5691,22 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
 
   elements.currentTotalSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
 
+  const liveSheepRuntime = appState.currentCycle.motorOn && appState.currentCycle.shearStart
+    ? getCurrentSheepRuntimeSeconds()
+    : null;
   const lastSheep = appState.sheep.length ? appState.sheep[appState.sheep.length - 1] : null;
-  const totalSheepTime = Number(lastSheep?.fullCycle);
-  if (!lastSheep || !Number.isFinite(totalSheepTime)) {
+  const totalSheepTime = Number.isFinite(liveSheepRuntime) ? liveSheepRuntime : Number(lastSheep?.fullCycle);
+  if (!Number.isFinite(totalSheepTime)) {
     setText(elements.currentTotalSheepTime, "—");
+    elements.currentTotalSheepTime.classList.add("on-pace-neutral");
     return;
   }
 
   setText(elements.currentTotalSheepTime, formatSeconds(totalSheepTime));
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
     elements.currentTotalSheepTime.classList.add(totalSheepTime <= requiredCycle ? "on-pace-good" : "on-pace-bad");
+  } else {
+    elements.currentTotalSheepTime.classList.add("on-pace-neutral");
   }
 }
 
@@ -5733,11 +5739,10 @@ function updateLivePanel() {
 
 function updateMarkerAverageDisplays() {
   const stats = buildResolvedMarkerStats(appState.sheep, appState.markerSettings);
-  const baseline = stats.baselineCatchAverage;
-  setText(elements.markerAvgDrink, formatMarkerAverageExtra(stats.buckets.drink, baseline));
-  setText(elements.markerAvgCutter, formatMarkerAverageExtra(stats.buckets.cutter, baseline));
-  setText(elements.markerAvgComb, formatMarkerAverageExtra(stats.buckets.comb, baseline));
-  setText(elements.markerAvgCustom, formatMarkerAverageExtra(stats.buckets[MANUAL_MARKER_CUSTOM_TYPE], baseline));
+  setText(elements.markerAvgDrink, formatMarkerAverageCatch(stats.buckets.drink));
+  setText(elements.markerAvgCutter, formatMarkerAverageCatch(stats.buckets.cutter));
+  setText(elements.markerAvgComb, formatMarkerAverageCatch(stats.buckets.comb));
+  setText(elements.markerAvgCustom, formatMarkerAverageCatch(stats.buckets[MANUAL_MARKER_CUSTOM_TYPE]));
 }
 
 function updateStatsPanel() {
