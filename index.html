@@ -469,6 +469,17 @@
               <span class="metric-label panel-metric-label">Pen model:</span>
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
             </div>
+            <div class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading">
+              <h4 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Confirm fill</h4>
+              <div class="pen-fill-confirm-actions" role="group" aria-label="Confirm pen fill amount">
+                <button id="penFillConfirmFullBtn" type="button" disabled>Full</button>
+                <button id="penFillConfirmRecommendedBtn" type="button" disabled>Recommended —</button>
+                <button id="penFillConfirmMinusOneBtn" type="button" disabled>-1</button>
+                <button id="penFillConfirmCustomBtn" type="button" disabled>Custom</button>
+                <button id="penFillUndoLastBtn" class="pen-fill-undo-btn" type="button" disabled>Undo last fill</button>
+              </div>
+              <div id="penFillConfirmStatus" class="pen-fill-confirm-status" role="status" aria-live="polite">—</div>
+            </div>
           </div>
         </div>
       </div>
@@ -977,6 +988,7 @@
         <p><strong>Final fill status:</strong><br />Shows whether the final projected fill is too early, on target, or too late. The target window is around 2–4 minutes before end of run.</p>
         <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version and assumes previous fills were full.</p>
         <p><strong>Pen state:</strong><br />Shows the current estimated sheep left in the pen, whether a refill is due, and whether the app is assuming full fills or using confirmed fills.</p>
+        <p><strong>Confirm fill:</strong><br />Records what was actually added to the pen at a refill point. This updates Pen State. Forecasts will use confirmed fills in a later version.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>

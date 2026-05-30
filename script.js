@@ -461,6 +461,233 @@ function createPenFillEventDraft(options = {}) {
   };
 }
 
+function getPenFillPlannerRecommendation(options = {}) {
+  const plannerOptions = {
+    recordType: appState.recordType,
+    rule: options.rule || getPenRule(appState.recordType),
+    physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen(),
+    cycleSnapshot: getPenCycleSnapshot(appState.recordType),
+    avgCycleSeconds: appState.currentStats.avgCycle,
+    effectiveElapsedSeconds: getEffectiveElapsedSeconds(),
+    runDurationSeconds: getCurrentRunDurationSeconds()
+  };
+  if (Number.isFinite(Number(options.remainingRunSeconds))) {
+    plannerOptions.remainingRunSeconds = Number(options.remainingRunSeconds);
+  }
+  if (Array.isArray(options.forecastPoints)) {
+    plannerOptions.forecastPoints = options.forecastPoints;
+  }
+  return planFinalFillStrategy(plannerOptions);
+}
+
+function findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen()) {
+  const currentRunIndex = Number(appState.currentRunIndex);
+  const currentPhysicalSheep = Number(physicalSheepTakenFromPen);
+  if (!Number.isFinite(currentRunIndex) || !Number.isFinite(currentPhysicalSheep)) return null;
+
+  return getCurrentRunPenFillEvents().find((event) => (
+    Number(event.runIndex) === currentRunIndex
+    && Number(event.physicalSheepTakenFromPen) === currentPhysicalSheep
+  )) || null;
+}
+
+function refreshPenFillConfirmationDisplays(message = "") {
+  updatePenFillForecastDisplay();
+  updatePenStateDisplay();
+  updatePenFillConfirmationControls({ statusOverride: message });
+}
+
+function getPenFillAmountErrorMessage(error) {
+  if (error === "Fill amount is below the minimum recommended fill.") {
+    return "Fill amount below minimum recommended.";
+  }
+  return error || "Unable to record fill.";
+}
+
+function recordPenFillEvent(options = {}) {
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+
+  const fail = (message, error = message) => {
+    updatePenFillConfirmationControls({ statusOverride: message });
+    return { success: false, event: null, message, error };
+  };
+
+  if (!recordType || recordType === "none") {
+    return fail("Select record type");
+  }
+  if (!appState.runActive) {
+    return fail("Start run");
+  }
+  if (appState.paused) {
+    return fail("Run paused");
+  }
+  if (!rule || !penState) {
+    return fail("Select record type", "Missing pen rule.");
+  }
+  if (!penState.refillAllowedNow) {
+    return fail("Fill not due yet");
+  }
+  if (findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)) {
+    return fail("Fill already confirmed");
+  }
+
+  const draft = createPenFillEventDraft({
+    recordType,
+    rule,
+    penState,
+    physicalSheepTakenFromPen,
+    actualFillAmount: options.actualFillAmount,
+    recommendedFillAmount: options.recommendedFillAmount,
+    source: options.source
+  });
+
+  if (draft?.error) {
+    const message = getPenFillAmountErrorMessage(draft.error);
+    return fail(message, draft.error);
+  }
+
+  appState.penFillEvents.push(draft);
+  autosaveState();
+
+  const sourceMessages = {
+    [PEN_FILL_EVENT_SOURCE.FULL]: "Recorded full fill",
+    [PEN_FILL_EVENT_SOURCE.RECOMMENDED]: "Recorded recommended fill",
+    [PEN_FILL_EVENT_SOURCE.MINUS_ONE]: "Recorded -1 fill",
+    [PEN_FILL_EVENT_SOURCE.CUSTOM]: "Recorded custom fill"
+  };
+  const message = `${sourceMessages[draft.source] || "Recorded fill"} — added ${draft.actualFillAmount}.`;
+  refreshPenFillConfirmationDisplays(message);
+
+  return { success: true, event: draft, message, error: null };
+}
+
+function getLatestActiveCurrentRunPenFillEvent() {
+  return getLatestPenFillEvent(getCurrentRunPenFillEvents());
+}
+
+async function undoLastPenFillEvent() {
+  const latestEvent = getLatestActiveCurrentRunPenFillEvent();
+  if (!latestEvent) {
+    updatePenFillConfirmationControls({ statusOverride: "—" });
+    return { success: false, event: null, message: "—", error: "No fill to undo." };
+  }
+
+  const confirmed = await confirmModal({
+    title: "Undo last fill?",
+    message: `Undo last fill at sheep ${latestEvent.physicalSheepTakenFromPen} — added ${latestEvent.actualFillAmount}?`,
+    confirmText: "Undo fill",
+    cancelText: "Cancel"
+  });
+
+  if (!confirmed) {
+    updatePenFillConfirmationControls();
+    return { success: false, event: latestEvent, message: "—", error: "Undo cancelled." };
+  }
+
+  const now = Date.now();
+  latestEvent.undone = true;
+  latestEvent.undoneAt = now;
+  latestEvent.updatedAt = now;
+  autosaveState();
+
+  const message = "Undid last fill.";
+  refreshPenFillConfirmationDisplays(message);
+  return { success: true, event: latestEvent, message, error: null };
+}
+
+function promptForCustomPenFillAmount() {
+  const fullFillAmount = Number(getPenRule(appState.recordType)?.defaultRefillAmount);
+  const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
+  const rawAmount = window.prompt(`Enter whole number fill amount${promptSuffix}:`, "");
+  if (rawAmount === null) return null;
+  return rawAmount.trim();
+}
+
+function updatePenFillConfirmationControls(options = {}) {
+  const buttons = [
+    elements.penFillConfirmFullBtn,
+    elements.penFillConfirmRecommendedBtn,
+    elements.penFillConfirmMinusOneBtn,
+    elements.penFillConfirmCustomBtn
+  ];
+  const setFillButtonsDisabled = (disabled) => {
+    buttons.forEach((button) => {
+      if (button) button.disabled = disabled;
+    });
+  };
+
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const minusOneAmount = Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null;
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+  const planner = getPenFillPlannerRecommendation({ rule });
+  const recommendedFillAmount = Number(planner?.recommendedFillAmount);
+  const hasValidRecommended = planner?.status === "recommendReduction"
+    && Number.isInteger(recommendedFillAmount)
+    && validatePenFillAmount(recommendedFillAmount, penState, rule).valid;
+  const minusOneValidation = Number.isInteger(minusOneAmount)
+    ? validatePenFillAmount(minusOneAmount, penState, rule)
+    : { valid: false };
+  const latestEvent = getLatestActiveCurrentRunPenFillEvent();
+  const alreadyConfirmed = Boolean(findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen));
+
+  if (elements.penFillConfirmFullBtn) {
+    elements.penFillConfirmFullBtn.textContent = Number.isFinite(fullFillAmount) ? `Full ${fullFillAmount}` : "Full";
+  }
+  if (elements.penFillConfirmRecommendedBtn) {
+    elements.penFillConfirmRecommendedBtn.textContent = hasValidRecommended ? `Recommended ${recommendedFillAmount}` : "Recommended —";
+  }
+  if (elements.penFillConfirmMinusOneBtn) {
+    elements.penFillConfirmMinusOneBtn.textContent = Number.isFinite(minusOneAmount) ? `-1 = ${minusOneAmount}` : "-1";
+  }
+  if (elements.penFillConfirmCustomBtn) {
+    elements.penFillConfirmCustomBtn.textContent = "Custom";
+  }
+  if (elements.penFillUndoLastBtn) {
+    elements.penFillUndoLastBtn.textContent = "Undo last fill";
+    elements.penFillUndoLastBtn.disabled = !latestEvent || !appState.runActive || appState.paused;
+  }
+
+  let disabledStatus = "—";
+  if (!recordType || recordType === "none") {
+    disabledStatus = "Select record type";
+  } else if (!appState.runActive) {
+    disabledStatus = "Start run";
+  } else if (appState.paused) {
+    disabledStatus = "Run paused";
+  } else if (!rule || !penState) {
+    disabledStatus = "Select record type";
+  } else if (alreadyConfirmed) {
+    disabledStatus = "Fill already confirmed";
+  } else if (!penState.refillAllowedNow) {
+    disabledStatus = "Fill not due yet";
+  }
+
+  const canConfirmAny = disabledStatus === "—";
+  setFillButtonsDisabled(!canConfirmAny);
+
+  if (canConfirmAny) {
+    if (elements.penFillConfirmRecommendedBtn) elements.penFillConfirmRecommendedBtn.disabled = !hasValidRecommended;
+    if (elements.penFillConfirmMinusOneBtn) elements.penFillConfirmMinusOneBtn.disabled = !minusOneValidation.valid;
+  }
+
+  const statusText = options.statusOverride || (canConfirmAny ? "—" : disabledStatus);
+  setText(elements.penFillConfirmStatus, statusText);
+}
+
 function simulatePenFillPlan(options = {}) {
   const rule = options.rule || null;
   const fullFillAmount = Number(rule?.defaultRefillAmount);
@@ -1099,6 +1326,12 @@ const elements = {
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
   penStateModel: document.getElementById("penStateModel"),
+  penFillConfirmFullBtn: document.getElementById("penFillConfirmFullBtn"),
+  penFillConfirmRecommendedBtn: document.getElementById("penFillConfirmRecommendedBtn"),
+  penFillConfirmMinusOneBtn: document.getElementById("penFillConfirmMinusOneBtn"),
+  penFillConfirmCustomBtn: document.getElementById("penFillConfirmCustomBtn"),
+  penFillUndoLastBtn: document.getElementById("penFillUndoLastBtn"),
+  penFillConfirmStatus: document.getElementById("penFillConfirmStatus"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -2386,6 +2619,7 @@ function startRun() {
   appState.target.runLengthSeconds = getRunLengthSeconds();
   const runDurationSeconds = getCurrentRunDurationSeconds();
   appState.runEndTimeMs = appState.runStartTime + (runDurationSeconds * 1000);
+
   if (elements.dayStartTimeInput) {
     appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
   }
@@ -4264,6 +4498,7 @@ function updateStatsPanel() {
   updateTrendFlags();
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
+  updatePenFillConfirmationControls();
 
   if (elements.lastSheepTime) {
     elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
@@ -4586,6 +4821,7 @@ function setPaused(paused) {
       elements.runStatus.textContent = "Paused";
     }
     updatePauseButtonUI();
+    updatePenFillConfirmationControls();
     return;
   }
 
@@ -4621,6 +4857,7 @@ function setPaused(paused) {
   }
 
   updatePauseButtonUI();
+  updatePenFillConfirmationControls();
 }
 
 function togglePauseRun() {
@@ -5980,7 +6217,78 @@ function bindEvents() {
     elements.recordType.addEventListener("change", () => {
       const nextRecordType = elements.recordType.value;
       appState.recordType = nextRecordType === "strongWoolLambs" || nextRecordType === "strongWoolEwes" ? nextRecordType : "none";
+      updateStatsPanel();
       autosaveState();
+    });
+  }
+  if (elements.penFillConfirmFullBtn) {
+    elements.penFillConfirmFullBtn.addEventListener("click", () => {
+      const rule = getPenRule(appState.recordType);
+      const planner = getPenFillPlannerRecommendation({ rule });
+      const fullFillAmount = Number(rule?.defaultRefillAmount);
+      recordPenFillEvent({
+        actualFillAmount: fullFillAmount,
+        recommendedFillAmount: Number.isFinite(Number(planner?.recommendedFillAmount)) ? Number(planner.recommendedFillAmount) : fullFillAmount,
+        source: PEN_FILL_EVENT_SOURCE.FULL
+      });
+    });
+  }
+
+  if (elements.penFillConfirmRecommendedBtn) {
+    elements.penFillConfirmRecommendedBtn.addEventListener("click", () => {
+      const rule = getPenRule(appState.recordType);
+      const planner = getPenFillPlannerRecommendation({ rule });
+      const recommendedFillAmount = Number(planner?.recommendedFillAmount);
+      if (planner?.status !== "recommendReduction" || !Number.isInteger(recommendedFillAmount)) {
+        updatePenFillConfirmationControls({ statusOverride: "Recommended fill unavailable" });
+        return;
+      }
+      recordPenFillEvent({
+        actualFillAmount: recommendedFillAmount,
+        recommendedFillAmount,
+        source: PEN_FILL_EVENT_SOURCE.RECOMMENDED
+      });
+    });
+  }
+
+  if (elements.penFillConfirmMinusOneBtn) {
+    elements.penFillConfirmMinusOneBtn.addEventListener("click", () => {
+      const rule = getPenRule(appState.recordType);
+      const fullFillAmount = Number(rule?.defaultRefillAmount);
+      recordPenFillEvent({
+        actualFillAmount: Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null,
+        recommendedFillAmount: Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null,
+        source: PEN_FILL_EVENT_SOURCE.MINUS_ONE
+      });
+    });
+  }
+
+  if (elements.penFillConfirmCustomBtn) {
+    elements.penFillConfirmCustomBtn.addEventListener("click", () => {
+      const rawAmount = promptForCustomPenFillAmount();
+      if (rawAmount === null) {
+        updatePenFillConfirmationControls();
+        return;
+      }
+      if (!/^\d+$/.test(rawAmount)) {
+        updatePenFillConfirmationControls({ statusOverride: "Fill amount must be a whole number." });
+        return;
+      }
+      const actualFillAmount = Number(rawAmount);
+      const result = recordPenFillEvent({
+        actualFillAmount,
+        recommendedFillAmount: actualFillAmount,
+        source: PEN_FILL_EVENT_SOURCE.CUSTOM
+      });
+      if (!result.success) {
+        updatePenFillConfirmationControls({ statusOverride: result.message });
+      }
+    });
+  }
+
+  if (elements.penFillUndoLastBtn) {
+    elements.penFillUndoLastBtn.addEventListener("click", () => {
+      undoLastPenFillEvent();
     });
   }
 
