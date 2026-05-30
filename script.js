@@ -462,6 +462,98 @@ function isActivePenFillEvent(event) {
   );
 }
 
+
+function getPenFillEventTimingPoint(event) {
+  const effectiveElapsedSeconds = Number(event?.effectiveElapsedSeconds);
+  if (Number.isFinite(effectiveElapsedSeconds) && effectiveElapsedSeconds >= 0) {
+    return { seconds: effectiveElapsedSeconds, source: "effectiveElapsedSeconds" };
+  }
+
+  const wallClockTime = Number(event?.wallClockTime);
+  if (Number.isFinite(wallClockTime) && wallClockTime > 0) {
+    return { seconds: wallClockTime / 1000, source: "wallClockTime" };
+  }
+
+  const createdAt = Number(event?.createdAt);
+  if (Number.isFinite(createdAt) && createdAt > 0) {
+    return { seconds: createdAt / 1000, source: "createdAt" };
+  }
+
+  return null;
+}
+
+function getConfirmedPenFillIntervalEvents(refillEvents = []) {
+  if (!Array.isArray(refillEvents)) return [];
+
+  return refillEvents
+    .filter((event) => event && typeof event === "object" && !event.undone && !event.undoneAt)
+    .map((event, originalIndex) => ({
+      event,
+      originalIndex,
+      timing: getPenFillEventTimingPoint(event)
+    }))
+    .filter((entry) => entry.timing)
+    .sort((a, b) => {
+      const timingDiff = a.timing.seconds - b.timing.seconds;
+      if (timingDiff !== 0) return timingDiff;
+      const sheepDiff = Number(a.event?.physicalSheepTakenFromPen ?? a.event?.sheepNumber)
+        - Number(b.event?.physicalSheepTakenFromPen ?? b.event?.sheepNumber);
+      if (Number.isFinite(sheepDiff) && sheepDiff !== 0) return sheepDiff;
+      return a.originalIndex - b.originalIndex;
+    });
+}
+
+function getPenFillIntervalPairs(refillEvents = []) {
+  const confirmedEvents = getConfirmedPenFillIntervalEvents(refillEvents);
+  if (confirmedEvents.length < 2) return [];
+
+  const intervals = [];
+  for (let index = 1; index < confirmedEvents.length; index += 1) {
+    const from = confirmedEvents[index - 1];
+    const to = confirmedEvents[index];
+    if (from.timing.source !== to.timing.source) continue;
+
+    const seconds = to.timing.seconds - from.timing.seconds;
+    if (!Number.isFinite(seconds) || seconds < 0) continue;
+
+    intervals.push({
+      fromEvent: from.event,
+      toEvent: to.event,
+      seconds
+    });
+  }
+
+  return intervals;
+}
+
+function calculateAverageFillInterval(refillEvents = []) {
+  const intervals = getPenFillIntervalPairs(refillEvents);
+  if (intervals.length < 1) return null;
+
+  const totalSeconds = intervals.reduce((total, interval) => total + interval.seconds, 0);
+  return {
+    averageSeconds: totalSeconds / intervals.length,
+    intervalCount: intervals.length
+  };
+}
+
+function getRecentFillIntervals(refillEvents = [], limit = 3) {
+  const safeLimit = Math.max(Math.floor(Number(limit) || 0), 0);
+  if (safeLimit <= 0) return [];
+
+  return getPenFillIntervalPairs(refillEvents)
+    .slice(-safeLimit)
+    .map((interval) => ({
+      fromSheepNumber: Number.isFinite(Number(interval.fromEvent?.sheepNumber))
+        ? Number(interval.fromEvent.sheepNumber)
+        : (Number.isFinite(Number(interval.fromEvent?.physicalSheepTakenFromPen)) ? Number(interval.fromEvent.physicalSheepTakenFromPen) : null),
+      toSheepNumber: Number.isFinite(Number(interval.toEvent?.sheepNumber))
+        ? Number(interval.toEvent.sheepNumber)
+        : (Number.isFinite(Number(interval.toEvent?.physicalSheepTakenFromPen)) ? Number(interval.toEvent.physicalSheepTakenFromPen) : null),
+      seconds: interval.seconds
+    }));
+}
+
 function getCurrentRunPenFillEvents(events = appState.penFillEvents) {
   if (!Array.isArray(events)) return [];
   const currentRunIndex = Number(appState.currentRunIndex);
@@ -1940,6 +2032,8 @@ const elements = {
   penFillPlannerRemainingFills: document.getElementById("penFillPlannerRemainingFills"),
   penFillPlannerFinalThreeMinutes: document.getElementById("penFillPlannerFinalThreeMinutes"),
   penFillEarlyReminder: document.getElementById("penFillEarlyReminder"),
+  penFillAverageInterval: document.getElementById("penFillAverageInterval"),
+  penFillRecentIntervals: document.getElementById("penFillRecentIntervals"),
   penStateCurrentCount: document.getElementById("penStateCurrentCount"),
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
@@ -4802,6 +4896,22 @@ function formatPenStateModel(penState) {
   return "—";
 }
 
+function updatePenFillIntervalDisplay(refillEvents = getCurrentRunPenFillEvents()) {
+  const averageInterval = calculateAverageFillInterval(refillEvents);
+  const recentIntervals = getRecentFillIntervals(refillEvents);
+
+  setText(
+    elements.penFillAverageInterval,
+    averageInterval ? formatCountdown(averageInterval.averageSeconds) : "—"
+  );
+  setText(
+    elements.penFillRecentIntervals,
+    recentIntervals.length
+      ? recentIntervals.map((interval) => formatCountdown(interval.seconds)).join(", ")
+      : "—"
+  );
+}
+
 function updatePenStateDisplay() {
   const refillStatusClassNames = ["pen-state-refill-now", "pen-state-refill-neutral"];
   const modelClassNames = ["pen-state-model-confirmed", "pen-state-model-assumed", "pen-state-model-neutral"];
@@ -4826,6 +4936,7 @@ function updatePenStateDisplay() {
     setText(elements.penStateCurrentCount, "—");
     setRefillStatus("—");
     setText(elements.penStateLastConfirmedFill, "—");
+    updatePenFillIntervalDisplay([]);
     setModel(modelText);
   };
 
@@ -4857,6 +4968,7 @@ function updatePenStateDisplay() {
     penState.refillAllowedNow ? "pen-state-refill-now" : "pen-state-refill-neutral"
   );
   setText(elements.penStateLastConfirmedFill, formatPenStateLastConfirmedFill(penState));
+  updatePenFillIntervalDisplay();
   setModel(
     formatPenStateModel(penState),
     penState.source === "confirmed"
@@ -4878,6 +4990,8 @@ function updatePenFillForecastDisplay() {
     "pen-fill-strategy-warning",
     "pen-fill-strategy-neutral"
   ];
+
+  updatePenFillIntervalDisplay();
 
   const setForecastStatus = (analysis) => {
     if (elements.penFillForecastStatus) {

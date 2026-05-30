@@ -463,6 +463,14 @@
               <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Average fill interval:</span>
+              <strong id="penFillAverageInterval" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Recent fill spacing:</span>
+              <strong id="penFillRecentIntervals" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Pen model:</span>
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
             </div>
@@ -1028,6 +1036,8 @@
         <h4 class="connection-help-title">What this panel shows</h4>
         <p>The Pen Fill Planner keeps the refill forecast and pen-state details separate from the live Timing Panel alert.</p>
         <p><strong>Pen state:</strong><br />Shows pen count, refill status, last confirmed fill, and whether the model is using confirmed or assumed full fills.</p>
+        <p><strong>Average fill interval:</strong><br />Shows the average time between confirmed pen fills.</p>
+        <p><strong>Recent fill spacing:</strong><br />Shows the last few confirmed fill intervals.</p>
         <p><strong>Next fill:</strong><br />Shows the next projected refill sheep and a short live reminder.</p>
         <p><strong>Final fill forecast:</strong><br />Shows the last projected refill before the run ends and whether it is early, on target, or late.</p>
         <p><strong>Strategy:</strong><br />Shows whether to keep full fills or use a smaller recommended fill.</p>
