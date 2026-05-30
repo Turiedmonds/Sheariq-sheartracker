@@ -67,6 +67,14 @@ const PEN_RULES_BY_RECORD_TYPE = {
   }
 };
 
+const PEN_FILL_EVENT_SOURCE = {
+  FULL: "full",
+  RECOMMENDED: "recommended",
+  MINUS_ONE: "minusOne",
+  CUSTOM: "custom",
+  ASSUMED_FULL: "assumedFull"
+};
+
 function getPenRule(recordType) {
   return PEN_RULES_BY_RECORD_TYPE[recordType] || null;
 }
@@ -228,6 +236,229 @@ function getMinimumRecommendedFillAmount(rule) {
 function normalizePenFillReduction(reduction, fullFillAmount) {
   const normalizedReduction = Number.isFinite(reduction) ? Math.max(Math.floor(reduction), 0) : 0;
   return Math.min(normalizedReduction, Math.max(fullFillAmount - 1, 0));
+}
+
+function createPenFillEventId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `pen-fill-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function isActivePenFillEvent(event) {
+  return Boolean(
+    event
+    && typeof event === "object"
+    && !event.undone
+    && !event.undoneAt
+    && Number.isFinite(Number(event.runIndex))
+    && Number.isFinite(Number(event.physicalSheepTakenFromPen))
+    && Number.isFinite(Number(event.actualFillAmount))
+    && Number(event.actualFillAmount) > 0
+    && Number.isFinite(Number(event.resultingPenCount))
+  );
+}
+
+function getCurrentRunPenFillEvents(events = appState.penFillEvents) {
+  if (!Array.isArray(events)) return [];
+  const currentRunIndex = Number(appState.currentRunIndex);
+  return events
+    .filter((event) => isActivePenFillEvent(event) && Number(event.runIndex) === currentRunIndex)
+    .sort((a, b) => {
+      const sheepDiff = Number(a.physicalSheepTakenFromPen) - Number(b.physicalSheepTakenFromPen);
+      if (sheepDiff !== 0) return sheepDiff;
+      return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+    });
+}
+
+function getLatestPenFillEvent(events = getCurrentRunPenFillEvents()) {
+  const activeEvents = Array.isArray(events)
+    ? events.filter(isActivePenFillEvent)
+    : [];
+  if (!activeEvents.length) return null;
+  return activeEvents.sort((a, b) => {
+    const sheepDiff = Number(a.physicalSheepTakenFromPen) - Number(b.physicalSheepTakenFromPen);
+    if (sheepDiff !== 0) return sheepDiff;
+    return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+  })[activeEvents.length - 1];
+}
+
+function getCurrentPenStateFromEvents(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  if (!recordType || recordType === "none" || !rule) return null;
+
+  const fullFillAmount = Number(rule.defaultRefillAmount);
+  if (!Number.isFinite(fullFillAmount) || fullFillAmount <= 0) return null;
+
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen < 0) return null;
+
+  const events = Object.prototype.hasOwnProperty.call(options, "events")
+    ? options.events
+    : getCurrentRunPenFillEvents();
+  const lastFillEvent = getLatestPenFillEvent(events);
+
+  if (lastFillEvent) {
+    const lastFillSheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
+    const sheepTakenSinceLastFill = Math.max(physicalSheepTakenFromPen - lastFillSheepNumber, 0);
+    const currentPenCount = Number(lastFillEvent.resultingPenCount) - sheepTakenSinceLastFill;
+    const nextRefillAllowedInSheep = Math.max(currentPenCount - Number(rule.refillTriggerLeft), 0);
+    return {
+      recordType,
+      rule,
+      source: "confirmed",
+      physicalSheepTakenFromPen,
+      currentPenCount,
+      sheepLeftInPen: currentPenCount,
+      sheepTakenSinceLastFill,
+      nextRefillAllowedInSheep,
+      refillAllowedNow: currentPenCount <= Number(rule.refillTriggerLeft),
+      lastFillEvent,
+      lastFillAmount: Number(lastFillEvent.actualFillAmount),
+      lastFillSheepNumber,
+      lastFillTime: lastFillEvent.wallClockTime || lastFillEvent.createdAt || null,
+      assumption: "Using confirmed fills."
+    };
+  }
+
+  const sheepIntoFullFillCycle = physicalSheepTakenFromPen % fullFillAmount;
+  const sheepTakenSinceLastFill = physicalSheepTakenFromPen > 0 && sheepIntoFullFillCycle === 0
+    ? fullFillAmount
+    : sheepIntoFullFillCycle;
+  const currentPenCount = Number(rule.maxPen) - sheepTakenSinceLastFill;
+  const nextRefillAllowedInSheep = Math.max(currentPenCount - Number(rule.refillTriggerLeft), 0);
+
+  return {
+    recordType,
+    rule,
+    source: "assumedFull",
+    physicalSheepTakenFromPen,
+    currentPenCount,
+    sheepLeftInPen: currentPenCount,
+    sheepTakenSinceLastFill,
+    nextRefillAllowedInSheep,
+    refillAllowedNow: physicalSheepTakenFromPen > 0 && currentPenCount <= Number(rule.refillTriggerLeft),
+    lastFillEvent: null,
+    lastFillAmount: null,
+    lastFillSheepNumber: null,
+    lastFillTime: null,
+    assumption: "Assuming full fills."
+  };
+}
+
+function validatePenFillAmount(amount, penState, rule) {
+  const numericAmount = Number(amount);
+  const currentRule = rule || penState?.rule || null;
+  const maxPen = Number(currentRule?.maxPen);
+  const fullFillAmount = Number(currentRule?.defaultRefillAmount);
+  const currentPenCount = Number(penState?.currentPenCount ?? penState?.sheepLeftInPen);
+  const minRecommended = getMinimumRecommendedFillAmount(currentRule);
+  const maxAllowedByPen = Number.isFinite(maxPen) && Number.isFinite(currentPenCount)
+    ? Math.max(maxPen - currentPenCount, 0)
+    : null;
+  const maxAllowed = Number.isFinite(maxAllowedByPen) && Number.isFinite(fullFillAmount)
+    ? Math.min(maxAllowedByPen, fullFillAmount)
+    : fullFillAmount;
+  const resultingPenCount = Number.isFinite(currentPenCount) && Number.isFinite(numericAmount)
+    ? currentPenCount + numericAmount
+    : null;
+  const reductionAmount = Number.isFinite(fullFillAmount) && Number.isFinite(numericAmount)
+    ? fullFillAmount - numericAmount
+    : null;
+
+  const result = {
+    valid: false,
+    amount: numericAmount,
+    reason: "",
+    maxAllowed,
+    minRecommended,
+    resultingPenCount,
+    reductionAmount
+  };
+
+  if (!currentRule || !Number.isFinite(maxPen) || !Number.isFinite(fullFillAmount) || fullFillAmount <= 0) {
+    return { ...result, reason: "Missing pen rule." };
+  }
+  if (!Number.isInteger(numericAmount)) {
+    return { ...result, reason: "Fill amount must be a whole number." };
+  }
+  if (numericAmount <= 0) {
+    return { ...result, reason: "Fill amount must be greater than 0." };
+  }
+  if (!Number.isFinite(currentPenCount)) {
+    return { ...result, reason: "Missing current pen count." };
+  }
+  if (numericAmount > fullFillAmount) {
+    return { ...result, reason: "Fill amount cannot exceed the full fill amount." };
+  }
+  if (resultingPenCount > maxPen) {
+    return { ...result, reason: "Resulting pen count cannot exceed pen capacity." };
+  }
+  if (Number.isFinite(minRecommended) && numericAmount < minRecommended) {
+    return { ...result, reason: "Fill amount is below the minimum recommended fill." };
+  }
+
+  return { ...result, valid: true, reason: "" };
+}
+
+function createPenFillEventDraft(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const penState = options.penState || getCurrentPenStateFromEvents({ recordType, rule });
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(penState?.physicalSheepTakenFromPen ?? getPhysicalSheepTakenFromPen());
+  const source = Object.values(PEN_FILL_EVENT_SOURCE).includes(options.source)
+    ? options.source
+    : PEN_FILL_EVENT_SOURCE.CUSTOM;
+  const actualFillAmount = Number(options.actualFillAmount);
+  const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+  if (!validation.valid) {
+    return { error: validation.reason, validation };
+  }
+
+  const cycleSnapshot = Object.prototype.hasOwnProperty.call(options, "cycleSnapshot")
+    ? options.cycleSnapshot
+    : getPenCycleSnapshot(recordType);
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const wallClockTime = Object.prototype.hasOwnProperty.call(options, "wallClockTime")
+    ? options.wallClockTime
+    : Date.now();
+  const createdAt = Date.now();
+  const sheepNumber = Number.isFinite(physicalSheepTakenFromPen)
+    ? physicalSheepTakenFromPen
+    : null;
+  const sheepId = options.sheepId || appState.sheep.find((entry) => Number(entry?.number) === sheepNumber)?.id || null;
+
+  return {
+    id: createPenFillEventId(),
+    recordType,
+    runIndex: appState.currentRunIndex,
+    sheepNumber,
+    sheepId,
+    physicalSheepTakenFromPen,
+    effectiveElapsedSeconds: Number.isFinite(effectiveElapsedSeconds) ? effectiveElapsedSeconds : null,
+    wallClockTime,
+    fullFillAmount: Number(rule.defaultRefillAmount),
+    recommendedFillAmount: Number.isFinite(Number(options.recommendedFillAmount))
+      ? Number(options.recommendedFillAmount)
+      : actualFillAmount,
+    actualFillAmount,
+    reductionAmount: validation.reductionAmount,
+    sheepLeftBeforeFill: penState.currentPenCount,
+    resultingPenCount: validation.resultingPenCount,
+    source,
+    mode: appState.simulationMode ? "simulation" : "real",
+    simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
+    cycleSnapshot,
+    createdAt,
+    updatedAt: createdAt
+  };
 }
 
 function simulatePenFillPlan(options = {}) {
@@ -714,6 +945,7 @@ const appState = {
   runStartTime: null,
   sheep: [],
   daySheep: [],
+  penFillEvents: [],
   currentCycle: {
     motorOn: false,
     shearStart: null,
@@ -2080,6 +2312,7 @@ function resetRunState() {
   appState.runStartTime = null;
   appState.sheep = [];
   appState.daySheep = [];
+  appState.penFillEvents = [];
   appState.lastMotorState = null;
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -4762,6 +4995,7 @@ function getAutosavePayload() {
       runStartTime: appState.runStartTime,
       sheep: appState.sheep,
       daySheep: appState.daySheep,
+      penFillEvents: appState.penFillEvents,
       currentCycle: appState.currentCycle,
       target: appState.target,
       farm: appState.farm,
@@ -4921,6 +5155,7 @@ function loadLastSave() {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
+    appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
     appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
     if (elements.recordType) elements.recordType.value = appState.recordType;
     if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
