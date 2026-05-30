@@ -1126,13 +1126,26 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-col {
-  min-width: 88px;
+  min-width: 122px;
+}
+
+#panel-log .sheep-log-manual-marker-select {
+  width: 100%;
+  min-width: 108px;
+  min-height: 2.25rem;
+  padding: 0.3rem 1.65rem 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  line-height: 1.2;
 }
 
 #panel-log .sheep-log-marker-tags {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 0.3rem;
+}
+
+#panel-log .sheep-log-auto-marker-tags {
+  margin-top: 0.3rem;
 }
 
 #panel-log .sheep-log-marker-tag {

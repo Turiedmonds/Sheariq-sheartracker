@@ -85,6 +85,42 @@ const SHEEP_STATUS = {
   PENDING: "pending"
 };
 
+const MANUAL_MARKER_TYPES = {
+  drink: "Drink",
+  cutter: "Cutter",
+  comb: "Comb"
+};
+
+function isValidManualMarkerType(type) {
+  return Object.prototype.hasOwnProperty.call(MANUAL_MARKER_TYPES, type);
+}
+
+function buildManualMarker(type) {
+  if (!isValidManualMarkerType(type)) return null;
+  return {
+    type,
+    label: MANUAL_MARKER_TYPES[type],
+    customLabel: "",
+    timestamp: Date.now()
+  };
+}
+
+function sanitizeManualMarker(manualMarker) {
+  if (!manualMarker || typeof manualMarker !== "object" || !isValidManualMarkerType(manualMarker.type)) return null;
+  const timestamp = Number(manualMarker.timestamp);
+  return {
+    type: manualMarker.type,
+    label: MANUAL_MARKER_TYPES[manualMarker.type],
+    customLabel: "",
+    timestamp: Number.isFinite(timestamp) ? timestamp : Date.now()
+  };
+}
+
+function getManualMarkerDisplayLabel(manualMarker) {
+  const sanitizedMarker = sanitizeManualMarker(manualMarker);
+  return sanitizedMarker ? sanitizedMarker.label : "";
+}
+
 function getSheepStatus(entry) {
   return entry && entry.status ? entry.status : SHEEP_STATUS.ACCEPTED;
 }
@@ -4230,11 +4266,33 @@ function renderLogTable() {
     `;
     const markerCell = document.createElement("td");
     markerCell.className = "sheep-log-marker-col";
+    const markerSelect = document.createElement("select");
+    markerSelect.className = "sheep-log-manual-marker-select";
+    markerSelect.dataset.sheepId = entry.id || "";
+    markerSelect.setAttribute("aria-label", `Manual marker for sheep #${entry.number}`);
+
+    const noMarkerOption = document.createElement("option");
+    noMarkerOption.value = "";
+    noMarkerOption.textContent = "No marker";
+    markerSelect.appendChild(noMarkerOption);
+
+    Object.entries(MANUAL_MARKER_TYPES).forEach(([type, label]) => {
+      const option = document.createElement("option");
+      option.value = type;
+      option.textContent = label;
+      markerSelect.appendChild(option);
+    });
+
+    const manualMarker = sanitizeManualMarker(entry.manualMarker);
+    markerSelect.value = manualMarker?.type || "";
+    if (manualMarker) markerSelect.title = getManualMarkerDisplayLabel(manualMarker);
+    markerCell.appendChild(markerSelect);
+
     if (appState.showPlannedDelayMarkers) {
       const markers = plannedDelayMarkers.get(entry.number) || [];
       if (markers.length) {
         const tags = document.createElement("div");
-        tags.className = "sheep-log-marker-tags";
+        tags.className = "sheep-log-marker-tags sheep-log-auto-marker-tags";
         markers.forEach((marker) => {
           const tag = document.createElement("span");
           tag.className = "sheep-log-marker-tag";
@@ -4445,6 +4503,41 @@ function setPlannedDelayMarkerVisibility(nextVisible) {
 function normalizeSheepNote(value) {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, SHEEP_NOTE_MAX_LENGTH);
+}
+
+function updateSheepEntryManualMarkerById(sheepId, markerType) {
+  if (!sheepId) return false;
+  const manualMarker = markerType ? buildManualMarker(markerType) : null;
+  if (markerType && !manualMarker) return false;
+  let updated = false;
+
+  [appState.sheep, appState.daySheep].forEach((entries) => {
+    if (!Array.isArray(entries)) return;
+    entries.forEach((entry) => {
+      if (entry?.id !== sheepId) return;
+      if (manualMarker) {
+        entry.manualMarker = { ...manualMarker };
+      } else {
+        delete entry.manualMarker;
+      }
+      updated = true;
+    });
+  });
+
+  return updated;
+}
+
+function sanitizeManualMarkersOnSheepEntries(entries) {
+  if (!Array.isArray(entries)) return;
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const manualMarker = sanitizeManualMarker(entry.manualMarker);
+    if (manualMarker) {
+      entry.manualMarker = manualMarker;
+    } else {
+      delete entry.manualMarker;
+    }
+  });
 }
 
 function promptForSheepNote(sheepNumber) {
@@ -6246,6 +6339,8 @@ function loadLastSave() {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
+    sanitizeManualMarkersOnSheepEntries(appState.sheep);
+    sanitizeManualMarkersOnSheepEntries(appState.daySheep);
     appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
     appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
     if (elements.recordType) elements.recordType.value = appState.recordType;
@@ -7353,6 +7448,16 @@ function bindEvents() {
       const sheepNumber = Number(noteButton.dataset.sheepNumber);
       if (!Number.isFinite(sheepNumber)) return;
       promptForSheepNote(sheepNumber);
+    });
+    elements.sheepLogBody.addEventListener("change", (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement) || !target.classList.contains("sheep-log-manual-marker-select")) return;
+      const markerType = target.value;
+      if (markerType && !isValidManualMarkerType(markerType)) return;
+      const updated = updateSheepEntryManualMarkerById(target.dataset.sheepId, markerType);
+      if (!updated) return;
+      autosaveState();
+      renderLogTable();
     });
   }
   if (elements.predictedCatchClockMode) {
