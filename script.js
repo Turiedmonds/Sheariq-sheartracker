@@ -4300,11 +4300,14 @@ function renderLogTable() {
   });
 
   const scroller = cacheSheepLogScroller();
-  if (appState.sheepLogUserScrolled) {
-    restoreSheepLogScroll(scroller);
-  } else if (appState.autoScrollSheepLog) {
-    scrollSheepLogToBottom(scroller);
-  }
+
+  if (!appState.followLatestSheep || appState.userScrolledUp || !scroller) return;
+
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      scroller.scrollTop = scroller.scrollHeight;
+    });
+  });
 }
 
 function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
