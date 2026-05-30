@@ -2085,6 +2085,7 @@ const elements = {
   lastSheepTimeLabel: document.getElementById("lastSheepTimeLabel"),
   motorState: document.getElementById("motorState"),
   currentShear: document.getElementById("currentShear"),
+  currentTotalSheepTime: document.getElementById("currentTotalSheepTime"),
   currentCatch: document.getElementById("currentCatch"),
   runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
@@ -2796,6 +2797,7 @@ const METRIC_VALUE_IDS = new Set([
   "catchPrediction",
   "motorState",
   "currentShear",
+  "currentTotalSheepTime",
   "currentCatch",
   "runClock",
   "runCountdown",
@@ -3797,7 +3799,7 @@ function renderReviewList() {
   elements.reviewList.innerHTML = appState.reviewBlocks.map((block) => `
     <div class="review-entry">
       <div><strong>${block.range}</strong></div>
-      <div>Sheep: ${block.count} • Avg Catch, Shear, Release: ${block.avgCycle.toFixed(3)}s</div>
+      <div>Sheep: ${block.count} • Avg Total Time Per Sheep: ${block.avgCycle.toFixed(3)}s</div>
       <div>${block.deltaText}</div>
       <div>${block.status}</div>
     </div>
@@ -3861,8 +3863,8 @@ function generateRunReview() {
   const bestRange = best ? buildRangeLabel(best.startElapsed, best.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
   const markerStats = buildResolvedMarkerStats(appState.sheep, appState.markerSettings);
   appState.runReviewText = [
-    `First 25% of run: ${avg(firstQuarter)} Catch, Shear, Release`,
-    `First 50% of run: ${avg(firstHalf)} Catch, Shear, Release`,
+    `First 25% of run: ${avg(firstQuarter)} Total Time Per Sheep`,
+    `First 50% of run: ${avg(firstHalf)} Total Time Per Sheep`,
     `Best: ${bestRange}`,
     `Worst: ${lostRange}`,
     `Recovery strongest: ${bestRange}`,
@@ -3993,12 +3995,12 @@ function updateTrendLatestSummary(points, requiredCycle) {
   const bucketMinutes = appState.trendBucketMinutes;
   const latest = points.length ? points[points.length - 1] : null;
   if (!latest) {
-    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg Catch, Shear, Release 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
+    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg Total Time Per Sheep 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
     return;
   }
   const delta = latest.avgCycle - requiredCycle;
   const meaning = describeAheadBehind(delta);
-  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg Catch, Shear, Release ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
+  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg Total Time Per Sheep ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
 }
 
 function updateTrendGraphTooltip(point) {
@@ -4013,9 +4015,9 @@ function updateTrendGraphTooltip(point) {
   elements.trendGraphTooltip.innerHTML = [
     `Bucket: ${buildRangeLabel(point.startElapsed, bucketEnd)}`,
     `Count: ${point.count} sheep`,
-    `Avg Catch, Shear, Release: ${formatSeconds(point.avgCycle)}`,
+    `Avg Total Time Per Sheep: ${formatSeconds(point.avgCycle)}`,
     `Avg catch: ${formatSeconds(point.avgCatch)}`,
-    `Target Catch, Shear, Release: ${formatSeconds(point.requiredCycle)}`,
+    `Target Total Time Per Sheep: ${formatSeconds(point.requiredCycle)}`,
     `Delta: ${formatDeltaPlain(delta)} (${describeAheadBehind(delta)})`
   ].map((line) => `<div>${line}</div>`).join("");
   elements.trendGraphTooltip.hidden = !appState.trendDetailsExpanded;
@@ -4082,7 +4084,7 @@ function updateTrendFlags() {
         <div class="trend-flag-title">${title}</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${meta.windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch, Shear, Release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
+          <div><span class="k">Total Time Per Sheep</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
           <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">${formatTrendDelta(catchDelta)}</span></div>
         </div>
       </div>
@@ -4101,7 +4103,7 @@ function updateTrendFlags() {
           <div class="trend-flag-title">Sustained behind</div>
           <div class="trend-flag-meta">Sheep ${lastMeta.sheepStart}–${lastMeta.sheepEnd} • ${lastMeta.timeStart}–${lastMeta.timeEnd} • Window: last ${windowSize}</div>
           <div class="trend-flag-lines">
-            <div><span class="k">Catch, Shear, Release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
+            <div><span class="k">Total Time Per Sheep</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
             <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgLast5Catch)}</span> <span class="d neutral">(all 5 above target cycle)</span></div>
           </div>
         </div>
@@ -4156,7 +4158,7 @@ function updateTrendFlags() {
         <div class="trend-flag-title">No trend warnings</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch, Shear, Release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
+          <div><span class="k">Total Time Per Sheep</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
           <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgCatch)}</span></div>
         </div>
       </div>
@@ -5684,6 +5686,24 @@ function updateCurrentSheepTimeLeft(requiredCycle) {
   }
 }
 
+function updateTotalSheepTimeDisplay(requiredCycle) {
+  if (!elements.currentTotalSheepTime) return;
+
+  elements.currentTotalSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
+
+  const lastSheep = appState.sheep.length ? appState.sheep[appState.sheep.length - 1] : null;
+  const totalSheepTime = Number(lastSheep?.fullCycle);
+  if (!lastSheep || !Number.isFinite(totalSheepTime)) {
+    setText(elements.currentTotalSheepTime, "—");
+    return;
+  }
+
+  setText(elements.currentTotalSheepTime, formatSeconds(totalSheepTime));
+  if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
+    elements.currentTotalSheepTime.classList.add(totalSheepTime <= requiredCycle ? "on-pace-good" : "on-pace-bad");
+  }
+}
+
 function updateLivePanel() {
   const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -5697,6 +5717,7 @@ function updateLivePanel() {
   setText(elements.motorState, appState.currentMotorDisplay);
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
+  updateTotalSheepTimeDisplay(calculateTargetMetrics().requiredCycle);
   setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateQuarterDisplay();
@@ -7305,7 +7326,7 @@ function renderBlock(minutes) {
     <p><strong>Sheep completed:</strong> ${block.count}</p>
     <p><strong>Average shear:</strong> ${formatSeconds(block.avgShear)}</p>
     <p><strong>Average catch:</strong> ${formatSeconds(block.avgCatch)}</p>
-    <p><strong>Average Catch, Shear, Release:</strong> ${formatSeconds(block.avgCycle)}</p>
+    <p><strong>Average Total Time Per Sheep:</strong> ${formatSeconds(block.avgCycle)}</p>
     <p><strong>Rate:</strong> ${block.rate.toFixed(2)} sheep/hour</p>
   `;
 }
