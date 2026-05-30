@@ -2004,6 +2004,10 @@ td.pace-neutral {
   margin-top: 0.35rem;
 }
 
+#panel-pen-fill-planner .pen-fill-confirm-section[hidden] {
+  display: none;
+}
+
 #panel-pen-fill-planner .pen-fill-confirm-instruction {
   font-size: 0.9rem;
   font-weight: 700;
