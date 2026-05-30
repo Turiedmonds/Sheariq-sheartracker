@@ -842,7 +842,10 @@ function getPenFillInstructionModel(options = {}) {
     ? (Number.isFinite(plannerReductionAmount) ? plannerReductionAmount : fullFillAmount - recommendedFillAmount)
     : 0;
   const isFullFill = canUseFullFill && recommendedFillAmount === fullFillAmount;
-  const isLastFullFill = Boolean(isFullFill && penState?.refillAllowedNow && planner?.status === "noFutureFill");
+  const selectedPlan = Array.isArray(planner?.plan) ? planner.plan : [];
+  const firstReducedPlanIndex = selectedPlan.findIndex((fill) => Number(fill?.reduction) > 0);
+  const hasLaterReducedFills = firstReducedPlanIndex > 0;
+  const isLastFullFill = Boolean(isFullFill && hasLaterReducedFills && firstReducedPlanIndex === 1);
   const validation = Number.isInteger(recommendedFillAmount)
     ? validatePenFillAmount(recommendedFillAmount, penState, rule)
     : { valid: false, error: planner?.message || "Waiting for pace data" };
@@ -882,6 +885,27 @@ function getPenFillInstructionModel(options = {}) {
   const reason = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
     ? `Final fill projected ${formatCountdown(projectedFinalFillSecondsBeforeEnd)} before end`
     : (planner?.reason || validation.error || "—");
+  const remainingFillPlan = Array.isArray(planner?.remainingFillPlan) ? planner.remainingFillPlan : [];
+  const remainingFillsMessage = planner?.remainingFillsMessage || formatRemainingFillsMessage(remainingFillPlan, {
+    status: planner?.status,
+    hasReductionPlan: selectedPlan.some((fill) => Number(fill?.reduction) > 0)
+  });
+  const finalThreeMinutePrediction = getFinalThreeMinutePrediction();
+  const finalThreeMinuteMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
+    && projectedFinalFillSecondsBeforeEnd < FINAL_FILL_MIN_BEFORE_END_SECONDS
+    && Number.isFinite(finalThreeMinutePrediction.predictedSheep)
+      ? `Final fill likely too late — about ${finalThreeMinutePrediction.predictedSheep} sheep`
+      : finalThreeMinutePrediction.message;
+  let lastFullFillMessage = "Not yet";
+  if (!canUseFullFill || !recordType || recordType === "none" || !appState.runActive) {
+    lastFullFillMessage = "—";
+  } else if (isLastFullFill) {
+    lastFullFillMessage = `This fill — add ${recommendedFillAmount}`;
+  } else if (isFullFill && planner?.status === "noFutureFill") {
+    lastFullFillMessage = "Already passed";
+  } else if (["onTarget", "tooLate", "noGoodPlan"].includes(planner?.status)) {
+    lastFullFillMessage = "No full fill change needed";
+  }
 
   return {
     instruction,
@@ -890,11 +914,39 @@ function getPenFillInstructionModel(options = {}) {
     reductionAmount,
     isFullFill,
     isLastFullFill,
+    lastFullFillMessage,
+    remainingFillPlan,
+    remainingFillsMessage,
+    finalThreeMinutePrediction,
+    finalThreeMinuteMessage,
     canConfirmNow,
     reason,
     planner,
     validation
   };
+}
+
+function updatePenFillPlannerStrategyDetails(options = {}) {
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+  const instructionModel = getPenFillInstructionModel({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen,
+    penState,
+    planner: options.planner
+  });
+
+  setText(elements.penFillPlannerReason, instructionModel.reason || "—");
+  setText(elements.penFillPlannerLastFullFill, instructionModel.lastFullFillMessage || "—");
+  setText(elements.penFillPlannerRemainingFills, instructionModel.remainingFillsMessage || "—");
+  setText(elements.penFillPlannerFinalThreeMinutes, instructionModel.finalThreeMinuteMessage || "—");
 }
 
 function updatePenFillEarlyReminderDisplay() {
@@ -1239,7 +1291,7 @@ function generateFinalFillPlanCandidates(options = {}) {
   const fullFillAmount = Number(rule?.defaultRefillAmount);
   const maxPlannedFills = Number.isFinite(options.maxPlannedFills) ? Math.max(Math.floor(options.maxPlannedFills), 1) : 4;
   const maxReductionPerFill = Number.isFinite(options.maxReductionPerFill) ? Math.max(Math.floor(options.maxReductionPerFill), 0) : 3;
-  const maxCandidates = Number.isFinite(options.maxCandidates) ? Math.max(Math.floor(options.maxCandidates), 1) : 16;
+  const maxCandidates = Number.isFinite(options.maxCandidates) ? Math.max(Math.floor(options.maxCandidates), 1) : 24;
   const minFillAmount = Number.isFinite(options.minFillAmount)
     ? options.minFillAmount
     : getMinimumRecommendedFillAmount(rule);
@@ -1253,9 +1305,16 @@ function generateFinalFillPlanCandidates(options = {}) {
     [1, 1],
     [1, 1, 1],
     [1, 1, 1, 1],
+    [0, 1],
+    [0, 1, 1],
+    [0, 0, 1],
+    [0, 0, 1, 1],
+    [0, 0, 0, 1],
     [2],
     [2, 2],
     [2, 2, 2],
+    [0, 2],
+    [0, 0, 2],
     [3]
   ];
   const candidates = [];
@@ -1324,30 +1383,87 @@ function generateFinalFillPlanCandidates(options = {}) {
 }
 
 function formatFinalFillPlanMessage(candidate, cycleSnapshot, hasActiveSheepOnBoard) {
-  const plan = Array.isArray(candidate?.plan) ? candidate.plan.filter((fill) => fill.reduction > 0) : [];
-  if (plan.length === 0) return "Keep full fills — final fill on target.";
+  const fullPlan = Array.isArray(candidate?.plan) ? candidate.plan : [];
+  const reducedPlan = fullPlan.filter((fill) => fill.reduction > 0);
+  if (reducedPlan.length === 0) return "Keep full fills — final fill on target.";
 
-  const firstFill = plan[0];
-  const allSameReduction = plan.every((fill) => fill.reduction === firstFill.reduction);
+  const firstFill = fullPlan[0] || reducedPlan[0];
+  const firstReducedFill = reducedPlan[0];
+  const allSameReduction = reducedPlan.every((fill) => fill.reduction === firstReducedFill.reduction);
   const fillAllowedNow = Boolean(cycleSnapshot?.refillAllowed);
   const nextFillPrefix = fillAllowedNow
     ? (hasActiveSheepOnBoard ? "At this fill, add" : "Add")
     : "At next fill, add";
 
-  if (plan.length === 1) {
+  if (firstFill && firstFill.reduction === 0) {
+    const fullFillCountBeforeReduction = fullPlan.findIndex((fill) => fill.reduction > 0);
+    if (fullFillCountBeforeReduction === 0) return `At next fill, add ${firstReducedFill.fillAmount}.`;
+    const fillText = fullFillCountBeforeReduction === 1 ? "this full fill" : `${fullFillCountBeforeReduction} full fills`;
+    return `Keep ${fillText}, then add ${firstReducedFill.fillAmount}.`;
+  }
+
+  if (reducedPlan.length === 1) {
     return fillAllowedNow && !hasActiveSheepOnBoard
-      ? `Add ${firstFill.fillAmount} now. Then full fills.`
-      : `${nextFillPrefix} ${firstFill.fillAmount}. Then full fills.`;
+      ? `Add ${firstReducedFill.fillAmount} now. Then full fills.`
+      : `${nextFillPrefix} ${firstReducedFill.fillAmount}. Then full fills.`;
   }
 
-  if (allSameReduction && firstFill.reduction === 1) {
-    if (fillAllowedNow && !hasActiveSheepOnBoard) return `Add ${firstFill.fillAmount} now. Then full fills.`;
-    if (fillAllowedNow) return `At this fill, add ${firstFill.fillAmount}. Then full fills.`;
-    return `Add ${firstFill.fillAmount} for next ${plan.length} fills.`;
+  if (allSameReduction && firstReducedFill.reduction === 1) {
+    if (fillAllowedNow && !hasActiveSheepOnBoard) return `Add ${firstReducedFill.fillAmount} now. Then full fills.`;
+    if (fillAllowedNow) return `At this fill, add ${firstReducedFill.fillAmount}. Then full fills.`;
+    return `Add ${firstReducedFill.fillAmount} for next ${reducedPlan.length} fills.`;
   }
 
-  if (allSameReduction) return `Reduce next ${plan.length} fills by ${firstFill.reduction}.`;
+  if (allSameReduction) return `Reduce next ${reducedPlan.length} fills by ${firstReducedFill.reduction}.`;
   return candidate.label;
+}
+
+function buildRemainingFillPlanFromCandidate(candidate) {
+  const points = Array.isArray(candidate?.simulatedRefillPoints) ? candidate.simulatedRefillPoints : [];
+  if (points.length === 0) return [];
+
+  return points.map((point, index) => ({
+    fillNumber: index + 1,
+    amount: Number.isFinite(Number(point.fillAmount)) ? Number(point.fillAmount) : null,
+    sheepNumber: Number.isFinite(Number(point.sheepNumber)) ? Number(point.sheepNumber) : null,
+    isFinalFill: index === points.length - 1,
+    secondsBeforeRunEnd: Number.isFinite(Number(point.secondsBeforeRunEnd)) ? Number(point.secondsBeforeRunEnd) : null
+  })).filter((fill) => Number.isInteger(fill.amount) && fill.amount > 0);
+}
+
+function formatRemainingFillsMessage(remainingFillPlan, options = {}) {
+  const plannerStatus = options.status || "waiting";
+  const hasReductionPlan = Boolean(options.hasReductionPlan);
+  if (["waiting", "notPlanningYet"].includes(plannerStatus)) return "—";
+  if (plannerStatus === "noFutureFill") return "No more projected fills";
+  if (!Array.isArray(remainingFillPlan) || remainingFillPlan.length === 0) return "No more projected fills";
+  if (!hasReductionPlan) return "Full fills";
+
+  const amounts = remainingFillPlan
+    .map((fill) => Number(fill.amount))
+    .filter((amount) => Number.isInteger(amount) && amount > 0);
+  if (amounts.length === 0) return "No more projected fills";
+
+  const visibleAmounts = amounts.slice(0, 5).join(", ");
+  return amounts.length > 5 ? `${visibleAmounts}, …` : visibleAmounts;
+}
+
+function getFinalThreeMinutePrediction(avgCycleSeconds = appState.currentStats.avgCycle) {
+  const cycleSecondsUsed = Number(avgCycleSeconds);
+  if (!Number.isFinite(cycleSecondsUsed) || cycleSecondsUsed <= 0) {
+    return {
+      predictedSheep: null,
+      cycleSecondsUsed: null,
+      message: "Waiting for pace data"
+    };
+  }
+
+  const predictedSheep = Math.max(Math.floor(180 / cycleSecondsUsed), 0);
+  return {
+    predictedSheep,
+    cycleSecondsUsed,
+    message: `About ${predictedSheep} sheep`
+  };
 }
 
 function buildFinalFillPlannerResult(overrides = {}) {
@@ -1363,6 +1479,8 @@ function buildFinalFillPlannerResult(overrides = {}) {
     currentFullFillFinalSecondsBeforeEnd: null,
     currentFullFillFinalSheepNumber: null,
     plan: [],
+    remainingFillPlan: [],
+    remainingFillsMessage: "—",
     assumption: "Assuming previous fills were full.",
     reason: "Waiting for physical sheep pace and run timing.",
     confidence: "low",
@@ -1458,6 +1576,7 @@ function planFinalFillStrategy(options = {}) {
     ? currentFinalFill.secondsBeforeRunEnd
     : null;
   const currentFullFillFinalSheepNumber = Number.isFinite(currentFinalFill?.sheepNumber) ? currentFinalFill.sheepNumber : null;
+  const currentFullRemainingFillPlan = buildRemainingFillPlanFromCandidate({ simulatedRefillPoints: forecastPoints });
 
   if (forecastPoints.length === 0 || !currentFinalFill) {
     return buildFinalFillPlannerResult({
@@ -1466,6 +1585,8 @@ function planFinalFillStrategy(options = {}) {
       fullFillAmount,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
+      remainingFillPlan: [],
+      remainingFillsMessage: "No more projected fills",
       reason: "No future final fill exists for the current run timing."
     });
   }
@@ -1480,6 +1601,8 @@ function planFinalFillStrategy(options = {}) {
       projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
+      remainingFillPlan: currentFullRemainingFillPlan,
+      remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "onTarget", hasReductionPlan: false }),
       reason: "Full fills already place the final fill in the target window.",
       confidence: "high"
     });
@@ -1495,6 +1618,8 @@ function planFinalFillStrategy(options = {}) {
       projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
+      remainingFillPlan: currentFullRemainingFillPlan,
+      remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "tooLate", hasReductionPlan: false }),
       reason: "Reducing fills would move refill timing later, so no reduction is recommended.",
       confidence: "medium"
     });
@@ -1520,6 +1645,8 @@ function planFinalFillStrategy(options = {}) {
       projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
+      remainingFillPlan: currentFullRemainingFillPlan,
+      remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "tooEarly", hasReductionPlan: false }),
       reason: "Candidate planning was skipped for this check.",
       confidence: "medium"
     });
@@ -1551,19 +1678,22 @@ function planFinalFillStrategy(options = {}) {
     && bestSecondsBeforeEnd >= FINAL_FILL_MIN_BEFORE_END_SECONDS;
 
   if (improvesTiming) {
-    const firstChangedFill = bestCandidate.plan.find((fill) => fill.reduction > 0) || bestCandidate.plan[0];
+    const firstPlannedFill = bestCandidate.plan[0] || bestCandidate.plan.find((fill) => fill.reduction > 0);
+    const bestRemainingFillPlan = buildRemainingFillPlanFromCandidate(bestCandidate);
     return buildFinalFillPlannerResult({
       status: "recommendReduction",
       message: formatFinalFillPlanMessage(bestCandidate, cycleSnapshot, hasActiveSheepOnBoard),
-      recommendedFillAmount: firstChangedFill?.fillAmount || null,
+      recommendedFillAmount: firstPlannedFill?.fillAmount || null,
       fullFillAmount,
-      reductionAmount: firstChangedFill?.reduction || null,
+      reductionAmount: firstPlannedFill?.reduction || null,
       projectedFinalFillSecondsBeforeEnd: bestCandidate.finalFill.secondsBeforeRunEnd,
       projectedFinalFillSheepNumber: bestCandidate.finalFill.sheepNumber,
       projectedFinalFillEffectiveElapsedSeconds: bestCandidate.finalFill.effectiveElapsedSeconds,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
       plan: bestCandidate.plan,
+      remainingFillPlan: bestRemainingFillPlan,
+      remainingFillsMessage: formatRemainingFillsMessage(bestRemainingFillPlan, { status: "recommendReduction", hasReductionPlan: true }),
       reason: "Full fills place the final fill too early.",
       confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= FINAL_FILL_MAX_BEFORE_END_SECONDS ? "high" : "medium",
       candidates: includeCandidates ? candidates : []
@@ -1576,6 +1706,8 @@ function planFinalFillStrategy(options = {}) {
     fullFillAmount,
     currentFullFillFinalSecondsBeforeEnd,
     currentFullFillFinalSheepNumber,
+    remainingFillPlan: currentFullRemainingFillPlan,
+    remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "noGoodPlan", hasReductionPlan: false }),
     reason: "Full fills place the final fill too early, but generated reductions did not safely improve timing.",
     confidence: "low",
     candidates: includeCandidates ? candidates : []
@@ -1768,6 +1900,10 @@ const elements = {
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
+  penFillPlannerReason: document.getElementById("penFillPlannerReason"),
+  penFillPlannerLastFullFill: document.getElementById("penFillPlannerLastFullFill"),
+  penFillPlannerRemainingFills: document.getElementById("penFillPlannerRemainingFills"),
+  penFillPlannerFinalThreeMinutes: document.getElementById("penFillPlannerFinalThreeMinutes"),
   penFillEarlyReminder: document.getElementById("penFillEarlyReminder"),
   penStateCurrentCount: document.getElementById("penStateCurrentCount"),
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
@@ -4757,6 +4893,7 @@ function updatePenFillForecastDisplay() {
     setText(elements.penFillForecastAssumption, assumptionText);
     setForecastStatus(analysis);
     setFillStrategy(planner);
+    updatePenFillPlannerStrategyDetails({ planner });
   };
 
   if (!appState.recordType || appState.recordType === "none" || !getPenRule(appState.recordType)) {
