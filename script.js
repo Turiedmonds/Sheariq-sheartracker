@@ -182,6 +182,466 @@ function forecastFullFillRefillPoints(options = {}) {
   return points;
 }
 
+
+function getMinimumRecommendedFillAmount(rule) {
+  if (!rule) return null;
+  if (rule.defaultRefillAmount === 15) return 12;
+  if (rule.defaultRefillAmount === 8) return 6;
+  return Math.max(1, Math.ceil(rule.defaultRefillAmount * 0.65));
+}
+
+function normalizePenFillReduction(reduction, fullFillAmount) {
+  const normalizedReduction = Number.isFinite(reduction) ? Math.max(Math.floor(reduction), 0) : 0;
+  return Math.min(normalizedReduction, Math.max(fullFillAmount - 1, 0));
+}
+
+function simulatePenFillPlan(options = {}) {
+  const rule = options.rule || null;
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const physicalSheepTakenFromPen = Number(options.physicalSheepTakenFromPen);
+  const avgCycleSeconds = Number(options.avgCycleSeconds);
+  const effectiveElapsedSeconds = Number(options.effectiveElapsedSeconds);
+  const runDurationSeconds = Number(options.runDurationSeconds);
+  const reductions = Array.isArray(options.reductions) ? options.reductions : [];
+  const maxForecastPoints = Number.isFinite(options.maxForecastPoints)
+    ? Math.max(Math.floor(options.maxForecastPoints), 0)
+    : 10;
+
+  if (
+    !rule
+    || !Number.isFinite(fullFillAmount)
+    || fullFillAmount <= 0
+    || !Number.isFinite(physicalSheepTakenFromPen)
+    || physicalSheepTakenFromPen < 0
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+    || maxForecastPoints <= 0
+  ) {
+    return [];
+  }
+
+  const points = [];
+  let simulatedSheepTakenFromPen = physicalSheepTakenFromPen;
+  let elapsedAtLastRefill = effectiveElapsedSeconds;
+
+  while (points.length < maxForecastPoints) {
+    const reduction = normalizePenFillReduction(reductions[points.length], fullFillAmount);
+    const fillAmount = fullFillAmount - reduction;
+    const nextIntervalSheep = fillAmount;
+    const secondsFromLastRefill = nextIntervalSheep * avgCycleSeconds;
+    const pointElapsedSeconds = elapsedAtLastRefill + secondsFromLastRefill;
+    if (pointElapsedSeconds > runDurationSeconds) break;
+
+    simulatedSheepTakenFromPen += nextIntervalSheep;
+    points.push({
+      refillNumber: points.length + 1,
+      sheepNumber: simulatedSheepTakenFromPen,
+      secondsFromNow: pointElapsedSeconds - effectiveElapsedSeconds,
+      effectiveElapsedSeconds: pointElapsedSeconds,
+      secondsBeforeRunEnd: Math.max(runDurationSeconds - pointElapsedSeconds, 0),
+      fillAmount,
+      fullFillAmount,
+      reduction,
+      resultingPenCount: Number.isFinite(rule.refillTriggerLeft) ? rule.refillTriggerLeft + fillAmount : fillAmount,
+      nextIntervalSheep,
+      label: `Sheep ${simulatedSheepTakenFromPen}`
+    });
+
+    elapsedAtLastRefill = pointElapsedSeconds;
+  }
+
+  return points;
+}
+
+function buildFinalFillPlanLabel(reductions, fullFillAmount) {
+  const changedFillCount = reductions.filter((reduction) => reduction > 0).length;
+  const maxSingleReduction = reductions.reduce((max, reduction) => Math.max(max, reduction), 0);
+  if (changedFillCount === 0) return "Full fills only";
+  if (changedFillCount === 1) {
+    return `Add ${fullFillAmount - maxSingleReduction} at next fill. Then full fills.`;
+  }
+  if (maxSingleReduction === 1) return `Add ${fullFillAmount - 1} for next ${changedFillCount} fills.`;
+  return `Reduce next ${changedFillCount} fills by ${maxSingleReduction}.`;
+}
+
+function scoreFinalFillPlanCandidate(candidate, options = {}) {
+  const finalSecondsBeforeEnd = Number(candidate?.finalFill?.secondsBeforeRunEnd);
+  if (!Number.isFinite(finalSecondsBeforeEnd)) return Number.POSITIVE_INFINITY;
+
+  const idealBeforeEndSeconds = Number.isFinite(options.idealBeforeEndSeconds)
+    ? options.idealBeforeEndSeconds
+    : FINAL_FILL_IDEAL_BEFORE_END_SECONDS;
+  const minBeforeEndSeconds = Number.isFinite(options.minBeforeEndSeconds)
+    ? options.minBeforeEndSeconds
+    : FINAL_FILL_MIN_BEFORE_END_SECONDS;
+  const maxBeforeEndSeconds = Number.isFinite(options.maxBeforeEndSeconds)
+    ? options.maxBeforeEndSeconds
+    : FINAL_FILL_MAX_BEFORE_END_SECONDS;
+
+  const totalReduction = Number.isFinite(candidate.totalReduction) ? candidate.totalReduction : 0;
+  const maxSingleReduction = Number.isFinite(candidate.maxSingleReduction) ? candidate.maxSingleReduction : 0;
+  const changedFillCount = Number.isFinite(candidate.changedFillCount) ? candidate.changedFillCount : 0;
+  const timingPenalty = Math.abs(finalSecondsBeforeEnd - idealBeforeEndSeconds) / 10;
+  const isInsideWindow = finalSecondsBeforeEnd >= minBeforeEndSeconds && finalSecondsBeforeEnd <= maxBeforeEndSeconds;
+  const windowPenalty = isInsideWindow ? 0 : 50;
+  const totalReductionPenalty = totalReduction * 2;
+  const singleReductionPenalty = Math.max(0, maxSingleReduction - 1) * 8;
+  const spreadPenalty = changedFillCount > 1 && maxSingleReduction <= 1 ? 0 : Math.max(0, maxSingleReduction - changedFillCount) * 2;
+  const complexityPenalty = changedFillCount * 1.5;
+  const latePenalty = finalSecondsBeforeEnd < minBeforeEndSeconds
+    ? (minBeforeEndSeconds - finalSecondsBeforeEnd) * 1.5 + 80
+    : 0;
+  const earlyPenalty = finalSecondsBeforeEnd > maxBeforeEndSeconds
+    ? (finalSecondsBeforeEnd - maxBeforeEndSeconds) * 0.75 + 30
+    : 0;
+
+  return timingPenalty
+    + windowPenalty
+    + totalReductionPenalty
+    + singleReductionPenalty
+    + spreadPenalty
+    + complexityPenalty
+    + latePenalty
+    + earlyPenalty;
+}
+
+function generateFinalFillPlanCandidates(options = {}) {
+  const rule = options.rule || null;
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const maxPlannedFills = Number.isFinite(options.maxPlannedFills) ? Math.max(Math.floor(options.maxPlannedFills), 1) : 4;
+  const maxReductionPerFill = Number.isFinite(options.maxReductionPerFill) ? Math.max(Math.floor(options.maxReductionPerFill), 0) : 3;
+  const maxCandidates = Number.isFinite(options.maxCandidates) ? Math.max(Math.floor(options.maxCandidates), 1) : 16;
+  const minFillAmount = Number.isFinite(options.minFillAmount)
+    ? options.minFillAmount
+    : getMinimumRecommendedFillAmount(rule);
+  const maxForecastPoints = Number.isFinite(options.maxForecastPoints) ? options.maxForecastPoints : 10;
+
+  if (!rule || !Number.isFinite(fullFillAmount) || fullFillAmount <= 0 || !Number.isFinite(minFillAmount)) return [];
+
+  const requestedPlans = [
+    [],
+    [1],
+    [1, 1],
+    [1, 1, 1],
+    [1, 1, 1, 1],
+    [2],
+    [2, 2],
+    [2, 2, 2],
+    [3]
+  ];
+  const candidates = [];
+
+  for (const reductions of requestedPlans) {
+    if (candidates.length >= maxCandidates) break;
+    const normalizedReductions = reductions.slice(0, maxPlannedFills).map((reduction) => normalizePenFillReduction(reduction, fullFillAmount));
+    const changedFillCount = normalizedReductions.filter((reduction) => reduction > 0).length;
+    const totalReduction = normalizedReductions.reduce((sum, reduction) => sum + reduction, 0);
+    const maxSingleReduction = normalizedReductions.reduce((max, reduction) => Math.max(max, reduction), 0);
+    const plan = normalizedReductions.map((reduction, index) => ({
+      fillNumber: index + 1,
+      fillAmount: fullFillAmount - reduction,
+      fullFillAmount,
+      reduction
+    }));
+    const label = buildFinalFillPlanLabel(normalizedReductions, fullFillAmount);
+    const candidate = {
+      id: normalizedReductions.length ? `reduce-${normalizedReductions.join("-")}` : "full-fills-only",
+      label,
+      reductions: normalizedReductions,
+      plan,
+      simulatedRefillPoints: [],
+      finalFill: null,
+      totalReduction,
+      maxSingleReduction,
+      changedFillCount,
+      score: Number.POSITIVE_INFINITY,
+      rejectionReason: null
+    };
+
+    const invalidPlanFill = plan.find((fill) => fill.fillAmount > fullFillAmount || fill.fillAmount < minFillAmount);
+    if (invalidPlanFill) {
+      candidate.rejectionReason = "fillAmountOutsideRecommendedRange";
+      candidates.push(candidate);
+      continue;
+    }
+
+    if (changedFillCount > maxPlannedFills || maxSingleReduction > maxReductionPerFill) {
+      candidate.rejectionReason = "planTooComplex";
+      candidates.push(candidate);
+      continue;
+    }
+
+    candidate.simulatedRefillPoints = simulatePenFillPlan({
+      ...options,
+      rule,
+      reductions: normalizedReductions,
+      maxForecastPoints
+    });
+    candidate.finalFill = candidate.simulatedRefillPoints[candidate.simulatedRefillPoints.length - 1] || null;
+
+    const overfilledPoint = candidate.simulatedRefillPoints.find((point) => point.resultingPenCount > rule.maxPen);
+    if (overfilledPoint) {
+      candidate.rejectionReason = "resultingPenCountAboveMax";
+    } else if (!candidate.finalFill) {
+      candidate.rejectionReason = "noUsefulFutureFinalFill";
+    } else {
+      candidate.score = scoreFinalFillPlanCandidate(candidate, options);
+    }
+
+    candidates.push(candidate);
+  }
+
+  return candidates;
+}
+
+function formatFinalFillPlanMessage(candidate, cycleSnapshot, hasActiveSheepOnBoard) {
+  const plan = Array.isArray(candidate?.plan) ? candidate.plan.filter((fill) => fill.reduction > 0) : [];
+  if (plan.length === 0) return "Keep full fills — final fill on target.";
+
+  const firstFill = plan[0];
+  const allSameReduction = plan.every((fill) => fill.reduction === firstFill.reduction);
+  const fillAllowedNow = Boolean(cycleSnapshot?.refillAllowed && !hasActiveSheepOnBoard);
+  const nextFillPrefix = fillAllowedNow ? "Add" : "At next fill, add";
+
+  if (plan.length === 1) {
+    return fillAllowedNow
+      ? `Add ${firstFill.fillAmount} now. Then full fills.`
+      : `${nextFillPrefix} ${firstFill.fillAmount}. Then full fills.`;
+  }
+
+  if (allSameReduction && firstFill.reduction === 1) {
+    return `Add ${firstFill.fillAmount} for next ${plan.length} fills.`;
+  }
+
+  if (allSameReduction) return `Reduce next ${plan.length} fills by ${firstFill.reduction}.`;
+  return candidate.label;
+}
+
+function buildFinalFillPlannerResult(overrides = {}) {
+  return {
+    status: "waiting",
+    message: "Waiting for pace data.",
+    recommendedFillAmount: null,
+    fullFillAmount: null,
+    reductionAmount: null,
+    projectedFinalFillSecondsBeforeEnd: null,
+    projectedFinalFillSheepNumber: null,
+    projectedFinalFillEffectiveElapsedSeconds: null,
+    currentFullFillFinalSecondsBeforeEnd: null,
+    currentFullFillFinalSheepNumber: null,
+    plan: [],
+    assumption: "Assuming previous fills were full.",
+    reason: "Waiting for physical sheep pace and run timing.",
+    confidence: "low",
+    candidates: [],
+    ...overrides
+  };
+}
+
+function planFinalFillStrategy(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const avgCycleSeconds = Object.prototype.hasOwnProperty.call(options, "avgCycleSeconds")
+    ? Number(options.avgCycleSeconds)
+    : Number(appState.currentStats.avgCycle);
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const runDurationSeconds = Object.prototype.hasOwnProperty.call(options, "runDurationSeconds")
+    ? Number(options.runDurationSeconds)
+    : Number(getCurrentRunDurationSeconds());
+  const remainingRunSeconds = Object.prototype.hasOwnProperty.call(options, "remainingRunSeconds")
+    ? Number(options.remainingRunSeconds)
+    : runDurationSeconds - effectiveElapsedSeconds;
+  const cycleSnapshot = Object.prototype.hasOwnProperty.call(options, "cycleSnapshot")
+    ? options.cycleSnapshot
+    : getPenCycleSnapshot(recordType);
+  const hasActiveSheepOnBoard = Boolean(
+    appState.runActive
+    && appState.currentCycle.motorOn
+    && appState.currentCycle.shearStart
+  );
+  const runActive = Object.prototype.hasOwnProperty.call(options, "runActive") ? Boolean(options.runActive) : Boolean(appState.runActive);
+  const includeCandidates = Boolean(options.includeCandidates);
+
+  if (
+    !recordType
+    || recordType === "none"
+    || !rule
+    || !runActive
+    || !Number.isFinite(fullFillAmount)
+    || fullFillAmount <= 0
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(physicalSheepTakenFromPen)
+    || physicalSheepTakenFromPen < 0
+    || !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+    || !Number.isFinite(remainingRunSeconds)
+  ) {
+    return buildFinalFillPlannerResult();
+  }
+
+  if (remainingRunSeconds > FINAL_FILL_ANALYSIS_START_SECONDS) {
+    return buildFinalFillPlannerResult({
+      status: "notPlanningYet",
+      message: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining.`,
+      fullFillAmount,
+      reason: "Outside the final-fill planning window."
+    });
+  }
+
+  const forecastPoints = Array.isArray(options.forecastPoints)
+    ? options.forecastPoints
+    : simulatePenFillPlan({
+      rule,
+      physicalSheepTakenFromPen,
+      avgCycleSeconds,
+      effectiveElapsedSeconds,
+      runDurationSeconds,
+      reductions: [],
+      maxForecastPoints: options.maxForecastPoints
+    });
+  const finalFillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
+  const currentFinalFill = finalFillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
+  const currentFullFillFinalSecondsBeforeEnd = Number.isFinite(currentFinalFill?.secondsBeforeRunEnd)
+    ? currentFinalFill.secondsBeforeRunEnd
+    : null;
+  const currentFullFillFinalSheepNumber = Number.isFinite(currentFinalFill?.sheepNumber) ? currentFinalFill.sheepNumber : null;
+
+  if (forecastPoints.length === 0 || !currentFinalFill) {
+    return buildFinalFillPlannerResult({
+      status: "noFutureFill",
+      message: "No more projected fills before end of run.",
+      fullFillAmount,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber,
+      reason: "No future final fill exists for the current run timing."
+    });
+  }
+
+  if (finalFillAnalysis.status === "onTarget") {
+    return buildFinalFillPlannerResult({
+      status: "onTarget",
+      message: "Keep full fills — final fill on target.",
+      fullFillAmount,
+      projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
+      projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
+      projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber,
+      reason: "Full fills already place the final fill in the target window.",
+      confidence: "high"
+    });
+  }
+
+  if (finalFillAnalysis.status === "tooLate") {
+    return buildFinalFillPlannerResult({
+      status: "tooLate",
+      message: "Full fills only — final fill likely late.",
+      fullFillAmount,
+      projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
+      projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
+      projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber,
+      reason: "Reducing fills would move refill timing later, so no reduction is recommended.",
+      confidence: "medium"
+    });
+  }
+
+  if (finalFillAnalysis.status !== "tooEarly") {
+    return buildFinalFillPlannerResult({
+      status: "waiting",
+      message: "Waiting for pace data.",
+      fullFillAmount,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber
+    });
+  }
+
+  if (options.skipCandidatePlanning === true) {
+    return buildFinalFillPlannerResult({
+      status: "tooEarly",
+      message: "Full fills place the final fill too early.",
+      fullFillAmount,
+      projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
+      projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
+      projectedFinalFillEffectiveElapsedSeconds: currentFinalFill.effectiveElapsedSeconds,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber,
+      reason: "Candidate planning was skipped for this check.",
+      confidence: "medium"
+    });
+  }
+
+  const candidates = generateFinalFillPlanCandidates({
+    rule,
+    physicalSheepTakenFromPen,
+    avgCycleSeconds,
+    effectiveElapsedSeconds,
+    runDurationSeconds,
+    maxForecastPoints: options.maxForecastPoints
+  });
+  const viableCandidates = candidates
+    .filter((candidate) => !candidate.rejectionReason && candidate.changedFillCount > 0 && Number.isFinite(candidate.score))
+    .sort((a, b) => a.score - b.score);
+  const bestCandidate = viableCandidates[0] || null;
+  const currentScore = scoreFinalFillPlanCandidate({
+    finalFill: currentFinalFill,
+    totalReduction: 0,
+    maxSingleReduction: 0,
+    changedFillCount: 0
+  });
+  const bestSecondsBeforeEnd = Number(bestCandidate?.finalFill?.secondsBeforeRunEnd);
+  const improvesTiming = bestCandidate
+    && Number.isFinite(bestSecondsBeforeEnd)
+    && Math.abs(bestSecondsBeforeEnd - FINAL_FILL_IDEAL_BEFORE_END_SECONDS) + 5 < Math.abs(currentFullFillFinalSecondsBeforeEnd - FINAL_FILL_IDEAL_BEFORE_END_SECONDS)
+    && bestCandidate.score + 5 < currentScore
+    && bestSecondsBeforeEnd >= FINAL_FILL_MIN_BEFORE_END_SECONDS;
+
+  if (improvesTiming) {
+    const firstChangedFill = bestCandidate.plan.find((fill) => fill.reduction > 0) || bestCandidate.plan[0];
+    return buildFinalFillPlannerResult({
+      status: "recommendReduction",
+      message: formatFinalFillPlanMessage(bestCandidate, cycleSnapshot, hasActiveSheepOnBoard),
+      recommendedFillAmount: firstChangedFill?.fillAmount || null,
+      fullFillAmount,
+      reductionAmount: firstChangedFill?.reduction || null,
+      projectedFinalFillSecondsBeforeEnd: bestCandidate.finalFill.secondsBeforeRunEnd,
+      projectedFinalFillSheepNumber: bestCandidate.finalFill.sheepNumber,
+      projectedFinalFillEffectiveElapsedSeconds: bestCandidate.finalFill.effectiveElapsedSeconds,
+      currentFullFillFinalSecondsBeforeEnd,
+      currentFullFillFinalSheepNumber,
+      plan: bestCandidate.plan,
+      reason: "Full fills place the final fill too early.",
+      confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= FINAL_FILL_MAX_BEFORE_END_SECONDS ? "high" : "medium",
+      candidates: includeCandidates ? candidates : []
+    });
+  }
+
+  return buildFinalFillPlannerResult({
+    status: "noGoodPlan",
+    message: "No safe reduction plan found.",
+    fullFillAmount,
+    currentFullFillFinalSecondsBeforeEnd,
+    currentFullFillFinalSheepNumber,
+    reason: "Full fills place the final fill too early, but generated reductions did not safely improve timing.",
+    confidence: "low",
+    candidates: includeCandidates ? candidates : []
+  });
+}
+
 // Official counts exclude rejected sheep for future record target progress.
 function getOfficialRunSheepCount() {
   return appState.sheep.filter(isOfficialCounted).length;
