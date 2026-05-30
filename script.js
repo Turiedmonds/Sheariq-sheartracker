@@ -182,6 +182,41 @@ function forecastFullFillRefillPoints(options = {}) {
   return points;
 }
 
+function getCurrentPenFillOpportunityPoint(recordType = appState.recordType) {
+  if (!recordType || recordType === "none" || !getPenRule(recordType)) return null;
+  if (!appState.runActive) return null;
+
+  const cycleSnapshot = getPenCycleSnapshot(recordType);
+  if (!cycleSnapshot?.refillAllowed) return null;
+
+  const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const effectiveElapsedSeconds = getEffectiveElapsedSeconds();
+  const runDurationSeconds = getCurrentRunDurationSeconds();
+
+  if (
+    !Number.isFinite(sheepTakenFromPen)
+    || sheepTakenFromPen <= 0
+    || !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+  ) {
+    return null;
+  }
+
+  const secondsBeforeRunEnd = runDurationSeconds - effectiveElapsedSeconds;
+  if (!Number.isFinite(secondsBeforeRunEnd) || secondsBeforeRunEnd < 0) return null;
+
+  return {
+    refillNumber: 0,
+    sheepNumber: sheepTakenFromPen,
+    secondsFromNow: 0,
+    effectiveElapsedSeconds,
+    secondsBeforeRunEnd,
+    label: `Sheep ${sheepTakenFromPen}`,
+    isCurrentFill: true
+  };
+}
 
 function getMinimumRecommendedFillAmount(rule) {
   if (!rule) return null;
@@ -404,16 +439,20 @@ function formatFinalFillPlanMessage(candidate, cycleSnapshot, hasActiveSheepOnBo
 
   const firstFill = plan[0];
   const allSameReduction = plan.every((fill) => fill.reduction === firstFill.reduction);
-  const fillAllowedNow = Boolean(cycleSnapshot?.refillAllowed && !hasActiveSheepOnBoard);
-  const nextFillPrefix = fillAllowedNow ? "Add" : "At next fill, add";
+  const fillAllowedNow = Boolean(cycleSnapshot?.refillAllowed);
+  const nextFillPrefix = fillAllowedNow
+    ? (hasActiveSheepOnBoard ? "At this fill, add" : "Add")
+    : "At next fill, add";
 
   if (plan.length === 1) {
-    return fillAllowedNow
+    return fillAllowedNow && !hasActiveSheepOnBoard
       ? `Add ${firstFill.fillAmount} now. Then full fills.`
       : `${nextFillPrefix} ${firstFill.fillAmount}. Then full fills.`;
   }
 
   if (allSameReduction && firstFill.reduction === 1) {
+    if (fillAllowedNow && !hasActiveSheepOnBoard) return `Add ${firstFill.fillAmount} now. Then full fills.`;
+    if (fillAllowedNow) return `At this fill, add ${firstFill.fillAmount}. Then full fills.`;
     return `Add ${firstFill.fillAmount} for next ${plan.length} fills.`;
   }
 
@@ -559,7 +598,7 @@ function planFinalFillStrategy(options = {}) {
   if (finalFillAnalysis.status === "tooLate") {
     return buildFinalFillPlannerResult({
       status: "tooLate",
-      message: "Full fills only — final fill likely late.",
+      message: cycleSnapshot?.refillAllowed ? "Full fill now — final fill likely late." : "Full fills only — final fill likely late.",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -643,7 +682,7 @@ function planFinalFillStrategy(options = {}) {
 
   return buildFinalFillPlannerResult({
     status: "noGoodPlan",
-    message: "No safe reduction plan found.",
+    message: cycleSnapshot?.refillAllowed ? "Full fill now — final fill likely early." : "No safe reduction plan found.",
     fullFillAmount,
     currentFullFillFinalSecondsBeforeEnd,
     currentFullFillFinalSheepNumber,
@@ -3558,6 +3597,7 @@ function updatePenRefillAlertDisplay() {
 }
 
 function formatPenFillForecastPoint(point) {
+  if (point?.isCurrentFill) return `${point.label} — now`;
   return `${point.label} — in ${formatCountdown(point.secondsFromNow)}`;
 }
 
@@ -3717,20 +3757,24 @@ function updatePenFillForecastDisplay() {
     return;
   }
 
-  const forecastPoints = forecastFullFillRefillPoints();
+  const futureForecastPoints = forecastFullFillRefillPoints();
+  const currentFillPoint = getCurrentPenFillOpportunityPoint();
+  const displayForecastPoints = currentFillPoint
+    ? [currentFillPoint, ...futureForecastPoints]
+    : futureForecastPoints;
   const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const remainingRunSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
-  const finalFillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
-  const planner = buildPlanner(forecastPoints, remainingRunSeconds);
+  const finalFillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
+  const planner = buildPlanner(displayForecastPoints, remainingRunSeconds);
 
-  if (forecastPoints.length === 0) {
+  if (displayForecastPoints.length === 0) {
     setForecastDisplay("No more projected fills", "—", "Full fills", finalFillAnalysis, planner);
     return;
   }
 
-  const nextFill = forecastPoints[0];
-  const finalFill = forecastPoints[forecastPoints.length - 1];
+  const nextFill = displayForecastPoints[0];
+  const finalFill = displayForecastPoints[displayForecastPoints.length - 1];
   setForecastDisplay(
     formatPenFillForecastPoint(nextFill),
     formatFinalPenFillForecastPoint(finalFill),
