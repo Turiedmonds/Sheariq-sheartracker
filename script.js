@@ -557,12 +557,12 @@ function recordPenFillEvent(options = {}) {
   autosaveState();
 
   const sourceMessages = {
-    [PEN_FILL_EVENT_SOURCE.FULL]: "Recorded full fill",
-    [PEN_FILL_EVENT_SOURCE.RECOMMENDED]: "Recorded recommended fill",
-    [PEN_FILL_EVENT_SOURCE.MINUS_ONE]: "Recorded -1 fill",
-    [PEN_FILL_EVENT_SOURCE.CUSTOM]: "Recorded custom fill"
+    [PEN_FILL_EVENT_SOURCE.FULL]: "Fill confirmed",
+    [PEN_FILL_EVENT_SOURCE.RECOMMENDED]: "Fill confirmed",
+    [PEN_FILL_EVENT_SOURCE.MINUS_ONE]: "Fill confirmed",
+    [PEN_FILL_EVENT_SOURCE.CUSTOM]: "Different amount recorded"
   };
-  const message = `${sourceMessages[draft.source] || "Recorded fill"} — added ${draft.actualFillAmount}.`;
+  const message = `${sourceMessages[draft.source] || "Fill confirmed"} — added ${draft.actualFillAmount}.`;
   refreshPenFillConfirmationDisplays(message);
 
   return { success: true, event: draft, message, error: null };
@@ -610,51 +610,112 @@ function promptForCustomPenFillAmount() {
   return rawAmount.trim();
 }
 
-function updatePenFillConfirmationControls(options = {}) {
-  const buttons = [
-    elements.penFillConfirmFullBtn,
-    elements.penFillConfirmRecommendedBtn,
-    elements.penFillConfirmMinusOneBtn,
-    elements.penFillConfirmCustomBtn
-  ];
-  const setFillButtonsDisabled = (disabled) => {
-    buttons.forEach((button) => {
-      if (button) button.disabled = disabled;
-    });
-  };
+function getPenFillInstructionModel(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  const penState = options.penState || getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+  const planner = options.planner || getPenFillPlannerRecommendation({ rule });
+  const plannerRecommendedAmount = Number(planner?.recommendedFillAmount);
+  const plannerReductionAmount = Number(planner?.reductionAmount);
+  const plannerUsesReducedFill = planner?.status === "recommendReduction"
+    && Number.isInteger(plannerRecommendedAmount)
+    && plannerRecommendedAmount > 0;
+  const plannerUsesFullFill = ["onTarget", "tooLate", "noGoodPlan", "noFutureFill", "notPlanningYet"].includes(planner?.status);
+  const canUseFullFill = Number.isInteger(fullFillAmount) && fullFillAmount > 0;
+  const recommendedFillAmount = plannerUsesReducedFill ? plannerRecommendedAmount : (plannerUsesFullFill && canUseFullFill ? fullFillAmount : null);
+  const reductionAmount = plannerUsesReducedFill
+    ? (Number.isFinite(plannerReductionAmount) ? plannerReductionAmount : fullFillAmount - recommendedFillAmount)
+    : 0;
+  const isFullFill = canUseFullFill && recommendedFillAmount === fullFillAmount;
+  const isLastFullFill = Boolean(isFullFill && penState?.refillAllowedNow && planner?.status === "noFutureFill");
+  const validation = Number.isInteger(recommendedFillAmount)
+    ? validatePenFillAmount(recommendedFillAmount, penState, rule)
+    : { valid: false, error: planner?.message || "Waiting for pace data" };
+  const canConfirmNow = Boolean(
+    recordType
+    && recordType !== "none"
+    && appState.runActive
+    && !appState.paused
+    && rule
+    && penState
+    && penState.refillAllowedNow
+    && validation.valid
+  );
 
+  let instruction = "—";
+  if (!recordType || recordType === "none") {
+    instruction = "Select record type";
+  } else if (!appState.runActive) {
+    instruction = "Start run";
+  } else if (appState.paused) {
+    instruction = "Run paused";
+  } else if (!rule || !penState) {
+    instruction = "Select record type";
+  } else if (!penState.refillAllowedNow) {
+    instruction = "Fill not due yet";
+  } else if (!validation.valid) {
+    instruction = planner?.status === "waiting" ? "Waiting for pace data" : "—";
+  } else if (isLastFullFill) {
+    instruction = `Last full fill — add ${recommendedFillAmount}`;
+  } else if (isFullFill) {
+    instruction = "Keep full fills";
+  } else {
+    instruction = penState.refillAllowedNow ? `Add ${recommendedFillAmount} now` : `At next fill, add ${recommendedFillAmount}`;
+  }
+
+  const projectedFinalFillSecondsBeforeEnd = Number(planner?.projectedFinalFillSecondsBeforeEnd);
+  const reason = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
+    ? `Final fill projected ${formatCountdown(projectedFinalFillSecondsBeforeEnd)} before end`
+    : (planner?.reason || validation.error || "—");
+
+  return {
+    instruction,
+    confirmLabel: Number.isInteger(recommendedFillAmount) ? `Confirm add ${recommendedFillAmount}` : "Confirm add —",
+    recommendedFillAmount,
+    fullFillAmount: canUseFullFill ? fullFillAmount : null,
+    reductionAmount,
+    isFullFill,
+    isLastFullFill,
+    canConfirmNow,
+    reason,
+    planner,
+    validation
+  };
+}
+
+function updatePenFillConfirmationControls(options = {}) {
+  const primaryButton = elements.penFillConfirmSuggestedBtn;
+  const differentAmountButton = elements.penFillDifferentAmountBtn;
   const recordType = appState.recordType;
   const rule = getPenRule(recordType);
-  const fullFillAmount = Number(rule?.defaultRefillAmount);
-  const minusOneAmount = Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null;
   const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
   const penState = getCurrentPenStateFromEvents({
     recordType,
     rule,
     physicalSheepTakenFromPen
   });
-  const planner = getPenFillPlannerRecommendation({ rule });
-  const recommendedFillAmount = Number(planner?.recommendedFillAmount);
-  const hasValidRecommended = planner?.status === "recommendReduction"
-    && Number.isInteger(recommendedFillAmount)
-    && validatePenFillAmount(recommendedFillAmount, penState, rule).valid;
-  const minusOneValidation = Number.isInteger(minusOneAmount)
-    ? validatePenFillAmount(minusOneAmount, penState, rule)
-    : { valid: false };
+  const instructionModel = getPenFillInstructionModel({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen,
+    penState
+  });
   const latestEvent = getLatestActiveCurrentRunPenFillEvent();
   const alreadyConfirmed = Boolean(findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen));
 
-  if (elements.penFillConfirmFullBtn) {
-    elements.penFillConfirmFullBtn.textContent = Number.isFinite(fullFillAmount) ? `Full ${fullFillAmount}` : "Full";
+  if (primaryButton) {
+    primaryButton.textContent = instructionModel.confirmLabel;
   }
-  if (elements.penFillConfirmRecommendedBtn) {
-    elements.penFillConfirmRecommendedBtn.textContent = hasValidRecommended ? `Recommended ${recommendedFillAmount}` : "Recommended —";
-  }
-  if (elements.penFillConfirmMinusOneBtn) {
-    elements.penFillConfirmMinusOneBtn.textContent = Number.isFinite(minusOneAmount) ? `-1 = ${minusOneAmount}` : "-1";
-  }
-  if (elements.penFillConfirmCustomBtn) {
-    elements.penFillConfirmCustomBtn.textContent = "Custom";
+  if (differentAmountButton) {
+    differentAmountButton.textContent = "Different amount";
   }
   if (elements.penFillUndoLastBtn) {
     elements.penFillUndoLastBtn.textContent = "Undo last fill";
@@ -674,17 +735,16 @@ function updatePenFillConfirmationControls(options = {}) {
     disabledStatus = "Fill already confirmed";
   } else if (!penState.refillAllowedNow) {
     disabledStatus = "Fill not due yet";
+  } else if (!instructionModel.canConfirmNow) {
+    disabledStatus = "Waiting for pace data";
   }
 
-  const canConfirmAny = disabledStatus === "—";
-  setFillButtonsDisabled(!canConfirmAny);
+  const canConfirmNow = disabledStatus === "—";
+  if (primaryButton) primaryButton.disabled = !canConfirmNow;
+  if (differentAmountButton) differentAmountButton.disabled = !canConfirmNow;
 
-  if (canConfirmAny) {
-    if (elements.penFillConfirmRecommendedBtn) elements.penFillConfirmRecommendedBtn.disabled = !hasValidRecommended;
-    if (elements.penFillConfirmMinusOneBtn) elements.penFillConfirmMinusOneBtn.disabled = !minusOneValidation.valid;
-  }
-
-  const statusText = options.statusOverride || (canConfirmAny ? "—" : disabledStatus);
+  setText(elements.penFillConfirmInstruction, instructionModel.instruction);
+  const statusText = options.statusOverride || (canConfirmNow ? "—" : disabledStatus);
   setText(elements.penFillConfirmStatus, statusText);
 }
 
@@ -1326,10 +1386,9 @@ const elements = {
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
   penStateModel: document.getElementById("penStateModel"),
-  penFillConfirmFullBtn: document.getElementById("penFillConfirmFullBtn"),
-  penFillConfirmRecommendedBtn: document.getElementById("penFillConfirmRecommendedBtn"),
-  penFillConfirmMinusOneBtn: document.getElementById("penFillConfirmMinusOneBtn"),
-  penFillConfirmCustomBtn: document.getElementById("penFillConfirmCustomBtn"),
+  penFillConfirmInstruction: document.getElementById("penFillConfirmInstruction"),
+  penFillConfirmSuggestedBtn: document.getElementById("penFillConfirmSuggestedBtn"),
+  penFillDifferentAmountBtn: document.getElementById("penFillDifferentAmountBtn"),
   penFillUndoLastBtn: document.getElementById("penFillUndoLastBtn"),
   penFillConfirmStatus: document.getElementById("penFillConfirmStatus"),
   dayClock: document.getElementById("dayClock"),
@@ -6221,26 +6280,12 @@ function bindEvents() {
       autosaveState();
     });
   }
-  if (elements.penFillConfirmFullBtn) {
-    elements.penFillConfirmFullBtn.addEventListener("click", () => {
-      const rule = getPenRule(appState.recordType);
-      const planner = getPenFillPlannerRecommendation({ rule });
-      const fullFillAmount = Number(rule?.defaultRefillAmount);
-      recordPenFillEvent({
-        actualFillAmount: fullFillAmount,
-        recommendedFillAmount: Number.isFinite(Number(planner?.recommendedFillAmount)) ? Number(planner.recommendedFillAmount) : fullFillAmount,
-        source: PEN_FILL_EVENT_SOURCE.FULL
-      });
-    });
-  }
-
-  if (elements.penFillConfirmRecommendedBtn) {
-    elements.penFillConfirmRecommendedBtn.addEventListener("click", () => {
-      const rule = getPenRule(appState.recordType);
-      const planner = getPenFillPlannerRecommendation({ rule });
-      const recommendedFillAmount = Number(planner?.recommendedFillAmount);
-      if (planner?.status !== "recommendReduction" || !Number.isInteger(recommendedFillAmount)) {
-        updatePenFillConfirmationControls({ statusOverride: "Recommended fill unavailable" });
+  if (elements.penFillConfirmSuggestedBtn) {
+    elements.penFillConfirmSuggestedBtn.addEventListener("click", () => {
+      const instructionModel = getPenFillInstructionModel();
+      const recommendedFillAmount = Number(instructionModel.recommendedFillAmount);
+      if (!instructionModel.canConfirmNow || !Number.isInteger(recommendedFillAmount)) {
+        updatePenFillConfirmationControls({ statusOverride: instructionModel.instruction || "Waiting for pace data" });
         return;
       }
       recordPenFillEvent({
@@ -6251,20 +6296,9 @@ function bindEvents() {
     });
   }
 
-  if (elements.penFillConfirmMinusOneBtn) {
-    elements.penFillConfirmMinusOneBtn.addEventListener("click", () => {
-      const rule = getPenRule(appState.recordType);
-      const fullFillAmount = Number(rule?.defaultRefillAmount);
-      recordPenFillEvent({
-        actualFillAmount: Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null,
-        recommendedFillAmount: Number.isFinite(fullFillAmount) ? fullFillAmount - 1 : null,
-        source: PEN_FILL_EVENT_SOURCE.MINUS_ONE
-      });
-    });
-  }
-
-  if (elements.penFillConfirmCustomBtn) {
-    elements.penFillConfirmCustomBtn.addEventListener("click", () => {
+  if (elements.penFillDifferentAmountBtn) {
+    elements.penFillDifferentAmountBtn.addEventListener("click", () => {
+      const instructionModel = getPenFillInstructionModel();
       const rawAmount = promptForCustomPenFillAmount();
       if (rawAmount === null) {
         updatePenFillConfirmationControls();
@@ -6277,7 +6311,7 @@ function bindEvents() {
       const actualFillAmount = Number(rawAmount);
       const result = recordPenFillEvent({
         actualFillAmount,
-        recommendedFillAmount: actualFillAmount,
+        recommendedFillAmount: instructionModel.recommendedFillAmount,
         source: PEN_FILL_EVENT_SOURCE.CUSTOM
       });
       if (!result.success) {
