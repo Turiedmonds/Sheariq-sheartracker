@@ -431,7 +431,25 @@
               <span class="metric-label panel-metric-label">Pen refill:</span>
               <strong id="penRefillAlert" class="panel-metric-value">—</strong>
             </div>
-            <h4 class="timing-group-heading panel-section-title">Pen fill forecast</h4>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="panel-pen-fill-planner" class="panel" aria-labelledby="pen-fill-planner-title" draggable="true">
+      <div class="panel-header" draggable="true">
+        <h2 id="pen-fill-planner-title">Pen Fill Planner</h2>
+        <div class="panel-header-actions">
+          <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
+          <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
+          <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
+          <button id="penFillPlannerHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Pen Fill Planner help">? Help</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <div class="metrics-grid pen-fill-planner-grid">
+          <div class="timing-group panel-section">
+            <h3 class="timing-group-heading panel-section-title">Pen fill forecast</h3>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Next fill:</span>
               <strong id="penFillForecastNext" class="panel-metric-value">—</strong>
@@ -456,7 +474,9 @@
               <span class="metric-label panel-metric-label">Fill reminder:</span>
               <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
             </div>
-            <h4 class="timing-group-heading panel-section-title">Pen state</h4>
+          </div>
+          <div class="timing-group panel-section">
+            <h3 class="timing-group-heading panel-section-title">Pen state</h3>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Pen count:</span>
               <strong id="penStateCurrentCount" class="panel-metric-value">—</strong>
@@ -473,13 +493,13 @@
               <span class="metric-label panel-metric-label">Pen model:</span>
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
             </div>
-            <div class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading">
-              <h4 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Fill confirmation</h4>
-              <div id="penFillConfirmInstruction" class="pen-fill-confirm-instruction">—</div>
-              <div class="metric-row panel-metric-row pen-fill-confirm-status-row">
-                <span class="metric-label panel-metric-label">Fill confirmation:</span>
-                <strong id="penFillConfirmStatus" class="panel-metric-value pen-fill-confirm-status" role="status" aria-live="polite">—</strong>
-              </div>
+          </div>
+          <div class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading">
+            <h3 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Fill confirmation</h3>
+            <div id="penFillConfirmInstruction" class="pen-fill-confirm-instruction">—</div>
+            <div class="metric-row panel-metric-row pen-fill-confirm-status-row">
+              <span class="metric-label panel-metric-label">Fill confirmation:</span>
+              <strong id="penFillConfirmStatus" class="panel-metric-value pen-fill-confirm-status" role="status" aria-live="polite">—</strong>
             </div>
           </div>
         </div>
@@ -985,14 +1005,30 @@
         <p><strong>Strong wool lambs:</strong><br />Pen starts with 20 sheep. Refill is allowed when 5 sheep are left. That means the alert is based on every 15 sheep taken from the pen.</p>
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 2 sheep are left. That means the alert is based on every 8 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
-        <p><strong>Pen fill forecast:</strong><br />Shows the next and final projected refill points. It uses physical sheep taken from the pen, not official count.</p>
-        <p><strong>Fill reminder:</strong><br />Shows when the next fill is 2 sheep away, 1 sheep away, or due now.</p>
-        <p><strong>Forecast assumption:</strong><br />If fills are confirmed, the forecast uses confirmed fill amounts. If not, it assumes full fills.</p>
-        <p><strong>Final fill status:</strong><br />Shows whether the final projected fill is too early, on target, or too late. The target window is around 2–4 minutes before end of run.</p>
-        <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version.</p>
-        <p><strong>Pen state:</strong><br />Shows the current estimated sheep left in the pen, whether a refill is due, and whether the app is assuming full fills or using confirmed fills.</p>
-        <p><strong>Fill confirmation:</strong><br />When a refill is due, the app asks whether the recommended amount was added. If not, enter the actual amount so Pen State can update.</p>
+        <p><strong>Pen refill:</strong><br />Shows the quick live refill alert: 2 sheep away, 1 sheep away, or refill allowed now.</p>
+        <p>Detailed refill forecast, reminder, strategy, pen state, and fill confirmation status now live in the Pen Fill Planner panel.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="penFillPlannerHelpModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="penFillPlannerHelpModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="penFillPlannerHelpModalTitle">Pen Fill Planner Help</h3>
+        <button id="penFillPlannerHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Pen Fill Planner help">✕</button>
+      </div>
+      <div class="connection-help-modal-content pen-fill-planner-help-content">
+        <h4 class="connection-help-title">What this panel shows</h4>
+        <p>The Pen Fill Planner keeps the refill forecast and pen-state details separate from the live Timing Panel alert.</p>
+        <p><strong>Next fill:</strong><br />The next projected refill sheep.</p>
+        <p><strong>Final projected fill:</strong><br />The last projected refill before the run ends.</p>
+        <p><strong>Assumption:</strong><br />Shows whether the forecast assumes full fills or uses confirmed fills.</p>
+        <p><strong>Final fill status:</strong><br />Shows if the final projected fill is early, on target, or late.</p>
+        <p><strong>Fill strategy:</strong><br />Read-only advice for the projected final fill timing.</p>
+        <p><strong>Fill reminder:</strong><br />Warns when the next fill is 2 sheep away, 1 sheep away, or due now.</p>
+        <p><strong>Pen state:</strong><br />Shows sheep left, refill status, last confirmed fill, and the active pen model.</p>
+        <p><strong>Fill confirmation pop-up:</strong><br />At a due fill point, confirm the recommended amount or enter the actual amount added.</p>
       </div>
     </div>
   </div>

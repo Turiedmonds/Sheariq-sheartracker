@@ -1411,7 +1411,8 @@ td {
 
 
 
-#panel-cycle .panel-body {
+#panel-cycle .panel-body,
+#panel-pen-fill-planner .panel-body {
   padding-top: 0.65rem;
   padding-bottom: 0.65rem;
 }
@@ -1450,7 +1451,8 @@ td {
 .target-section-title,
 .perf-section-title,
 .sim-controls-section-title,
-#panel-cycle .timing-group-heading {
+#panel-cycle .timing-group-heading,
+#panel-pen-fill-planner .timing-group-heading {
   margin: 0;
   font-size: 0.82rem;
   font-weight: 700;
@@ -1512,11 +1514,13 @@ td {
   overflow-wrap: anywhere;
 }
 
-#panel-cycle .metrics-grid {
+#panel-cycle .metrics-grid,
+#panel-pen-fill-planner .metrics-grid {
   gap: 0.35rem;
 }
 
-#panel-cycle .metric-row {
+#panel-cycle .metric-row,
+#panel-pen-fill-planner .metric-row {
   display: grid;
   grid-template-columns: minmax(120px, 1fr) auto;
   align-items: center;
@@ -1526,7 +1530,8 @@ td {
   color: #374151;
 }
 
-#panel-cycle .metric-row strong {
+#panel-cycle .metric-row strong,
+#panel-pen-fill-planner .metric-row strong {
   justify-self: end;
   font-size: 0.95rem;
   font-weight: 700;
@@ -1547,14 +1552,16 @@ td {
   align-items: center;
 }
 
-#panel-cycle .timing-group {
+#panel-cycle .timing-group,
+#panel-pen-fill-planner .timing-group {
   display: grid;
   gap: 0.28rem;
   margin-top: 0.28rem;
   padding-top: 0.25rem;
 }
 
-#panel-cycle .timing-group-heading {
+#panel-cycle .timing-group-heading,
+#panel-pen-fill-planner .timing-group-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1683,12 +1690,14 @@ td {
     text-align: left;
   }
 
-  #panel-cycle .metric-row {
+  #panel-cycle .metric-row,
+  #panel-pen-fill-planner .metric-row {
     grid-template-columns: 1fr;
     row-gap: 0.15rem;
   }
 
   #panel-cycle .metric-row strong,
+  #panel-pen-fill-planner .metric-row strong,
   #panel-cycle .run-countdown-value-wrap {
     justify-self: start;
     justify-content: flex-start;
@@ -1943,69 +1952,69 @@ td.pace-neutral {
   box-shadow: inset 0 0 0 1px #ec4899;
 }
 
-#panel-cycle .pen-fill-status-on-target {
+#panel-pen-fill-planner .pen-fill-status-on-target {
   color: #15803d;
 }
 
-#panel-cycle .pen-fill-status-too-early {
+#panel-pen-fill-planner .pen-fill-status-too-early {
   color: #a16207;
 }
 
-#panel-cycle .pen-fill-status-too-late {
+#panel-pen-fill-planner .pen-fill-status-too-late {
   color: #b91c1c;
 }
 
-#panel-cycle .pen-fill-status-neutral {
+#panel-pen-fill-planner .pen-fill-status-neutral {
   color: #4b5563;
 }
 
-#panel-cycle .pen-fill-strategy-ok {
+#panel-pen-fill-planner .pen-fill-strategy-ok {
   color: #166534;
 }
 
-#panel-cycle .pen-fill-strategy-recommend {
+#panel-pen-fill-planner .pen-fill-strategy-recommend {
   color: #0369a1;
 }
 
-#panel-cycle .pen-fill-strategy-warning {
+#panel-pen-fill-planner .pen-fill-strategy-warning {
   color: #92400e;
 }
 
-#panel-cycle .pen-fill-strategy-neutral {
+#panel-pen-fill-planner .pen-fill-strategy-neutral {
   color: #4b5563;
 }
 
-#panel-cycle .pen-state-refill-now {
+#panel-pen-fill-planner .pen-state-refill-now {
   color: #b45309;
 }
 
-#panel-cycle .pen-state-refill-neutral,
-#panel-cycle .pen-state-model-neutral,
-#panel-cycle .pen-state-model-assumed {
+#panel-pen-fill-planner .pen-state-refill-neutral,
+#panel-pen-fill-planner .pen-state-model-neutral,
+#panel-pen-fill-planner .pen-state-model-assumed {
   color: #4b5563;
 }
 
-#panel-cycle .pen-state-model-confirmed {
+#panel-pen-fill-planner .pen-state-model-confirmed {
   color: #0369a1;
 }
 
-#panel-cycle .pen-fill-confirm-section {
+#panel-pen-fill-planner .pen-fill-confirm-section {
   display: grid;
   gap: 0.35rem;
   margin-top: 0.35rem;
 }
 
-#panel-cycle .pen-fill-confirm-instruction {
+#panel-pen-fill-planner .pen-fill-confirm-instruction {
   font-size: 0.9rem;
   font-weight: 700;
   color: #111827;
 }
 
-#panel-cycle .pen-fill-confirm-status-row {
+#panel-pen-fill-planner .pen-fill-confirm-status-row {
   margin-top: 0.1rem;
 }
 
-#panel-cycle .pen-fill-confirm-status {
+#panel-pen-fill-planner .pen-fill-confirm-status {
   min-height: 1.1rem;
   font-size: 0.82rem;
   color: #4b5563;
