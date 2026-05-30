@@ -882,9 +882,18 @@ function getPenFillInstructionModel(options = {}) {
   }
 
   const projectedFinalFillSecondsBeforeEnd = Number(planner?.projectedFinalFillSecondsBeforeEnd);
-  const reason = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
-    ? `Final fill projected ${formatCountdown(projectedFinalFillSecondsBeforeEnd)} before end`
-    : (planner?.reason || validation.error || "—");
+  const reasonByStatus = {
+    onTarget: "Final fill on target",
+    recommendReduction: "Final fill too early",
+    tooEarly: "Final fill too early",
+    tooLate: "Final fill too late",
+    noGoodPlan: "Keep full fills",
+    noFutureFill: "No final fill projected",
+    notPlanningYet: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
+    waiting: "Waiting for pace data"
+  };
+  const reason = reasonByStatus[planner?.status]
+    || (Number.isFinite(projectedFinalFillSecondsBeforeEnd) ? "Final fill on target" : (validation.error || "—"));
   const remainingFillPlan = Array.isArray(planner?.remainingFillPlan) ? planner.remainingFillPlan : [];
   const remainingFillsMessage = planner?.remainingFillsMessage || formatRemainingFillsMessage(remainingFillPlan, {
     status: planner?.status,
@@ -893,8 +902,7 @@ function getPenFillInstructionModel(options = {}) {
   const finalThreeMinutePrediction = getFinalThreeMinutePrediction();
   const finalThreeMinuteMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
     && projectedFinalFillSecondsBeforeEnd < FINAL_FILL_MIN_BEFORE_END_SECONDS
-    && Number.isFinite(finalThreeMinutePrediction.predictedSheep)
-      ? `Final fill likely too late — about ${finalThreeMinutePrediction.predictedSheep} sheep`
+      ? "Final fill too late"
       : finalThreeMinutePrediction.message;
   let lastFullFillMessage = "Not yet";
   if (!canUseFullFill || !recordType || recordType === "none" || !appState.runActive) {
@@ -982,11 +990,6 @@ function updatePenFillEarlyReminderDisplay() {
     return;
   }
 
-  if (findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)) {
-    setReminder("Fill already confirmed");
-    return;
-  }
-
   const instructionModel = getPenFillInstructionModel({
     recordType,
     rule,
@@ -1005,21 +1008,33 @@ function updatePenFillEarlyReminderDisplay() {
   }
 
   if (penState.refillAllowedNow) {
-    setReminder(`Refill now — add ${recommendedFillAmount}`);
+    setReminder("Refill now");
     return;
   }
 
   const nextRefillAllowedInSheep = Number(penState.nextRefillAllowedInSheep);
   if (nextRefillAllowedInSheep === 1) {
-    setReminder(`Next fill in 1 sheep — get ready to add ${recommendedFillAmount}`);
+    setReminder("1 sheep until refill");
     return;
   }
   if (nextRefillAllowedInSheep === 2) {
-    setReminder(`Next fill in 2 sheep — likely add ${recommendedFillAmount}`);
+    setReminder("2 sheep until refill");
     return;
   }
 
   setReminder("—");
+}
+
+function penFillInstructionNeedsConfirmation(instructionModel, rule) {
+  const recommendedFillAmount = Number(instructionModel?.recommendedFillAmount);
+  const fullFillAmount = Number(rule?.defaultRefillAmount ?? instructionModel?.fullFillAmount);
+  return Boolean(
+    Number.isInteger(recommendedFillAmount)
+    && Number.isInteger(fullFillAmount)
+    && recommendedFillAmount > 0
+    && fullFillAmount > 0
+    && recommendedFillAmount < fullFillAmount
+  );
 }
 
 function updatePenFillConfirmationControls(options = {}) {
@@ -1038,9 +1053,29 @@ function updatePenFillConfirmationControls(options = {}) {
     penState
   });
   const alreadyConfirmed = Boolean(findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen));
+  const needsConfirmation = penFillInstructionNeedsConfirmation(instructionModel, rule);
+  const canShowConfirmation = Boolean(
+    needsConfirmation
+    && penState?.refillAllowedNow
+    && !alreadyConfirmed
+    && (instructionModel.canConfirmNow || options.statusOverride)
+  );
 
-  let statusText = "—";
-  if (!recordType || recordType === "none") {
+  if (elements.penFillConfirmSection) {
+    elements.penFillConfirmSection.hidden = !canShowConfirmation;
+  }
+
+  if (!canShowConfirmation) {
+    setText(elements.penFillConfirmInstruction, "—");
+    setText(elements.penFillConfirmStatus, "—");
+    return;
+  }
+
+  const recommendedFillAmount = Number(instructionModel.recommendedFillAmount);
+  let statusText = "Was this amount added?";
+  if (options.statusOverride) {
+    statusText = options.statusOverride;
+  } else if (!recordType || recordType === "none") {
     statusText = "Select record type";
   } else if (!appState.runActive) {
     statusText = "Start run";
@@ -1048,16 +1083,12 @@ function updatePenFillConfirmationControls(options = {}) {
     statusText = "Run paused";
   } else if (!rule || !penState) {
     statusText = "Select record type";
-  } else if (alreadyConfirmed) {
-    statusText = "Fill already confirmed";
-  } else if (!penState.refillAllowedNow) {
-    statusText = "—";
   } else if (!instructionModel.canConfirmNow) {
     statusText = "Waiting for pace data";
   }
 
-  setText(elements.penFillConfirmInstruction, instructionModel.instruction);
-  setText(elements.penFillConfirmStatus, options.statusOverride || statusText);
+  setText(elements.penFillConfirmInstruction, `Recommended: Add ${recommendedFillAmount}.`);
+  setText(elements.penFillConfirmStatus, statusText);
 }
 
 function getPenFillPromptKey(physicalSheepTakenFromPen, runIndex = appState.currentRunIndex) {
@@ -1068,6 +1099,7 @@ function canShowPenFillConfirmationPrompt(context) {
   if (!context) return false;
   const { recordType, rule, penState, instructionModel, physicalSheepTakenFromPen, promptKey } = context;
   const recommendedFillAmount = Number(instructionModel?.recommendedFillAmount);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
   return Boolean(
     appState.runActive
     && !appState.paused
@@ -1079,6 +1111,9 @@ function canShowPenFillConfirmationPrompt(context) {
     && instructionModel?.canConfirmNow
     && Number.isInteger(recommendedFillAmount)
     && recommendedFillAmount > 0
+    && Number.isInteger(fullFillAmount)
+    && fullFillAmount > 0
+    && recommendedFillAmount < fullFillAmount
     && !findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)
     && appState.pendingPenFillPromptKey !== promptKey
     && appState.dismissedPenFillPromptKey !== promptKey
@@ -1553,7 +1588,7 @@ function planFinalFillStrategy(options = {}) {
   if (remainingRunSeconds > FINAL_FILL_ANALYSIS_START_SECONDS) {
     return buildFinalFillPlannerResult({
       status: "notPlanningYet",
-      message: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining.`,
+      message: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
       fullFillAmount,
       reason: "Outside the final-fill planning window."
     });
@@ -1581,7 +1616,7 @@ function planFinalFillStrategy(options = {}) {
   if (forecastPoints.length === 0 || !currentFinalFill) {
     return buildFinalFillPlannerResult({
       status: "noFutureFill",
-      message: "No more projected fills before end of run.",
+      message: "No final fill projected",
       fullFillAmount,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
@@ -1594,7 +1629,7 @@ function planFinalFillStrategy(options = {}) {
   if (finalFillAnalysis.status === "onTarget") {
     return buildFinalFillPlannerResult({
       status: "onTarget",
-      message: "Keep full fills — final fill on target.",
+      message: "Keep full fills",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1611,7 +1646,7 @@ function planFinalFillStrategy(options = {}) {
   if (finalFillAnalysis.status === "tooLate") {
     return buildFinalFillPlannerResult({
       status: "tooLate",
-      message: cycleSnapshot?.refillAllowed ? "Full fill now — final fill likely late." : "Full fills only — final fill likely late.",
+      message: "Keep full fills",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1638,7 +1673,7 @@ function planFinalFillStrategy(options = {}) {
   if (options.skipCandidatePlanning === true) {
     return buildFinalFillPlannerResult({
       status: "tooEarly",
-      message: "Full fills place the final fill too early.",
+      message: "Final fill too early",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1702,7 +1737,7 @@ function planFinalFillStrategy(options = {}) {
 
   return buildFinalFillPlannerResult({
     status: "noGoodPlan",
-    message: cycleSnapshot?.refillAllowed ? "Full fill now — final fill likely early." : "No safe reduction plan found.",
+    message: "Keep full fills",
     fullFillAmount,
     currentFullFillFinalSecondsBeforeEnd,
     currentFullFillFinalSheepNumber,
@@ -1909,6 +1944,7 @@ const elements = {
   penStateRefillStatus: document.getElementById("penStateRefillStatus"),
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
   penStateModel: document.getElementById("penStateModel"),
+  penFillConfirmSection: document.getElementById("penFillConfirmSection"),
   penFillConfirmInstruction: document.getElementById("penFillConfirmInstruction"),
   penFillConfirmStatus: document.getElementById("penFillConfirmStatus"),
   dayClock: document.getElementById("dayClock"),
@@ -4660,7 +4696,10 @@ function formatPenFillForecastPoint(point) {
 }
 
 function formatFinalPenFillForecastPoint(point) {
-  return `${point.label} — ${formatCountdown(point.secondsBeforeRunEnd)} before end of run`;
+  const secondsBeforeRunEnd = Number(point?.secondsBeforeRunEnd);
+  if (!Number.isFinite(secondsBeforeRunEnd)) return "No final fill projected";
+  if (secondsBeforeRunEnd <= 0) return `${point.label} — at end`;
+  return `${point.label} — ${formatCountdown(secondsBeforeRunEnd)} before end`;
 }
 
 function analyzeFinalFillWindow(forecastPoints, options = {}) {
@@ -4687,7 +4726,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (!Array.isArray(forecastPoints) || forecastPoints.length === 0) {
     return {
       status: "none",
-      message: "No more projected fills before end of run",
+      message: "No final fill projected",
       secondsBeforeRunEnd: null,
       finalFill: null
     };
@@ -4707,7 +4746,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (secondsBeforeRunEnd > maxBeforeEndSeconds) {
     return {
       status: "tooEarly",
-      message: `Too early — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+      message: "Final fill too early",
       secondsBeforeRunEnd,
       finalFill
     };
@@ -4716,7 +4755,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (secondsBeforeRunEnd < minBeforeEndSeconds) {
     return {
       status: "tooLate",
-      message: `Too late — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+      message: "Final fill too late",
       secondsBeforeRunEnd,
       finalFill
     };
@@ -4724,7 +4763,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
 
   return {
     status: "onTarget",
-    message: `On target — final fill ${formatCountdown(secondsBeforeRunEnd)} before end of run`,
+    message: "Final fill on target",
     secondsBeforeRunEnd,
     finalFill
   };
@@ -6499,9 +6538,9 @@ function penFillConfirmationModal({ recommendedFillAmount }) {
   }
 
   modal.title.textContent = "Confirm pen fill";
-  modal.message.textContent = `Recommended fill: Add ${recommendedFillAmount} now.\nWas this amount added?`;
+  modal.message.textContent = `Recommended: Add ${recommendedFillAmount}.\nWas this amount added?`;
   modal.yesBtn.textContent = `Yes, added ${recommendedFillAmount}`;
-  modal.noBtn.textContent = "No / different amount";
+  modal.noBtn.textContent = "Different amount";
   modal.cancelBtn.textContent = "Cancel";
   modal.returnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   modal.open = true;

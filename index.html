@@ -449,49 +449,6 @@
       <div class="panel-body">
         <div class="metrics-grid pen-fill-planner-grid">
           <div class="timing-group panel-section">
-            <h3 class="timing-group-heading panel-section-title">Pen fill forecast</h3>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Next fill:</span>
-              <strong id="penFillForecastNext" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Final projected fill:</span>
-              <strong id="penFillForecastFinal" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Assumption:</span>
-              <strong id="penFillForecastAssumption" class="panel-metric-value">Select record type</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Final fill status:</span>
-              <strong id="penFillForecastStatus" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Fill strategy:</span>
-              <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Reason:</span>
-              <strong id="penFillPlannerReason" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Last full fill:</span>
-              <strong id="penFillPlannerLastFullFill" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Remaining fills:</span>
-              <strong id="penFillPlannerRemainingFills" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Final 3 min:</span>
-              <strong id="penFillPlannerFinalThreeMinutes" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Fill reminder:</span>
-              <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
-            </div>
-          </div>
-          <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Pen state</h3>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Pen count:</span>
@@ -510,8 +467,41 @@
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
             </div>
           </div>
-          <div class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading">
-            <h3 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Fill confirmation</h3>
+          <div class="timing-group panel-section">
+            <h3 class="timing-group-heading panel-section-title">Next fill</h3>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Next fill:</span>
+              <strong id="penFillForecastNext" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Fill reminder:</span>
+              <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
+            </div>
+          </div>
+          <div class="timing-group panel-section">
+            <h3 class="timing-group-heading panel-section-title">Final fill forecast</h3>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Final projected fill:</span>
+              <strong id="penFillForecastFinal" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Final fill status:</span>
+              <strong id="penFillForecastStatus" class="panel-metric-value">—</strong>
+            </div>
+          </div>
+          <div class="timing-group panel-section">
+            <h3 class="timing-group-heading panel-section-title">Strategy</h3>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Fill strategy:</span>
+              <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Reason:</span>
+              <strong id="penFillPlannerReason" class="panel-metric-value">—</strong>
+            </div>
+          </div>
+          <div id="penFillConfirmSection" class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading" hidden>
+            <h3 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Confirmation</h3>
             <div id="penFillConfirmInstruction" class="pen-fill-confirm-instruction">—</div>
             <div class="metric-row panel-metric-row pen-fill-confirm-status-row">
               <span class="metric-label panel-metric-label">Fill confirmation:</span>
@@ -1037,17 +1027,11 @@
       <div class="connection-help-modal-content pen-fill-planner-help-content">
         <h4 class="connection-help-title">What this panel shows</h4>
         <p>The Pen Fill Planner keeps the refill forecast and pen-state details separate from the live Timing Panel alert.</p>
-        <p><strong>Next fill:</strong><br />The next projected refill sheep.</p>
-        <p><strong>Final projected fill:</strong><br />The last projected refill before the run ends.</p>
-        <p><strong>Assumption:</strong><br />Shows whether the forecast assumes full fills or uses confirmed fills.</p>
-        <p><strong>Final fill status:</strong><br />Shows if the final projected fill is early, on target, or late.</p>
-        <p><strong>Fill strategy:</strong><br />Read-only advice for the projected final fill timing.</p>
-        <p><strong>Last full fill:</strong><br />Shows when the app thinks the final maximum fill is due before smaller fills may be needed.</p>
-        <p><strong>Remaining fills:</strong><br />Shows the planned fill amounts from now to the final fill.</p>
-        <p><strong>Final 3 min:</strong><br />Estimates how many sheep may be caught/shorn in the final 3 minutes based on current average cycle time.</p>
-        <p><strong>Fill reminder:</strong><br />Warns when the next fill is 2 sheep away, 1 sheep away, or due now.</p>
-        <p><strong>Pen state:</strong><br />Shows sheep left, refill status, last confirmed fill, and the active pen model.</p>
-        <p><strong>Fill confirmation pop-up:</strong><br />At a due fill point, confirm the recommended amount or enter the actual amount added.</p>
+        <p><strong>Pen state:</strong><br />Shows pen count, refill status, last confirmed fill, and whether the model is using confirmed or assumed full fills.</p>
+        <p><strong>Next fill:</strong><br />Shows the next projected refill sheep and a short live reminder.</p>
+        <p><strong>Final fill forecast:</strong><br />Shows the last projected refill before the run ends and whether it is early, on target, or late.</p>
+        <p><strong>Strategy:</strong><br />Shows whether to keep full fills or use a smaller recommended fill.</p>
+        <p><strong>Confirmation:</strong><br />Only appears when a smaller-than-full fill needs confirmation.</p>
       </div>
     </div>
   </div>
