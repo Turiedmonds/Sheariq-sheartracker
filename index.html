@@ -317,7 +317,7 @@
                 <strong id="avgShear" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Average Catch, Shear, Release</span>
+                <span class="perf-metric-label panel-metric-label">Average Total Time Per Sheep</span>
                 <strong id="avgCycle" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
@@ -411,6 +411,10 @@
               <span class="metric-label panel-metric-label">Current shear time:</span>
               <strong id="currentShear" class="panel-metric-value">0.0s</strong>
             </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Total time per sheep:</span>
+              <strong id="currentTotalSheepTime" class="panel-metric-value">—</strong>
+            </div>
           </div>
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Run timing</h3>
@@ -474,10 +478,6 @@
               <strong id="penStateCurrentCount" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Refill status:</span>
-              <strong id="penStateRefillStatus" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Last confirmed refill:</span>
               <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
             </div>
@@ -492,6 +492,10 @@
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Pen model:</span>
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Refill status:</span>
+              <strong id="penStateRefillStatus" class="panel-metric-value">—</strong>
             </div>
           </div>
           <div class="timing-group panel-section">
@@ -677,7 +681,7 @@
                 <th class="sheep-log-time-col">End Time</th>
                 <th class="sheep-log-time-col">Catch Duration</th>
                 <th class="sheep-log-time-col">Shear Duration</th>
-                <th class="sheep-log-time-col">Catch, Shear, Release</th>
+                <th class="sheep-log-time-col">Total Time Per Sheep</th>
                 <th>Marker / Note</th>
               </tr>
             </thead>
@@ -719,11 +723,11 @@
           </header>
           <div class="panel-section-content">
             <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-              <span><strong>Blue</strong> Avg Catch, Shear, Release</span>
+              <span><strong>Blue</strong> Avg Total Time Per Sheep</span>
               <span><strong>Green</strong> Avg catch</span>
               <span><strong>Orange</strong> Target cycle</span>
             </div>
-            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg Catch, Shear, Release 0.000s • Target 0.000s • Set target for pace comparison.</div>
+            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg Total Time Per Sheep 0.000s • Target 0.000s • Set target for pace comparison.</div>
             <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
             <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
           </div>
@@ -847,14 +851,14 @@
           <li>End time</li>
           <li>Shear duration</li>
           <li>Catch duration</li>
-          <li>Catch, Shear, Release</li>
+          <li>Total Time Per Sheep</li>
           <li>Marker / Note</li>
         </ul>
 
         <h4 class="connection-help-title">Duration columns</h4>
         <p><strong>Shear Duration:</strong><br />How long the motor was running for that sheep.</p>
         <p><strong>Catch Duration:</strong><br />How long it took from the end of one sheep to the start of the next sheep.</p>
-        <p><strong>Catch, Shear, Release:</strong><br />The full time from starting the catch through to releasing the sheep. This combines catch time and shear time.</p>
+        <p><strong>Total Time Per Sheep:</strong><br />The total time per sheep. This combines catch time and shear time.</p>
 
         <h4 class="connection-help-title">Colour shading</h4>
         <p>Yellow/orange shading means that time was longer than normal compared with the average for that same column.</p>
@@ -875,7 +879,7 @@
         <ul class="connection-help-list">
           <li><strong>Normal / no colour:</strong> The time is close to the average for that column.</li>
         </ul>
-        <p><strong>What “average for that column” means:</strong><br />Each duration column is compared with its own average: Shear Duration with average shear duration, Catch Duration with average catch duration, and Catch, Shear, Release with average Catch, Shear, Release.</p>
+        <p><strong>What “average for that column” means:</strong><br />Each duration column is compared with its own average: Shear Duration with average shear duration, Catch Duration with average catch duration, and Total Time Per Sheep with average Total Time Per Sheep.</p>
         <p><strong>Example (catch duration):</strong><br />If the average catch duration is 7 seconds, 8 or 9 seconds may stay normal, around 12 seconds may show light yellow, around 20 seconds may show strong yellow, and around 25 seconds or more may show orange. This is an example only.</p>
         <p>The colour does not automatically mean something went wrong. It is only a quick way to spot times worth checking.</p>
 
@@ -909,7 +913,7 @@
       </div>
       <div class="connection-help-modal-content">
         <div class="sheep-log-sort-controls panel-section" aria-label="Sheep log sorting controls">
-          <div class="sheep-log-sort-control"><label for="sheepLogSortBy">Sort:</label><select id="sheepLogSortBy"><option value="number">Sheep number</option><option value="shearDuration">Shear time</option><option value="catchDuration">Catch time</option><option value="fullCycle">Catch, Shear, Release</option></select></div>
+          <div class="sheep-log-sort-control"><label for="sheepLogSortBy">Sort:</label><select id="sheepLogSortBy"><option value="number">Sheep number</option><option value="shearDuration">Shear time</option><option value="catchDuration">Catch time</option><option value="fullCycle">Total Time Per Sheep</option></select></div>
           <div class="sheep-log-sort-control"><label for="sheepLogSortOrder">Order:</label><select id="sheepLogSortOrder"><option value="asc">Fastest first</option><option value="desc">Slowest first</option></select></div>
           <div class="sheep-log-sort-control"><label for="sheepLogFillDirection">Fill:</label><select id="sheepLogFillDirection"><option value="latestFirst">Latest first</option><option value="oldestFirst">Oldest first</option></select></div>
           <div class="sheep-log-sort-control"><button id="markerSettingsToggle" class="marker-settings-toggle panel-settings-btn" type="button" aria-expanded="false">⚙ Marker Settings</button></div>
@@ -964,7 +968,7 @@
         <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
         <h4>Required section</h4>
         <ul>
-          <li><strong>Required average total time per sheep:</strong> Average Catch, Shear, Release time needed to hit the run target.</li>
+          <li><strong>Required average total time per sheep:</strong> Average Total Time Per Sheep time needed to hit the run target.</li>
           <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
           <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
           <li><strong>Required run total:</strong> Target sheep count for this run.</li>
@@ -1080,11 +1084,11 @@
         <h4 class="connection-help-title">Averages</h4>
         <p><strong>Average shear time:</strong><br />The average time spent shearing each completed sheep.</p>
         <p><strong>Average catch time:</strong><br />The average time between finishing one sheep and starting the next sheep.</p>
-        <p><strong>Average Catch, Shear, Release time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
+        <p><strong>Average Total Time Per Sheep time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
         <p><strong>Sheep per hour:</strong><br />The current average number of sheep being completed per hour.</p>
 
-        <h4 class="connection-help-title">Average Catch, Shear, Release colour</h4>
-        <p>The Catch, Shear, Release value may show a coloured outline or background.</p>
+        <h4 class="connection-help-title">Average Total Time Per Sheep colour</h4>
+        <p>The Total Time Per Sheep value may show a coloured outline or background.</p>
         <p>The colour helps show whether the average full cycle time is on pace, close to target, or falling behind.</p>
 
         <h4 class="connection-help-title">Sheep Times</h4>
