@@ -495,6 +495,7 @@ function refreshPenFillConfirmationDisplays(message = "") {
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
   updatePenFillConfirmationControls({ statusOverride: message });
+  maybeShowPenFillConfirmationPrompt();
 }
 
 function getPenFillAmountErrorMessage(error) {
@@ -602,10 +603,10 @@ async function undoLastPenFillEvent() {
   return { success: true, event: latestEvent, message, error: null };
 }
 
-function promptForCustomPenFillAmount() {
+function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
   const fullFillAmount = Number(getPenRule(appState.recordType)?.defaultRefillAmount);
   const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
-  const rawAmount = window.prompt(`Enter whole number fill amount${promptSuffix}:`, "");
+  const rawAmount = window.prompt(`${message}${promptSuffix}`, "");
   if (rawAmount === null) return null;
   return rawAmount.trim();
 }
@@ -678,7 +679,6 @@ function getPenFillInstructionModel(options = {}) {
 
   return {
     instruction,
-    confirmLabel: Number.isInteger(recommendedFillAmount) ? `Confirm add ${recommendedFillAmount}` : "Confirm add —",
     recommendedFillAmount,
     fullFillAmount: canUseFullFill ? fullFillAmount : null,
     reductionAmount,
@@ -692,8 +692,6 @@ function getPenFillInstructionModel(options = {}) {
 }
 
 function updatePenFillConfirmationControls(options = {}) {
-  const primaryButton = elements.penFillConfirmSuggestedBtn;
-  const differentAmountButton = elements.penFillDifferentAmountBtn;
   const recordType = appState.recordType;
   const rule = getPenRule(recordType);
   const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
@@ -708,44 +706,139 @@ function updatePenFillConfirmationControls(options = {}) {
     physicalSheepTakenFromPen,
     penState
   });
-  const latestEvent = getLatestActiveCurrentRunPenFillEvent();
   const alreadyConfirmed = Boolean(findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen));
 
-  if (primaryButton) {
-    primaryButton.textContent = instructionModel.confirmLabel;
-  }
-  if (differentAmountButton) {
-    differentAmountButton.textContent = "Different amount";
-  }
-  if (elements.penFillUndoLastBtn) {
-    elements.penFillUndoLastBtn.textContent = "Undo last fill";
-    elements.penFillUndoLastBtn.disabled = !latestEvent || !appState.runActive || appState.paused;
-  }
-
-  let disabledStatus = "—";
+  let statusText = "—";
   if (!recordType || recordType === "none") {
-    disabledStatus = "Select record type";
+    statusText = "Select record type";
   } else if (!appState.runActive) {
-    disabledStatus = "Start run";
+    statusText = "Start run";
   } else if (appState.paused) {
-    disabledStatus = "Run paused";
+    statusText = "Run paused";
   } else if (!rule || !penState) {
-    disabledStatus = "Select record type";
+    statusText = "Select record type";
   } else if (alreadyConfirmed) {
-    disabledStatus = "Fill already confirmed";
+    statusText = "Fill already confirmed";
   } else if (!penState.refillAllowedNow) {
-    disabledStatus = "Fill not due yet";
+    statusText = "—";
   } else if (!instructionModel.canConfirmNow) {
-    disabledStatus = "Waiting for pace data";
+    statusText = "Waiting for pace data";
   }
-
-  const canConfirmNow = disabledStatus === "—";
-  if (primaryButton) primaryButton.disabled = !canConfirmNow;
-  if (differentAmountButton) differentAmountButton.disabled = !canConfirmNow;
 
   setText(elements.penFillConfirmInstruction, instructionModel.instruction);
-  const statusText = options.statusOverride || (canConfirmNow ? "—" : disabledStatus);
-  setText(elements.penFillConfirmStatus, statusText);
+  setText(elements.penFillConfirmStatus, options.statusOverride || statusText);
+}
+
+function getPenFillPromptKey(physicalSheepTakenFromPen, runIndex = appState.currentRunIndex) {
+  return `${runIndex}:${physicalSheepTakenFromPen}`;
+}
+
+function canShowPenFillConfirmationPrompt(context) {
+  if (!context) return false;
+  const { recordType, rule, penState, instructionModel, physicalSheepTakenFromPen, promptKey } = context;
+  const recommendedFillAmount = Number(instructionModel?.recommendedFillAmount);
+  return Boolean(
+    appState.runActive
+    && !appState.paused
+    && recordType
+    && recordType !== "none"
+    && rule
+    && penState
+    && penState.refillAllowedNow
+    && instructionModel?.canConfirmNow
+    && Number.isInteger(recommendedFillAmount)
+    && recommendedFillAmount > 0
+    && !findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)
+    && appState.pendingPenFillPromptKey !== promptKey
+    && appState.dismissedPenFillPromptKey !== promptKey
+  );
+}
+
+function getPenFillPromptContext() {
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
+  const instructionModel = getPenFillInstructionModel({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen,
+    penState
+  });
+  const promptKey = getPenFillPromptKey(physicalSheepTakenFromPen);
+  return { recordType, rule, physicalSheepTakenFromPen, penState, instructionModel, promptKey };
+}
+
+async function maybeShowPenFillConfirmationPrompt() {
+  const context = getPenFillPromptContext();
+  if (!canShowPenFillConfirmationPrompt(context)) return;
+
+  const { promptKey, instructionModel } = context;
+  const recommendedFillAmount = Number(instructionModel.recommendedFillAmount);
+  appState.pendingPenFillPromptKey = promptKey;
+
+  try {
+    const answer = await penFillConfirmationModal({ recommendedFillAmount });
+    if (appState.pendingPenFillPromptKey !== promptKey) return;
+
+    if (answer === "yes") {
+      recordPenFillEvent({
+        actualFillAmount: recommendedFillAmount,
+        recommendedFillAmount,
+        source: PEN_FILL_EVENT_SOURCE.RECOMMENDED
+      });
+      return;
+    }
+
+    if (answer === "different") {
+      await promptForDifferentPenFillAmount(recommendedFillAmount, promptKey);
+      return;
+    }
+
+    appState.dismissedPenFillPromptKey = promptKey;
+    updatePenFillConfirmationControls({ statusOverride: "Fill not confirmed." });
+  } finally {
+    if (appState.pendingPenFillPromptKey === promptKey) {
+      appState.pendingPenFillPromptKey = null;
+    }
+  }
+}
+
+async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey) {
+  let promptMessage = "What amount was actually added to the pen?";
+  while (appState.pendingPenFillPromptKey === promptKey) {
+    const rawAmount = promptForCustomPenFillAmount(promptMessage);
+    if (rawAmount === null) {
+      appState.dismissedPenFillPromptKey = promptKey;
+      updatePenFillConfirmationControls({ statusOverride: "Fill not confirmed." });
+      return { success: false, message: "Fill not confirmed." };
+    }
+
+    if (!/^\d+$/.test(rawAmount)) {
+      const message = "Fill amount must be a whole number.";
+      updatePenFillConfirmationControls({ statusOverride: message });
+      promptMessage = `${message}\n\nWhat amount was actually added to the pen?`;
+      continue;
+    }
+
+    const actualFillAmount = Number(rawAmount);
+    const result = recordPenFillEvent({
+      actualFillAmount,
+      recommendedFillAmount,
+      source: PEN_FILL_EVENT_SOURCE.CUSTOM
+    });
+
+    if (result.success) return result;
+
+    const message = result.message || "Unable to record fill.";
+    updatePenFillConfirmationControls({ statusOverride: message });
+    promptMessage = `${message}\n\nWhat amount was actually added to the pen?`;
+  }
+  return { success: false, message: "Fill not confirmed." };
 }
 
 function simulatePenFillPlan(options = {}) {
@@ -1287,6 +1380,20 @@ const appState = {
     resolver: null,
     returnFocusEl: null
   },
+  penFillPromptModal: {
+    open: false,
+    overlay: null,
+    dialog: null,
+    title: null,
+    message: null,
+    yesBtn: null,
+    noBtn: null,
+    cancelBtn: null,
+    resolver: null,
+    returnFocusEl: null
+  },
+  pendingPenFillPromptKey: null,
+  dismissedPenFillPromptKey: null,
   effectiveElapsedBeforePauseMs: 0,
   effectiveResumeRealMs: null,
   trendBucketMinutes: 15,
@@ -1387,9 +1494,6 @@ const elements = {
   penStateLastConfirmedFill: document.getElementById("penStateLastConfirmedFill"),
   penStateModel: document.getElementById("penStateModel"),
   penFillConfirmInstruction: document.getElementById("penFillConfirmInstruction"),
-  penFillConfirmSuggestedBtn: document.getElementById("penFillConfirmSuggestedBtn"),
-  penFillDifferentAmountBtn: document.getElementById("penFillDifferentAmountBtn"),
-  penFillUndoLastBtn: document.getElementById("penFillUndoLastBtn"),
   penFillConfirmStatus: document.getElementById("penFillConfirmStatus"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
@@ -2628,6 +2732,8 @@ function resetRunState() {
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
   appState.targetPacePredictionSnapshot = null;
+  appState.pendingPenFillPromptKey = null;
+  appState.dismissedPenFillPromptKey = null;
   calculateAverages();
 }
 
@@ -2693,6 +2799,8 @@ function startRun() {
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
   appState.targetPacePredictionSnapshot = null;
+  appState.pendingPenFillPromptKey = null;
+  appState.dismissedPenFillPromptKey = null;
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
@@ -4558,6 +4666,7 @@ function updateStatsPanel() {
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
   updatePenFillConfirmationControls();
+  maybeShowPenFillConfirmationPrompt();
 
   if (elements.lastSheepTime) {
     elements.lastSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
@@ -5855,6 +5964,125 @@ function ensureConfirmModal() {
   return appState.confirmModal;
 }
 
+function ensurePenFillPromptModal() {
+  if (appState.penFillPromptModal.overlay instanceof HTMLElement) return appState.penFillPromptModal;
+
+  const overlay = document.createElement("div");
+  overlay.id = "penFillPromptModalOverlay";
+  overlay.className = "modal-overlay";
+  overlay.hidden = true;
+
+  const dialog = document.createElement("div");
+  dialog.className = "modal-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "penFillPromptModalTitle");
+  dialog.setAttribute("aria-describedby", "penFillPromptModalMessage");
+  dialog.tabIndex = -1;
+
+  const title = document.createElement("h3");
+  title.id = "penFillPromptModalTitle";
+
+  const message = document.createElement("p");
+  message.id = "penFillPromptModalMessage";
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+
+  const yesBtn = document.createElement("button");
+  yesBtn.id = "penFillPromptModalYes";
+  yesBtn.type = "button";
+
+  const noBtn = document.createElement("button");
+  noBtn.id = "penFillPromptModalNo";
+  noBtn.type = "button";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.id = "penFillPromptModalCancel";
+  cancelBtn.type = "button";
+  cancelBtn.textContent = "Cancel";
+
+  actions.append(yesBtn, noBtn, cancelBtn);
+  dialog.append(title, message, actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  Object.assign(appState.penFillPromptModal, {
+    overlay,
+    dialog,
+    title,
+    message,
+    yesBtn,
+    noBtn,
+    cancelBtn
+  });
+
+  const resolvePenFillPromptModal = (answer) => {
+    if (!appState.penFillPromptModal.open) return;
+    const resolver = appState.penFillPromptModal.resolver;
+    appState.penFillPromptModal.open = false;
+    appState.penFillPromptModal.resolver = null;
+    overlay.hidden = true;
+    setLayoutScrollLock(false);
+    if (appState.penFillPromptModal.returnFocusEl instanceof HTMLElement) {
+      appState.penFillPromptModal.returnFocusEl.focus();
+    }
+    appState.penFillPromptModal.returnFocusEl = null;
+    if (typeof resolver === "function") resolver(answer);
+  };
+
+  yesBtn.addEventListener("click", () => resolvePenFillPromptModal("yes"));
+  noBtn.addEventListener("click", () => resolvePenFillPromptModal("different"));
+  cancelBtn.addEventListener("click", () => resolvePenFillPromptModal("cancel"));
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) resolvePenFillPromptModal("cancel");
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      resolvePenFillPromptModal("cancel");
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      resolvePenFillPromptModal("yes");
+    }
+  });
+
+  return appState.penFillPromptModal;
+}
+
+function penFillConfirmationModal({ recommendedFillAmount }) {
+  const modal = ensurePenFillPromptModal();
+  if (!modal.overlay || !modal.dialog || !modal.title || !modal.message || !modal.yesBtn || !modal.noBtn || !modal.cancelBtn) {
+    return Promise.resolve("cancel");
+  }
+
+  if (modal.open && typeof modal.resolver === "function") {
+    const previousResolver = modal.resolver;
+    modal.open = false;
+    modal.resolver = null;
+    modal.overlay.hidden = true;
+    setLayoutScrollLock(false);
+    previousResolver("cancel");
+  }
+
+  modal.title.textContent = "Confirm pen fill";
+  modal.message.textContent = `Recommended fill: Add ${recommendedFillAmount} now.\nWas this amount added?`;
+  modal.yesBtn.textContent = `Yes, added ${recommendedFillAmount}`;
+  modal.noBtn.textContent = "No / different amount";
+  modal.cancelBtn.textContent = "Cancel";
+  modal.returnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.open = true;
+  modal.overlay.hidden = false;
+  setLayoutScrollLock(true);
+  modal.dialog.focus();
+
+  return new Promise((resolve) => {
+    modal.resolver = resolve;
+  });
+}
+
+
 function confirmModal({ title, message, confirmText = "Confirm", cancelText = "Cancel" }) {
   const modal = ensureConfirmModal();
   if (!modal.overlay || !modal.dialog || !modal.title || !modal.message || !modal.confirmBtn || !modal.cancelBtn) {
@@ -6280,52 +6508,6 @@ function bindEvents() {
       autosaveState();
     });
   }
-  if (elements.penFillConfirmSuggestedBtn) {
-    elements.penFillConfirmSuggestedBtn.addEventListener("click", () => {
-      const instructionModel = getPenFillInstructionModel();
-      const recommendedFillAmount = Number(instructionModel.recommendedFillAmount);
-      if (!instructionModel.canConfirmNow || !Number.isInteger(recommendedFillAmount)) {
-        updatePenFillConfirmationControls({ statusOverride: instructionModel.instruction || "Waiting for pace data" });
-        return;
-      }
-      recordPenFillEvent({
-        actualFillAmount: recommendedFillAmount,
-        recommendedFillAmount,
-        source: PEN_FILL_EVENT_SOURCE.RECOMMENDED
-      });
-    });
-  }
-
-  if (elements.penFillDifferentAmountBtn) {
-    elements.penFillDifferentAmountBtn.addEventListener("click", () => {
-      const instructionModel = getPenFillInstructionModel();
-      const rawAmount = promptForCustomPenFillAmount();
-      if (rawAmount === null) {
-        updatePenFillConfirmationControls();
-        return;
-      }
-      if (!/^\d+$/.test(rawAmount)) {
-        updatePenFillConfirmationControls({ statusOverride: "Fill amount must be a whole number." });
-        return;
-      }
-      const actualFillAmount = Number(rawAmount);
-      const result = recordPenFillEvent({
-        actualFillAmount,
-        recommendedFillAmount: instructionModel.recommendedFillAmount,
-        source: PEN_FILL_EVENT_SOURCE.CUSTOM
-      });
-      if (!result.success) {
-        updatePenFillConfirmationControls({ statusOverride: result.message });
-      }
-    });
-  }
-
-  if (elements.penFillUndoLastBtn) {
-    elements.penFillUndoLastBtn.addEventListener("click", () => {
-      undoLastPenFillEvent();
-    });
-  }
-
   if (elements.dayStartTimeInput) {
     elements.dayStartTimeInput.addEventListener("input", () => {
       appState.dayStartTimeTouched = true;

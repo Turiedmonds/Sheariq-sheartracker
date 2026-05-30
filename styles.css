@@ -1365,6 +1365,7 @@ td {
 
 .modal-dialog p {
   margin: 0 0 1rem;
+  white-space: pre-line;
 }
 
 .modal-actions {
@@ -1994,42 +1995,14 @@ td.pace-neutral {
   margin-top: 0.35rem;
 }
 
-#panel-cycle .pen-fill-confirm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-items: center;
-}
-
 #panel-cycle .pen-fill-confirm-instruction {
   font-size: 0.9rem;
   font-weight: 700;
   color: #111827;
 }
 
-#panel-cycle .pen-fill-confirm-actions button {
-  min-height: 2.25rem;
-  padding: 0.45rem 0.65rem;
-  font-size: 0.85rem;
-  touch-action: manipulation;
-}
-
-#panel-cycle .pen-fill-confirm-actions .pen-fill-confirm-primary {
-  min-width: 9rem;
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #ffffff;
-  font-weight: 700;
-}
-
-#panel-cycle .pen-fill-confirm-actions .pen-fill-secondary-btn {
-  min-height: 2rem;
-  padding: 0.35rem 0.55rem;
-  font-size: 0.8rem;
-}
-
-#panel-cycle .pen-fill-undo-btn {
-  margin-left: 0.25rem;
+#panel-cycle .pen-fill-confirm-status-row {
+  margin-top: 0.1rem;
 }
 
 #panel-cycle .pen-fill-confirm-status {
