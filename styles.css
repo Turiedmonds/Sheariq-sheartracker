@@ -1919,7 +1919,8 @@ td {
 
 #avgCycle.on-pace-good,
 #lastSheepTime.on-pace-good,
-#currentSheepTimeLeft.on-pace-good {
+#currentSheepTimeLeft.on-pace-good,
+#currentTotalSheepTime.on-pace-good {
   background: #ecfdf5;
   border: 1px solid #16a34a;
   border-radius: 4px;
@@ -1928,7 +1929,8 @@ td {
 
 #avgCycle.on-pace-bad,
 #lastSheepTime.on-pace-bad,
-#currentSheepTimeLeft.on-pace-bad {
+#currentSheepTimeLeft.on-pace-bad,
+#currentTotalSheepTime.on-pace-bad {
   background: #fef2f2;
   border: 1px solid #dc2626;
   border-radius: 4px;
@@ -1937,7 +1939,8 @@ td {
 
 #avgCycle.on-pace-neutral,
 #lastSheepTime.on-pace-neutral,
-#currentSheepTimeLeft.on-pace-neutral {
+#currentSheepTimeLeft.on-pace-neutral,
+#currentTotalSheepTime.on-pace-neutral {
   background: #f9fafb;
   border: 1px solid #d1d5db;
   border-radius: 4px;
