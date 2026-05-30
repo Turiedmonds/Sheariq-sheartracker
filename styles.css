@@ -1449,6 +1449,90 @@ td {
   border-bottom: 0;
 }
 
+.perf-marker-averages {
+  margin-top: 0.65rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.perf-subsection-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.85rem;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.run-review-summary {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.run-review-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.45rem;
+}
+
+.run-review-stat-card {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.run-review-stat-card span {
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.run-review-stat-card strong {
+  color: #0f172a;
+  font-size: 0.9rem;
+}
+
+.run-review-marker-breakdown {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.run-review-marker-breakdown h4 {
+  margin: 0;
+  color: #334155;
+}
+
+.run-review-marker-row {
+  display: grid;
+  grid-template-columns: 4.8rem minmax(80px, 1fr) 2rem;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.run-review-marker-label {
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.run-review-marker-bar-wrap {
+  height: 0.7rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+
+.run-review-marker-bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
+}
+
+.run-review-marker-count {
+  text-align: right;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;

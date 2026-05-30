@@ -473,7 +473,7 @@ function getPenFillForecastPoints(options = {}) {
   if (hasConfirmedEvents) {
     return {
       points: forecastPenFillPointsFromEvents({ ...options, recordType, rule, events, physicalSheepTakenFromPen }),
-      assumption: fillNotConfirmed ? "Fill not confirmed — assuming full fills" : "Using confirmed fills",
+      assumption: fillNotConfirmed ? "Refill not confirmed — assuming full refills" : "Using confirmed refills",
       hasConfirmedEvents,
       fillNotConfirmed,
       penState
@@ -485,7 +485,7 @@ function getPenFillForecastPoints(options = {}) {
   const points = currentFillPoint ? [currentFillPoint, ...fullFillPoints] : fullFillPoints;
   return {
     points,
-    assumption: fillNotConfirmed ? "Fill not confirmed — assuming full fills" : "Assuming full fills",
+    assumption: fillNotConfirmed ? "Refill not confirmed — assuming full refills" : "Assuming full refills",
     hasConfirmedEvents,
     fillNotConfirmed,
     penState
@@ -682,7 +682,7 @@ function getCurrentPenStateFromEvents(options = {}) {
       lastFillAmount: Number(lastFillEvent.actualFillAmount),
       lastFillSheepNumber,
       lastFillTime: lastFillEvent.wallClockTime || lastFillEvent.createdAt || null,
-      assumption: "Using confirmed fills."
+      assumption: "Using confirmed refills."
     };
   }
 
@@ -707,7 +707,7 @@ function getCurrentPenStateFromEvents(options = {}) {
     lastFillAmount: null,
     lastFillSheepNumber: null,
     lastFillTime: null,
-    assumption: "Assuming full fills."
+    assumption: "Assuming full refills."
   };
 }
 
@@ -745,22 +745,22 @@ function validatePenFillAmount(amount, penState, rule) {
     return { ...result, reason: "Missing pen rule." };
   }
   if (!Number.isInteger(numericAmount)) {
-    return { ...result, reason: "Fill amount must be a whole number." };
+    return { ...result, reason: "Refill amount must be a whole number." };
   }
   if (numericAmount <= 0) {
-    return { ...result, reason: "Fill amount must be greater than 0." };
+    return { ...result, reason: "Refill amount must be greater than 0." };
   }
   if (!Number.isFinite(currentPenCount)) {
     return { ...result, reason: "Missing current pen count." };
   }
   if (numericAmount > fullFillAmount) {
-    return { ...result, reason: "Fill amount cannot exceed the full fill amount." };
+    return { ...result, reason: "Refill amount cannot exceed the full refill amount." };
   }
   if (resultingPenCount > maxPen) {
     return { ...result, reason: "Resulting pen count cannot exceed pen capacity." };
   }
   if (Number.isFinite(minRecommended) && numericAmount < minRecommended) {
-    return { ...result, reason: "Fill amount is below the minimum recommended fill." };
+    return { ...result, reason: "Refill amount is below the minimum recommended refill." };
   }
 
   return { ...result, valid: true, reason: "" };
@@ -864,10 +864,10 @@ function refreshPenFillConfirmationDisplays(message = "") {
 }
 
 function getPenFillAmountErrorMessage(error) {
-  if (error === "Fill amount is below the minimum recommended fill.") {
-    return "Fill amount below minimum recommended.";
+  if (error === "Refill amount is below the minimum recommended refill.") {
+    return "Refill amount below minimum recommended.";
   }
-  return error || "Unable to record fill.";
+  return error || "Unable to record refill.";
 }
 
 function recordPenFillEvent(options = {}) {
@@ -898,10 +898,10 @@ function recordPenFillEvent(options = {}) {
     return fail("Select record type", "Missing pen rule.");
   }
   if (!penState.refillAllowedNow) {
-    return fail("Fill not due yet");
+    return fail("Refill not due yet");
   }
   if (findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)) {
-    return fail("Fill already confirmed");
+    return fail("Refill already confirmed");
   }
 
   const draft = createPenFillEventDraft({
@@ -923,12 +923,12 @@ function recordPenFillEvent(options = {}) {
   autosaveState();
 
   const sourceMessages = {
-    [PEN_FILL_EVENT_SOURCE.FULL]: "Fill confirmed",
-    [PEN_FILL_EVENT_SOURCE.RECOMMENDED]: "Fill confirmed",
-    [PEN_FILL_EVENT_SOURCE.MINUS_ONE]: "Fill confirmed",
+    [PEN_FILL_EVENT_SOURCE.FULL]: "Refill confirmed",
+    [PEN_FILL_EVENT_SOURCE.RECOMMENDED]: "Refill confirmed",
+    [PEN_FILL_EVENT_SOURCE.MINUS_ONE]: "Refill confirmed",
     [PEN_FILL_EVENT_SOURCE.CUSTOM]: "Different amount recorded"
   };
-  const message = `${sourceMessages[draft.source] || "Fill confirmed"} — added ${draft.actualFillAmount}.`;
+  const message = `${sourceMessages[draft.source] || "Refill confirmed"} — added ${draft.actualFillAmount}.`;
   refreshPenFillConfirmationDisplays(message);
 
   return { success: true, event: draft, message, error: null };
@@ -942,13 +942,13 @@ async function undoLastPenFillEvent() {
   const latestEvent = getLatestActiveCurrentRunPenFillEvent();
   if (!latestEvent) {
     updatePenFillConfirmationControls({ statusOverride: "—" });
-    return { success: false, event: null, message: "—", error: "No fill to undo." };
+    return { success: false, event: null, message: "—", error: "No refill to undo." };
   }
 
   const confirmed = await confirmModal({
-    title: "Undo last fill?",
-    message: `Undo last fill at sheep ${latestEvent.physicalSheepTakenFromPen} — added ${latestEvent.actualFillAmount}?`,
-    confirmText: "Undo fill",
+    title: "Undo last refill?",
+    message: `Undo last refill at sheep ${latestEvent.physicalSheepTakenFromPen} — added ${latestEvent.actualFillAmount}?`,
+    confirmText: "Undo refill",
     cancelText: "Cancel"
   });
 
@@ -963,7 +963,7 @@ async function undoLastPenFillEvent() {
   latestEvent.updatedAt = now;
   autosaveState();
 
-  const message = "Undid last fill.";
+  const message = "Undid last refill.";
   refreshPenFillConfirmationDisplays(message);
   return { success: true, event: latestEvent, message, error: null };
 }
@@ -1029,30 +1029,30 @@ function getPenFillInstructionModel(options = {}) {
   } else if (!rule || !penState) {
     instruction = "Select record type";
   } else if (!penState.refillAllowedNow) {
-    instruction = "Fill not due yet";
+    instruction = "Refill not due yet";
   } else if (!validation.valid) {
     instruction = planner?.status === "waiting" ? "Waiting for pace data" : "—";
   } else if (isLastFullFill) {
-    instruction = `Last full fill — add ${recommendedFillAmount}`;
+    instruction = `Last full refill — add ${recommendedFillAmount}`;
   } else if (isFullFill) {
-    instruction = "Keep full fills";
+    instruction = "Keep full refills";
   } else {
-    instruction = penState.refillAllowedNow ? `Add ${recommendedFillAmount} now` : `At next fill, add ${recommendedFillAmount}`;
+    instruction = penState.refillAllowedNow ? `Add ${recommendedFillAmount} now` : `At next refill, add ${recommendedFillAmount}`;
   }
 
   const projectedFinalFillSecondsBeforeEnd = Number(planner?.projectedFinalFillSecondsBeforeEnd);
   const reasonByStatus = {
-    onTarget: "Final fill on target",
-    recommendReduction: "Final fill too early",
-    tooEarly: "Final fill too early",
-    tooLate: "Final fill too late",
-    noGoodPlan: "Keep full fills",
-    noFutureFill: "No final fill projected",
+    onTarget: "Final refill on target",
+    recommendReduction: "Final refill too early",
+    tooEarly: "Final refill too early",
+    tooLate: "Final refill too late",
+    noGoodPlan: "Keep full refills",
+    noFutureFill: "No final refill projected",
     notPlanningYet: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
     waiting: "Waiting for pace data"
   };
   const reason = reasonByStatus[planner?.status]
-    || (Number.isFinite(projectedFinalFillSecondsBeforeEnd) ? "Final fill on target" : (validation.error || "—"));
+    || (Number.isFinite(projectedFinalFillSecondsBeforeEnd) ? "Final refill on target" : (validation.error || "—"));
   const remainingFillPlan = Array.isArray(planner?.remainingFillPlan) ? planner.remainingFillPlan : [];
   const remainingFillsMessage = planner?.remainingFillsMessage || formatRemainingFillsMessage(remainingFillPlan, {
     status: planner?.status,
@@ -1061,7 +1061,7 @@ function getPenFillInstructionModel(options = {}) {
   const finalThreeMinutePrediction = getFinalThreeMinutePrediction();
   const finalThreeMinuteMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
     && projectedFinalFillSecondsBeforeEnd < FINAL_FILL_MIN_BEFORE_END_SECONDS
-      ? "Final fill too late"
+      ? "Final refill too late"
       : finalThreeMinutePrediction.message;
   let lastFullFillMessage = "Not yet";
   if (!canUseFullFill || !recordType || recordType === "none" || !appState.runActive) {
@@ -1071,7 +1071,7 @@ function getPenFillInstructionModel(options = {}) {
   } else if (isFullFill && planner?.status === "noFutureFill") {
     lastFullFillMessage = "Already passed";
   } else if (["onTarget", "tooLate", "noGoodPlan"].includes(planner?.status)) {
-    lastFullFillMessage = "No full fill change needed";
+    lastFullFillMessage = "No full refill change needed";
   }
 
   return {
@@ -1231,7 +1231,7 @@ function updatePenFillConfirmationControls(options = {}) {
   }
 
   const recommendedFillAmount = Number(instructionModel.recommendedFillAmount);
-  let statusText = "Was this amount added?";
+  let statusText = "Was this refill amount added?";
   if (options.statusOverride) {
     statusText = options.statusOverride;
   } else if (!recordType || recordType === "none") {
@@ -1344,7 +1344,7 @@ async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey)
     }
 
     if (!/^\d+$/.test(rawAmount)) {
-      const message = "Fill amount must be a whole number.";
+      const message = "Refill amount must be a whole number.";
       updatePenFillConfirmationControls({ statusOverride: message });
       promptMessage = `${message}\n\nWhat amount was actually added to the pen?`;
       continue;
@@ -1359,7 +1359,7 @@ async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey)
 
     if (result.success) return result;
 
-    const message = result.message || "Unable to record fill.";
+    const message = result.message || "Unable to record refill.";
     updatePenFillConfirmationControls({ statusOverride: message });
     promptMessage = `${message}\n\nWhat amount was actually added to the pen?`;
   }
@@ -1431,12 +1431,12 @@ function simulatePenFillPlan(options = {}) {
 function buildFinalFillPlanLabel(reductions, fullFillAmount) {
   const changedFillCount = reductions.filter((reduction) => reduction > 0).length;
   const maxSingleReduction = reductions.reduce((max, reduction) => Math.max(max, reduction), 0);
-  if (changedFillCount === 0) return "Full fills only";
+  if (changedFillCount === 0) return "Full refills only";
   if (changedFillCount === 1) {
-    return `Add ${fullFillAmount - maxSingleReduction} at next fill. Then full fills.`;
+    return `Add ${fullFillAmount - maxSingleReduction} at next refill. Then full refills.`;
   }
-  if (maxSingleReduction === 1) return `Add ${fullFillAmount - 1} for next ${changedFillCount} fills.`;
-  return `Reduce next ${changedFillCount} fills by ${maxSingleReduction}.`;
+  if (maxSingleReduction === 1) return `Add ${fullFillAmount - 1} for next ${changedFillCount} refills.`;
+  return `Reduce next ${changedFillCount} refills by ${maxSingleReduction}.`;
 }
 
 function scoreFinalFillPlanCandidate(candidate, options = {}) {
@@ -1579,36 +1579,36 @@ function generateFinalFillPlanCandidates(options = {}) {
 function formatFinalFillPlanMessage(candidate, cycleSnapshot, hasActiveSheepOnBoard) {
   const fullPlan = Array.isArray(candidate?.plan) ? candidate.plan : [];
   const reducedPlan = fullPlan.filter((fill) => fill.reduction > 0);
-  if (reducedPlan.length === 0) return "Keep full fills — final fill on target.";
+  if (reducedPlan.length === 0) return "Keep full refills — final refill on target.";
 
   const firstFill = fullPlan[0] || reducedPlan[0];
   const firstReducedFill = reducedPlan[0];
   const allSameReduction = reducedPlan.every((fill) => fill.reduction === firstReducedFill.reduction);
   const fillAllowedNow = Boolean(cycleSnapshot?.refillAllowed);
-  const nextFillPrefix = fillAllowedNow
-    ? (hasActiveSheepOnBoard ? "At this fill, add" : "Add")
-    : "At next fill, add";
+  const nextRefillPrefix = fillAllowedNow
+    ? (hasActiveSheepOnBoard ? "At this refill, add" : "Add")
+    : "At next refill, add";
 
   if (firstFill && firstFill.reduction === 0) {
     const fullFillCountBeforeReduction = fullPlan.findIndex((fill) => fill.reduction > 0);
-    if (fullFillCountBeforeReduction === 0) return `At next fill, add ${firstReducedFill.fillAmount}.`;
-    const fillText = fullFillCountBeforeReduction === 1 ? "this full fill" : `${fullFillCountBeforeReduction} full fills`;
+    if (fullFillCountBeforeReduction === 0) return `At next refill, add ${firstReducedFill.fillAmount}.`;
+    const fillText = fullFillCountBeforeReduction === 1 ? "this full refill" : `${fullFillCountBeforeReduction} full refills`;
     return `Keep ${fillText}, then add ${firstReducedFill.fillAmount}.`;
   }
 
   if (reducedPlan.length === 1) {
     return fillAllowedNow && !hasActiveSheepOnBoard
-      ? `Add ${firstReducedFill.fillAmount} now. Then full fills.`
-      : `${nextFillPrefix} ${firstReducedFill.fillAmount}. Then full fills.`;
+      ? `Add ${firstReducedFill.fillAmount} now. Then full refills.`
+      : `${nextRefillPrefix} ${firstReducedFill.fillAmount}. Then full refills.`;
   }
 
   if (allSameReduction && firstReducedFill.reduction === 1) {
-    if (fillAllowedNow && !hasActiveSheepOnBoard) return `Add ${firstReducedFill.fillAmount} now. Then full fills.`;
-    if (fillAllowedNow) return `At this fill, add ${firstReducedFill.fillAmount}. Then full fills.`;
-    return `Add ${firstReducedFill.fillAmount} for next ${reducedPlan.length} fills.`;
+    if (fillAllowedNow && !hasActiveSheepOnBoard) return `Add ${firstReducedFill.fillAmount} now. Then full refills.`;
+    if (fillAllowedNow) return `At this refill, add ${firstReducedFill.fillAmount}. Then full refills.`;
+    return `Add ${firstReducedFill.fillAmount} for next ${reducedPlan.length} refills.`;
   }
 
-  if (allSameReduction) return `Reduce next ${reducedPlan.length} fills by ${firstReducedFill.reduction}.`;
+  if (allSameReduction) return `Reduce next ${reducedPlan.length} refills by ${firstReducedFill.reduction}.`;
   return candidate.label;
 }
 
@@ -1629,14 +1629,14 @@ function formatRemainingFillsMessage(remainingFillPlan, options = {}) {
   const plannerStatus = options.status || "waiting";
   const hasReductionPlan = Boolean(options.hasReductionPlan);
   if (["waiting", "notPlanningYet"].includes(plannerStatus)) return "—";
-  if (plannerStatus === "noFutureFill") return "No more projected fills";
-  if (!Array.isArray(remainingFillPlan) || remainingFillPlan.length === 0) return "No more projected fills";
-  if (!hasReductionPlan) return "Full fills";
+  if (plannerStatus === "noFutureFill") return "No more projected refills";
+  if (!Array.isArray(remainingFillPlan) || remainingFillPlan.length === 0) return "No more projected refills";
+  if (!hasReductionPlan) return "Full refills";
 
   const amounts = remainingFillPlan
     .map((fill) => Number(fill.amount))
     .filter((amount) => Number.isInteger(amount) && amount > 0);
-  if (amounts.length === 0) return "No more projected fills";
+  if (amounts.length === 0) return "No more projected refills";
 
   const visibleAmounts = amounts.slice(0, 5).join(", ");
   return amounts.length > 5 ? `${visibleAmounts}, …` : visibleAmounts;
@@ -1675,7 +1675,7 @@ function buildFinalFillPlannerResult(overrides = {}) {
     plan: [],
     remainingFillPlan: [],
     remainingFillsMessage: "—",
-    assumption: "Assuming previous fills were full.",
+    assumption: "Assuming previous refills were full.",
     reason: "Waiting for physical sheep pace and run timing.",
     confidence: "low",
     candidates: [],
@@ -1764,8 +1764,8 @@ function planFinalFillStrategy(options = {}) {
       reductions: [],
       maxForecastPoints: options.maxForecastPoints
     });
-  const finalFillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
-  const currentFinalFill = finalFillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
+  const finalRefillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
+  const currentFinalFill = finalRefillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
   const currentFullFillFinalSecondsBeforeEnd = Number.isFinite(currentFinalFill?.secondsBeforeRunEnd)
     ? currentFinalFill.secondsBeforeRunEnd
     : null;
@@ -1775,20 +1775,20 @@ function planFinalFillStrategy(options = {}) {
   if (forecastPoints.length === 0 || !currentFinalFill) {
     return buildFinalFillPlannerResult({
       status: "noFutureFill",
-      message: "No final fill projected",
+      message: "No final refill projected",
       fullFillAmount,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
       remainingFillPlan: [],
-      remainingFillsMessage: "No more projected fills",
-      reason: "No future final fill exists for the current run timing."
+      remainingFillsMessage: "No more projected refills",
+      reason: "No future final refill exists for the current run timing."
     });
   }
 
-  if (finalFillAnalysis.status === "onTarget") {
+  if (finalRefillAnalysis.status === "onTarget") {
     return buildFinalFillPlannerResult({
       status: "onTarget",
-      message: "Keep full fills",
+      message: "Keep full refills",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1797,15 +1797,15 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: currentFullRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "onTarget", hasReductionPlan: false }),
-      reason: "Full fills already place the final fill in the target window.",
+      reason: "Full refills already place the final refill in the target window.",
       confidence: "high"
     });
   }
 
-  if (finalFillAnalysis.status === "tooLate") {
+  if (finalRefillAnalysis.status === "tooLate") {
     return buildFinalFillPlannerResult({
       status: "tooLate",
-      message: "Keep full fills",
+      message: "Keep full refills",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1814,12 +1814,12 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: currentFullRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "tooLate", hasReductionPlan: false }),
-      reason: "Reducing fills would move refill timing later, so no reduction is recommended.",
+      reason: "Reducing refills would move refill timing later, so no reduction is recommended.",
       confidence: "medium"
     });
   }
 
-  if (finalFillAnalysis.status !== "tooEarly") {
+  if (finalRefillAnalysis.status !== "tooEarly") {
     return buildFinalFillPlannerResult({
       status: "waiting",
       message: "Waiting for pace data.",
@@ -1832,7 +1832,7 @@ function planFinalFillStrategy(options = {}) {
   if (options.skipCandidatePlanning === true) {
     return buildFinalFillPlannerResult({
       status: "tooEarly",
-      message: "Final fill too early",
+      message: "Final refill too early",
       fullFillAmount,
       projectedFinalFillSecondsBeforeEnd: currentFullFillFinalSecondsBeforeEnd,
       projectedFinalFillSheepNumber: currentFullFillFinalSheepNumber,
@@ -1888,7 +1888,7 @@ function planFinalFillStrategy(options = {}) {
       plan: bestCandidate.plan,
       remainingFillPlan: bestRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(bestRemainingFillPlan, { status: "recommendReduction", hasReductionPlan: true }),
-      reason: "Full fills place the final fill too early.",
+      reason: "Full refills place the final refill too early.",
       confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= FINAL_FILL_MAX_BEFORE_END_SECONDS ? "high" : "medium",
       candidates: includeCandidates ? candidates : []
     });
@@ -1896,13 +1896,13 @@ function planFinalFillStrategy(options = {}) {
 
   return buildFinalFillPlannerResult({
     status: "noGoodPlan",
-    message: "Keep full fills",
+    message: "Keep full refills",
     fullFillAmount,
     currentFullFillFinalSecondsBeforeEnd,
     currentFullFillFinalSheepNumber,
     remainingFillPlan: currentFullRemainingFillPlan,
     remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "noGoodPlan", hasReductionPlan: false }),
-    reason: "Full fills place the final fill too early, but generated reductions did not safely improve timing.",
+    reason: "Full refills place the final refill too early, but generated reductions did not safely improve timing.",
     confidence: "low",
     candidates: includeCandidates ? candidates : []
   });
@@ -2070,6 +2070,10 @@ const elements = {
   avgShear: document.getElementById("avgShear"),
   avgCatch: document.getElementById("avgCatch"),
   avgCycle: document.getElementById("avgCycle"),
+  markerAvgDrink: document.getElementById("markerAvgDrink"),
+  markerAvgCutter: document.getElementById("markerAvgCutter"),
+  markerAvgComb: document.getElementById("markerAvgComb"),
+  markerAvgCustom: document.getElementById("markerAvgCustom"),
   sheepPerHour: document.getElementById("sheepPerHour"),
   fastestSheepToday: document.getElementById("fastestSheepToday"),
   slowestSheepToday: document.getElementById("slowestSheepToday"),
@@ -3793,7 +3797,7 @@ function renderReviewList() {
   elements.reviewList.innerHTML = appState.reviewBlocks.map((block) => `
     <div class="review-entry">
       <div><strong>${block.range}</strong></div>
-      <div>Sheep: ${block.count} • Avg catch-to-release: ${block.avgCycle.toFixed(3)}s</div>
+      <div>Sheep: ${block.count} • Avg Catch, Shear, Release: ${block.avgCycle.toFixed(3)}s</div>
       <div>${block.deltaText}</div>
       <div>${block.status}</div>
     </div>
@@ -3837,6 +3841,7 @@ function maybeGenerate15MinuteReviews() {
 
 function generateRunReview() {
   if (!elements.runReviewText) return;
+  elements.runReviewText.innerHTML = "";
   if (!appState.sheep.length) {
     appState.runReviewText = "Run review will be generated when you stop a run.";
     elements.runReviewText.textContent = appState.runReviewText;
@@ -3848,15 +3853,92 @@ function generateRunReview() {
   const segs = getSortedBucketSummaries();
   const firstQuarter = appState.sheep.filter((s) => s.effectiveElapsedSeconds <= quarterPoint);
   const firstHalf = appState.sheep.filter((s) => s.effectiveElapsedSeconds <= halfPoint);
-  const avg = (arr) => arr.length ? (arr.reduce((sum, i) => sum + i.fullCycle, 0) / arr.length).toFixed(3) : "n/a";
+  const avg = (arr) => arr.length ? `${(arr.reduce((sum, i) => sum + i.fullCycle, 0) / arr.length).toFixed(3)}s` : "n/a";
   const best = segs.reduce((a, b) => (!a || b.avgCycle < a.avgCycle ? b : a), null);
   const worst = segs.reduce((a, b) => (!a || b.avgCycle > a.avgCycle ? b : a), null);
-  const verdict = segs.length > 1 && segs[segs.length - 1].avgCycle < segs[0].avgCycle ? "Strong finish" : "Maintained pace throughout";
+  const verdict = segs.length > 1 && segs[segs.length - 1].avgCycle < segs[0].avgCycle ? "Strong finish" : "Maintained pace";
   const lostRange = worst ? buildRangeLabel(worst.startElapsed, worst.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
   const bestRange = best ? buildRangeLabel(best.startElapsed, best.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
-  const markerSummary = formatMarkerStatsSummary(buildMarkerStats(appState.sheep, appState.markerSettings));
-  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s catch-to-release time. First half averaged ${avg(firstHalf)}s catch-to-release time. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.\n\n${markerSummary}`;
-  elements.runReviewText.textContent = appState.runReviewText;
+  const markerStats = buildResolvedMarkerStats(appState.sheep, appState.markerSettings);
+  appState.runReviewText = [
+    `First 25% of run: ${avg(firstQuarter)} Catch, Shear, Release`,
+    `First 50% of run: ${avg(firstHalf)} Catch, Shear, Release`,
+    `Best: ${bestRange}`,
+    `Worst: ${lostRange}`,
+    `Recovery strongest: ${bestRange}`,
+    verdict,
+    formatMarkerStatsSummary(markerStats)
+  ].join("\n");
+  renderRunReviewSummary({
+    firstQuarterAverage: avg(firstQuarter),
+    firstHalfAverage: avg(firstHalf),
+    bestRange,
+    lostRange,
+    verdict,
+    markerStats
+  });
+}
+
+function renderRunReviewSummary(summary) {
+  if (!elements.runReviewText) return;
+  elements.runReviewText.innerHTML = "";
+
+  const review = document.createElement("div");
+  review.className = "run-review-summary";
+
+  const statsGrid = document.createElement("div");
+  statsGrid.className = "run-review-stats-grid";
+  [
+    ["First 25% of run", summary.firstQuarterAverage],
+    ["First 50% of run", summary.firstHalfAverage],
+    ["Best", summary.bestRange],
+    ["Worst", summary.lostRange],
+    ["Finish", summary.verdict]
+  ].forEach(([label, value]) => {
+    const item = document.createElement("div");
+    item.className = "run-review-stat-card";
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    const valueEl = document.createElement("strong");
+    valueEl.textContent = value;
+    item.append(labelEl, valueEl);
+    statsGrid.appendChild(item);
+  });
+  review.appendChild(statsGrid);
+
+  const markerSection = document.createElement("div");
+  markerSection.className = "run-review-marker-breakdown";
+  const markerTitle = document.createElement("h4");
+  markerTitle.textContent = "Marker Breakdown";
+  markerSection.appendChild(markerTitle);
+
+  const markerRows = [
+    ["Drink", summary.markerStats?.buckets?.drink?.count || 0],
+    ["Cutter", summary.markerStats?.buckets?.cutter?.count || 0],
+    ["Comb", summary.markerStats?.buckets?.comb?.count || 0],
+    ["Custom", summary.markerStats?.buckets?.[MANUAL_MARKER_CUSTOM_TYPE]?.count || 0]
+  ];
+  const maxCount = Math.max(...markerRows.map(([, count]) => count), 1);
+  markerRows.forEach(([label, count]) => {
+    const row = document.createElement("div");
+    row.className = "run-review-marker-row";
+    const labelEl = document.createElement("span");
+    labelEl.className = "run-review-marker-label";
+    labelEl.textContent = label;
+    const barWrap = document.createElement("span");
+    barWrap.className = "run-review-marker-bar-wrap";
+    const bar = document.createElement("span");
+    bar.className = "run-review-marker-bar";
+    bar.style.width = `${count ? Math.max((count / maxCount) * 100, 10) : 0}%`;
+    barWrap.appendChild(bar);
+    const countEl = document.createElement("strong");
+    countEl.className = "run-review-marker-count";
+    countEl.textContent = String(count);
+    row.append(labelEl, barWrap, countEl);
+    markerSection.appendChild(row);
+  });
+  review.appendChild(markerSection);
+  elements.runReviewText.appendChild(review);
 }
 
 function formatDeltaPlain(delta) {
@@ -3911,12 +3993,12 @@ function updateTrendLatestSummary(points, requiredCycle) {
   const bucketMinutes = appState.trendBucketMinutes;
   const latest = points.length ? points[points.length - 1] : null;
   if (!latest) {
-    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg catch-to-release 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
+    elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: 0 sheep • Avg Catch, Shear, Release 0.000s • Target ${formatSeconds(requiredCycle)} • No buckets yet.`;
     return;
   }
   const delta = latest.avgCycle - requiredCycle;
   const meaning = describeAheadBehind(delta);
-  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg catch-to-release ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
+  elements.trendLatestSummary.textContent = `Last ${bucketMinutes} min: ${latest.count} sheep • Avg Catch, Shear, Release ${formatSeconds(latest.avgCycle)} • Target ${formatSeconds(requiredCycle)} • ${formatDeltaPlain(delta)} ${meaning}`;
 }
 
 function updateTrendGraphTooltip(point) {
@@ -3931,9 +4013,9 @@ function updateTrendGraphTooltip(point) {
   elements.trendGraphTooltip.innerHTML = [
     `Bucket: ${buildRangeLabel(point.startElapsed, bucketEnd)}`,
     `Count: ${point.count} sheep`,
-    `Avg catch-to-release: ${formatSeconds(point.avgCycle)}`,
+    `Avg Catch, Shear, Release: ${formatSeconds(point.avgCycle)}`,
     `Avg catch: ${formatSeconds(point.avgCatch)}`,
-    `Target catch-to-release: ${formatSeconds(point.requiredCycle)}`,
+    `Target Catch, Shear, Release: ${formatSeconds(point.requiredCycle)}`,
     `Delta: ${formatDeltaPlain(delta)} (${describeAheadBehind(delta)})`
   ].map((line) => `<div>${line}</div>`).join("");
   elements.trendGraphTooltip.hidden = !appState.trendDetailsExpanded;
@@ -4000,7 +4082,7 @@ function updateTrendFlags() {
         <div class="trend-flag-title">${title}</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${meta.windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
+          <div><span class="k">Catch, Shear, Release</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
           <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">${formatTrendDelta(catchDelta)}</span></div>
         </div>
       </div>
@@ -4019,7 +4101,7 @@ function updateTrendFlags() {
           <div class="trend-flag-title">Sustained behind</div>
           <div class="trend-flag-meta">Sheep ${lastMeta.sheepStart}–${lastMeta.sheepEnd} • ${lastMeta.timeStart}–${lastMeta.timeEnd} • Window: last ${windowSize}</div>
           <div class="trend-flag-lines">
-            <div><span class="k">Catch-to-release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
+            <div><span class="k">Catch, Shear, Release</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
             <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgLast5Catch)}</span> <span class="d neutral">(all 5 above target cycle)</span></div>
           </div>
         </div>
@@ -4074,7 +4156,7 @@ function updateTrendFlags() {
         <div class="trend-flag-title">No trend warnings</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Catch-to-release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
+          <div><span class="k">Catch, Shear, Release</span>: <span class="v">${formatSeconds(avgCycle)} vs target ${formatSeconds(requiredCycle)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
           <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgCatch)}</span></div>
         </div>
       </div>
@@ -4295,8 +4377,8 @@ function renderLogTable() {
       <td>${entry.number}</td>
       <td class="sheep-log-time-col">${formatClock(entry.startTime)}</td>
       <td class="sheep-log-time-col">${formatClock(entry.endTime)}</td>
-      <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
       <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
+      <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
       <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
     row.appendChild(createSheepLogMarkerNoteCell(entry, plannedDelayMarkers));
@@ -4321,11 +4403,13 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
 
   const manualMarker = sanitizeManualMarker(entry.manualMarker);
   const noteText = normalizeSheepNote(entry.note);
-  const autoMarkers = appState.showPlannedDelayMarkers ? (plannedDelayMarkers.get(entry.number) || []) : [];
+  const allAutoMarkers = plannedDelayMarkers.get(entry.number) || [];
+  const autoMarkers = !manualMarker && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
 
   if (sheepLogMarkerNoteEditorSheepId && entry.id === sheepLogMarkerNoteEditorSheepId) {
+    const suggestedMarker = !manualMarker && allAutoMarkers.length ? allAutoMarkers[0] : null;
     markerNoteCell.classList.add("is-editing");
-    markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarker, noteText));
+    markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarker, noteText, suggestedMarker));
     return markerNoteCell;
   }
 
@@ -4338,8 +4422,8 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
     autoMarkers.forEach((marker) => {
       const tag = document.createElement("span");
       tag.className = "sheep-log-marker-tag";
-      tag.textContent = marker.shortLabel;
-      tag.title = marker.label;
+      tag.textContent = `${marker.shortLabel} suggestion`;
+      tag.title = `${marker.label}. Click + or Edit to confirm or change.`;
       tags.appendChild(tag);
     });
     content.appendChild(tags);
@@ -4353,7 +4437,7 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
     if (manualMarker) {
       const markerSummary = document.createElement("div");
       markerSummary.className = "sheep-log-manual-marker-summary";
-      markerSummary.textContent = `Manual: ${getManualMarkerDisplayLabel(manualMarker)}`;
+      markerSummary.textContent = `Confirmed: ${getManualMarkerDisplayLabel(manualMarker)}`;
       markerSummary.title = getManualMarkerDisplayLabel(manualMarker);
       summary.appendChild(markerSummary);
     }
@@ -4389,7 +4473,7 @@ function createSheepLogMarkerNoteActionButton(entry, mode) {
   return button;
 }
 
-function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText) {
+function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText, suggestedMarker = null) {
   const editor = document.createElement("div");
   editor.className = "sheep-log-marker-note-editor";
   editor.dataset.sheepId = entry.id || "";
@@ -4401,7 +4485,7 @@ function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText) {
 
   const blankOption = document.createElement("option");
   blankOption.value = "";
-  blankOption.textContent = "No manual marker";
+  blankOption.textContent = "No confirmed marker";
   select.appendChild(blankOption);
 
   Object.entries(MANUAL_MARKER_TYPES).forEach(([type, label]) => {
@@ -4415,7 +4499,8 @@ function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText) {
   customOption.value = MANUAL_MARKER_CUSTOM_TYPE;
   customOption.textContent = "Custom...";
   select.appendChild(customOption);
-  select.value = manualMarker?.type || "";
+  const suggestedType = suggestedMarker?.type && isValidManualMarkerType(suggestedMarker.type) ? suggestedMarker.type : "";
+  select.value = manualMarker?.type || suggestedType || "";
   editor.appendChild(select);
 
   const customInput = document.createElement("input");
@@ -4528,35 +4613,62 @@ function addMarkerStatCatchDuration(bucket, catchDuration) {
   }
 }
 
-function buildMarkerStats(entries, markerSettings) {
+function getResolvedMarkerForEntry(entry, automaticMarkersBySheep) {
+  const manualMarker = sanitizeManualMarker(entry?.manualMarker);
+  if (manualMarker) return { type: manualMarker.type, label: manualMarker.label, source: "manual" };
+  const automaticMarkers = Number.isFinite(entry?.number) ? automaticMarkersBySheep?.get(entry.number) : null;
+  const automaticMarker = Array.isArray(automaticMarkers) ? automaticMarkers[0] : null;
+  if (automaticMarker?.type && isValidManualMarkerType(automaticMarker.type)) {
+    return { type: automaticMarker.type, label: MANUAL_MARKER_TYPES[automaticMarker.type], source: "suggested" };
+  }
+  return null;
+}
+
+function buildResolvedMarkerStats(entries, markerSettings) {
   const markerTypes = Object.keys(MANUAL_MARKER_TYPES);
   const stats = {
-    suggested: Object.fromEntries(markerTypes.map((type) => [type, createMarkerStatBucket()])),
-    manual: Object.fromEntries(markerTypes.map((type) => [type, createMarkerStatBucket()])),
-    customManualCount: 0
+    buckets: Object.fromEntries([
+      ...markerTypes.map((type) => [type, createMarkerStatBucket()]),
+      [MANUAL_MARKER_CUSTOM_TYPE, createMarkerStatBucket()]
+    ]),
+    baselineCatchAverage: calculateAverageCatchDuration(entries)
   };
   if (!Array.isArray(entries)) return stats;
 
-  const suggestedMarkersBySheep = buildPlannedDelayMarkerMap(entries, markerSettings);
+  const automaticMarkersBySheep = buildPlannedDelayMarkerMap(entries, markerSettings);
   entries.forEach((entry) => {
-    const catchDuration = entry?.catchDuration;
-    const suggestedMarkers = Number.isFinite(entry?.number) ? suggestedMarkersBySheep.get(entry.number) : null;
-    if (Array.isArray(suggestedMarkers)) {
-      suggestedMarkers.forEach((marker) => {
-        if (stats.suggested[marker.type]) addMarkerStatCatchDuration(stats.suggested[marker.type], catchDuration);
-      });
-    }
-
-    const manualMarker = sanitizeManualMarker(entry?.manualMarker);
-    if (!manualMarker) return;
-    if (manualMarker.type === MANUAL_MARKER_CUSTOM_TYPE) {
-      stats.customManualCount += 1;
-      return;
-    }
-    if (stats.manual[manualMarker.type]) addMarkerStatCatchDuration(stats.manual[manualMarker.type], catchDuration);
+    const marker = getResolvedMarkerForEntry(entry, automaticMarkersBySheep);
+    if (!marker) return;
+    const bucket = stats.buckets[marker.type];
+    if (bucket) addMarkerStatCatchDuration(bucket, entry?.catchDuration);
   });
 
   return stats;
+}
+
+function buildMarkerStats(entries, markerSettings) {
+  return buildResolvedMarkerStats(entries, markerSettings);
+}
+
+function calculateAverageCatchDuration(entries) {
+  if (!Array.isArray(entries)) return null;
+  const catchDurations = entries
+    .map((entry) => Number(entry?.catchDuration))
+    .filter((duration) => Number.isFinite(duration));
+  if (!catchDurations.length) return null;
+  return catchDurations.reduce((sum, duration) => sum + duration, 0) / catchDurations.length;
+}
+
+function getMarkerAverageExtraCatchSeconds(bucket, baselineCatchAverage) {
+  if (!bucket || bucket.catchCount <= 0 || !Number.isFinite(baselineCatchAverage)) return null;
+  return (bucket.catchTotal / bucket.catchCount) - baselineCatchAverage;
+}
+
+function formatMarkerAverageExtra(bucket, baselineCatchAverage) {
+  const extraSeconds = getMarkerAverageExtraCatchSeconds(bucket, baselineCatchAverage);
+  if (!Number.isFinite(extraSeconds)) return "—";
+  const sign = extraSeconds >= 0 ? "+" : "−";
+  return `${sign}${Math.abs(extraSeconds).toFixed(1)}s over normal catch`;
 }
 
 function formatMarkerStatLine(label, bucket) {
@@ -4567,19 +4679,16 @@ function formatMarkerStatLine(label, bucket) {
 }
 
 function formatMarkerStatsSummary(stats) {
-  const markerTypes = Object.keys(MANUAL_MARKER_TYPES);
-  const hasSuggestedStats = markerTypes.some((type) => stats?.suggested?.[type]?.count > 0);
-  const hasManualStats = markerTypes.some((type) => stats?.manual?.[type]?.count > 0) || stats?.customManualCount > 0;
-  if (!hasSuggestedStats && !hasManualStats) return "Marker Summary: No marker data recorded for this run.";
-
-  const formatGroup = (groupStats) => markerTypes
-    .map((type) => formatMarkerStatLine(MANUAL_MARKER_TYPES[type], groupStats[type]))
-    .join("; ");
+  const buckets = stats?.buckets || {};
+  const hasStats = ["drink", "cutter", "comb", MANUAL_MARKER_CUSTOM_TYPE].some((type) => buckets[type]?.count > 0);
+  if (!hasStats) return "Marker Summary: No marker data recorded for this run.";
 
   return [
     "Marker Summary",
-    `Suggested markers: ${formatGroup(stats.suggested)}`,
-    `Manual markers: ${formatGroup(stats.manual)}; Custom: ${stats.customManualCount || 0}`
+    formatMarkerStatLine("Drink", buckets.drink),
+    formatMarkerStatLine("Cutter", buckets.cutter),
+    formatMarkerStatLine("Comb", buckets.comb),
+    formatMarkerStatLine("Custom", buckets[MANUAL_MARKER_CUSTOM_TYPE])
   ].join("\n");
 }
 
@@ -4872,6 +4981,7 @@ function saveSheepLogMarkerNoteFromEditor(editor) {
   sheepLogMarkerNoteEditorSheepId = "";
   autosaveState();
   renderLogTable();
+  updateStatsPanel();
 }
 
 function getSortedSheepLogEntries() {
@@ -5197,12 +5307,22 @@ function updatePenRefillAlertDisplay() {
 
 function formatPenFillForecastPoint(point) {
   if (point?.isCurrentFill) return `${point.label} — now`;
-  return `${point.label} — in ${formatCountdown(point.secondsFromNow)}`;
+  const secondsFromNow = Number(point?.secondsFromNow);
+  const clockText = formatProjectedLocalClock(secondsFromNow);
+  return `${point.label} — in ${formatCountdown(secondsFromNow)}${clockText ? ` — approx ${clockText}` : ""}`;
+}
+
+function formatProjectedLocalClock(secondsFromNow) {
+  if (!Number.isFinite(secondsFromNow) || secondsFromNow < 0) return "";
+  return new Date(Date.now() + secondsFromNow * 1000).toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit"
+  });
 }
 
 function formatFinalPenFillForecastPoint(point) {
   const secondsBeforeRunEnd = Number(point?.secondsBeforeRunEnd);
-  if (!Number.isFinite(secondsBeforeRunEnd)) return "No final fill projected";
+  if (!Number.isFinite(secondsBeforeRunEnd)) return "No final refill projected";
   if (secondsBeforeRunEnd <= 0) return `${point.label} — at end`;
   return `${point.label} — ${formatCountdown(secondsBeforeRunEnd)} before end`;
 }
@@ -5231,7 +5351,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (!Array.isArray(forecastPoints) || forecastPoints.length === 0) {
     return {
       status: "none",
-      message: "No final fill projected",
+      message: "No final refill projected",
       secondsBeforeRunEnd: null,
       finalFill: null
     };
@@ -5251,7 +5371,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (secondsBeforeRunEnd > maxBeforeEndSeconds) {
     return {
       status: "tooEarly",
-      message: "Final fill too early",
+      message: "Final refill too early",
       secondsBeforeRunEnd,
       finalFill
     };
@@ -5260,7 +5380,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (secondsBeforeRunEnd < minBeforeEndSeconds) {
     return {
       status: "tooLate",
-      message: "Final fill too late",
+      message: "Final refill too late",
       secondsBeforeRunEnd,
       finalFill
     };
@@ -5268,7 +5388,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
 
   return {
     status: "onTarget",
-    message: "Final fill on target",
+    message: "Final refill on target",
     secondsBeforeRunEnd,
     finalFill
   };
@@ -5302,8 +5422,8 @@ function formatPenStateLastConfirmedFill(penState) {
 }
 
 function formatPenStateModel(penState) {
-  if (penState?.source === "confirmed") return "Using confirmed fills";
-  if (penState?.source === "assumedFull") return "Assuming full fills";
+  if (penState?.source === "confirmed") return "Using confirmed refills";
+  if (penState?.source === "assumedFull") return "Assuming full refills";
   return "—";
 }
 
@@ -5489,21 +5609,21 @@ function updatePenFillForecastDisplay() {
   });
   const displayForecastPoints = routedForecast.points;
   const assumptionText = routedForecast.assumption;
-  const finalFillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
+  const finalRefillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
   const planner = buildPlanner(displayForecastPoints, remainingRunSeconds);
 
   if (displayForecastPoints.length === 0) {
-    setForecastDisplay("No more projected fills", "—", assumptionText, finalFillAnalysis, planner);
+    setForecastDisplay("No more projected refills", "—", assumptionText, finalRefillAnalysis, planner);
     return;
   }
 
-  const nextFill = displayForecastPoints[0];
-  const finalFill = displayForecastPoints[displayForecastPoints.length - 1];
+  const nextRefill = displayForecastPoints[0];
+  const finalRefill = displayForecastPoints[displayForecastPoints.length - 1];
   setForecastDisplay(
-    formatPenFillForecastPoint(nextFill),
-    formatFinalPenFillForecastPoint(finalFill),
+    formatPenFillForecastPoint(nextRefill),
+    formatFinalPenFillForecastPoint(finalRefill),
     assumptionText,
-    finalFillAnalysis,
+    finalRefillAnalysis,
     planner
   );
 }
@@ -5590,6 +5710,15 @@ function updateLivePanel() {
   updateCurrentSheepTimeLeft(calculateTargetMetrics().requiredCycle);
 }
 
+function updateMarkerAverageDisplays() {
+  const stats = buildResolvedMarkerStats(appState.sheep, appState.markerSettings);
+  const baseline = stats.baselineCatchAverage;
+  setText(elements.markerAvgDrink, formatMarkerAverageExtra(stats.buckets.drink, baseline));
+  setText(elements.markerAvgCutter, formatMarkerAverageExtra(stats.buckets.cutter, baseline));
+  setText(elements.markerAvgComb, formatMarkerAverageExtra(stats.buckets.comb, baseline));
+  setText(elements.markerAvgCustom, formatMarkerAverageExtra(stats.buckets[MANUAL_MARKER_CUSTOM_TYPE], baseline));
+}
+
 function updateStatsPanel() {
   calculateAverages();
   const target = calculateTargetMetrics();
@@ -5602,6 +5731,7 @@ function updateStatsPanel() {
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
   setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
   setText(elements.sheepPerHour, appState.currentStats.sheepPerHour.toFixed(2));
+  updateMarkerAverageDisplays();
   setText(elements.fastestSheepToday, fastest ? `#${fastest.number} — ${fastest.fullCycle.toFixed(3)}s` : "—");
   setText(elements.slowestSheepToday, slowest ? `#${slowest.number} — ${slowest.fullCycle.toFixed(3)}s` : "—");
   const lastSheepNumberText = last ? ` (Sheep ${last.number})` : "";
@@ -7064,8 +7194,8 @@ function penFillConfirmationModal({ recommendedFillAmount }) {
     previousResolver("cancel");
   }
 
-  modal.title.textContent = "Confirm pen fill";
-  modal.message.textContent = `Recommended: Add ${recommendedFillAmount}.\nWas this amount added?`;
+  modal.title.textContent = "Confirm pen refill";
+  modal.message.textContent = `Recommended: Add ${recommendedFillAmount}.\nWas this refill amount added?`;
   modal.yesBtn.textContent = `Yes, added ${recommendedFillAmount}`;
   modal.noBtn.textContent = "Different amount";
   modal.cancelBtn.textContent = "Cancel";
@@ -7175,7 +7305,7 @@ function renderBlock(minutes) {
     <p><strong>Sheep completed:</strong> ${block.count}</p>
     <p><strong>Average shear:</strong> ${formatSeconds(block.avgShear)}</p>
     <p><strong>Average catch:</strong> ${formatSeconds(block.avgCatch)}</p>
-    <p><strong>Average catch-to-release time:</strong> ${formatSeconds(block.avgCycle)}</p>
+    <p><strong>Average Catch, Shear, Release:</strong> ${formatSeconds(block.avgCycle)}</p>
     <p><strong>Rate:</strong> ${block.rate.toFixed(2)} sheep/hour</p>
   `;
 }
