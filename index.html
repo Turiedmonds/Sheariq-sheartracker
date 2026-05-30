@@ -470,14 +470,12 @@
               <strong id="penStateModel" class="panel-metric-value">Select record type</strong>
             </div>
             <div class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading">
-              <h4 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Confirm fill</h4>
+              <h4 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Fill confirmation</h4>
               <div id="penFillConfirmInstruction" class="pen-fill-confirm-instruction">—</div>
-              <div class="pen-fill-confirm-actions" role="group" aria-label="Confirm pen fill amount">
-                <button id="penFillConfirmSuggestedBtn" class="pen-fill-confirm-primary" type="button" disabled>Confirm add —</button>
-                <button id="penFillDifferentAmountBtn" class="pen-fill-secondary-btn" type="button" disabled>Different amount</button>
-                <button id="penFillUndoLastBtn" class="pen-fill-secondary-btn pen-fill-undo-btn" type="button" disabled>Undo last fill</button>
+              <div class="metric-row panel-metric-row pen-fill-confirm-status-row">
+                <span class="metric-label panel-metric-label">Fill confirmation:</span>
+                <strong id="penFillConfirmStatus" class="panel-metric-value pen-fill-confirm-status" role="status" aria-live="polite">—</strong>
               </div>
-              <div id="penFillConfirmStatus" class="pen-fill-confirm-status" role="status" aria-live="polite">—</div>
             </div>
           </div>
         </div>
@@ -987,7 +985,7 @@
         <p><strong>Final fill status:</strong><br />Shows whether the final projected fill is too early, on target, or too late. The target window is around 2–4 minutes before end of run.</p>
         <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version and assumes previous fills were full.</p>
         <p><strong>Pen state:</strong><br />Shows the current estimated sheep left in the pen, whether a refill is due, and whether the app is assuming full fills or using confirmed fills.</p>
-        <p><strong>Confirm fill:</strong><br />The app recommends the fill amount. Confirm records that the recommended amount was added. Use Different amount only when the team filled a different number.</p>
+        <p><strong>Fill confirmation:</strong><br />When a refill is due, the app asks whether the recommended amount was added. If not, enter the actual amount so Pen State can update.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>
