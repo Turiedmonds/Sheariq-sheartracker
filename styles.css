@@ -1089,6 +1089,30 @@ button:disabled {
   padding: 0.2rem 0.3rem;
 }
 
+
+.marker-range-fieldset {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.25rem 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.marker-range-title,
+.marker-range-help {
+  grid-column: 1 / -1;
+  font-size: 0.76rem;
+}
+
+.marker-range-help {
+  color: #6b7280;
+  font-size: 0.72rem;
+}
+
+.marker-settings-group .marker-range-fieldset label {
+  grid-template-columns: auto 1fr;
+  margin-bottom: 0;
+}
+
 .marker-unit {
   color: #6b7280;
   font-size: 0.72rem;
