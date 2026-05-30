@@ -472,12 +472,23 @@ function planFinalFillStrategy(options = {}) {
   const runActive = Object.prototype.hasOwnProperty.call(options, "runActive") ? Boolean(options.runActive) : Boolean(appState.runActive);
   const includeCandidates = Boolean(options.includeCandidates);
 
+  if (!recordType || recordType === "none" || !rule) {
+    return buildFinalFillPlannerResult({
+      message: "Select record type.",
+      reason: "Pen fill planning needs a record type with pen rules."
+    });
+  }
+
+  if (!runActive) {
+    return buildFinalFillPlannerResult({
+      message: "Start run.",
+      fullFillAmount,
+      reason: "Pen fill planning starts when the run is active."
+    });
+  }
+
   if (
-    !recordType
-    || recordType === "none"
-    || !rule
-    || !runActive
-    || !Number.isFinite(fullFillAmount)
+    !Number.isFinite(fullFillAmount)
     || fullFillAmount <= 0
     || !Number.isFinite(avgCycleSeconds)
     || avgCycleSeconds <= 0
@@ -810,6 +821,7 @@ const elements = {
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
+  penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
   requiredRate: document.getElementById("requiredRate"),
@@ -3523,6 +3535,12 @@ function updatePenFillForecastDisplay() {
     "pen-fill-status-too-late",
     "pen-fill-status-neutral"
   ];
+  const strategyClassNames = [
+    "pen-fill-strategy-ok",
+    "pen-fill-strategy-recommend",
+    "pen-fill-strategy-warning",
+    "pen-fill-strategy-neutral"
+  ];
 
   const setForecastStatus = (analysis) => {
     if (elements.penFillForecastStatus) {
@@ -3540,11 +3558,43 @@ function updatePenFillForecastDisplay() {
     setText(elements.penFillForecastStatus, analysis?.message || "—");
   };
 
-  const setForecastDisplay = (nextText, finalText, assumptionText, analysis = { status: "waiting", message: "—" }) => {
+  const setFillStrategy = (planner = { status: "waiting", message: "—" }) => {
+    if (elements.penFillStrategyRecommendation) {
+      elements.penFillStrategyRecommendation.classList.remove(...strategyClassNames);
+      const strategyClassByStatus = {
+        onTarget: "pen-fill-strategy-ok",
+        recommendReduction: "pen-fill-strategy-recommend",
+        tooLate: "pen-fill-strategy-warning",
+        tooEarly: "pen-fill-strategy-warning",
+        noGoodPlan: "pen-fill-strategy-warning",
+        waiting: "pen-fill-strategy-neutral",
+        notPlanningYet: "pen-fill-strategy-neutral",
+        noFutureFill: "pen-fill-strategy-neutral"
+      };
+      const strategyClass = strategyClassByStatus[planner?.status] || "pen-fill-strategy-neutral";
+      elements.penFillStrategyRecommendation.classList.add(strategyClass);
+    }
+    setText(elements.penFillStrategyRecommendation, planner?.message || "—");
+  };
+
+  const buildPlanner = (forecastPoints = [], remainingRunSeconds = null) => planFinalFillStrategy({
+    recordType: appState.recordType,
+    rule: getPenRule(appState.recordType),
+    physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen(),
+    cycleSnapshot: getPenCycleSnapshot(appState.recordType),
+    avgCycleSeconds: appState.currentStats.avgCycle,
+    effectiveElapsedSeconds: getEffectiveElapsedSeconds(),
+    runDurationSeconds: getCurrentRunDurationSeconds(),
+    remainingRunSeconds,
+    forecastPoints
+  });
+
+  const setForecastDisplay = (nextText, finalText, assumptionText, analysis = { status: "waiting", message: "—" }, planner = buildPlanner()) => {
     setText(elements.penFillForecastNext, nextText);
     setText(elements.penFillForecastFinal, finalText);
     setText(elements.penFillForecastAssumption, assumptionText);
     setForecastStatus(analysis);
+    setFillStrategy(planner);
   };
 
   if (!appState.recordType || appState.recordType === "none" || !getPenRule(appState.recordType)) {
@@ -3568,9 +3618,10 @@ function updatePenFillForecastDisplay() {
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const remainingRunSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
   const finalFillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
+  const planner = buildPlanner(forecastPoints, remainingRunSeconds);
 
   if (forecastPoints.length === 0) {
-    setForecastDisplay("No more projected fills", "—", "Full fills", finalFillAnalysis);
+    setForecastDisplay("No more projected fills", "—", "Full fills", finalFillAnalysis, planner);
     return;
   }
 
@@ -3580,7 +3631,8 @@ function updatePenFillForecastDisplay() {
     formatPenFillForecastPoint(nextFill),
     formatFinalPenFillForecastPoint(finalFill),
     "Full fills",
-    finalFillAnalysis
+    finalFillAnalysis,
+    planner
   );
 }
 
