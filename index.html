@@ -317,12 +317,31 @@
                 <strong id="avgShear" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Average catch-to-release time</span>
+                <span class="perf-metric-label panel-metric-label">Average Catch, Shear, Release</span>
                 <strong id="avgCycle" class="perf-metric-value panel-metric-value">0.0s</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Sheep per hour</span>
                 <strong id="sheepPerHour" class="perf-metric-value panel-metric-value">0.00</strong>
+              </div>
+              <div class="perf-marker-averages" aria-label="Marker average extra catch time">
+                <h4 class="perf-subsection-title">Marker averages</h4>
+                <div class="perf-metric-row panel-metric-row">
+                  <span class="perf-metric-label panel-metric-label">Drink</span>
+                  <strong id="markerAvgDrink" class="perf-metric-value panel-metric-value">—</strong>
+                </div>
+                <div class="perf-metric-row panel-metric-row">
+                  <span class="perf-metric-label panel-metric-label">Cutter</span>
+                  <strong id="markerAvgCutter" class="perf-metric-value panel-metric-value">—</strong>
+                </div>
+                <div class="perf-metric-row panel-metric-row">
+                  <span class="perf-metric-label panel-metric-label">Comb</span>
+                  <strong id="markerAvgComb" class="perf-metric-value panel-metric-value">—</strong>
+                </div>
+                <div class="perf-metric-row panel-metric-row">
+                  <span class="perf-metric-label panel-metric-label">Custom</span>
+                  <strong id="markerAvgCustom" class="perf-metric-value panel-metric-value">—</strong>
+                </div>
               </div>
             </div>
           </section>
@@ -438,12 +457,12 @@
 
     <section id="panel-pen-fill-planner" class="panel" aria-labelledby="pen-fill-planner-title" draggable="true">
       <div class="panel-header" draggable="true">
-        <h2 id="pen-fill-planner-title">Pen Fill Planner</h2>
+        <h2 id="pen-fill-planner-title">Pen Refill Planner</h2>
         <div class="panel-header-actions">
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
-          <button id="penFillPlannerHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Pen Fill Planner help">? Help</button>
+          <button id="penFillPlannerHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Pen Refill Planner help">? Help</button>
         </div>
       </div>
       <div class="panel-body">
@@ -459,15 +478,15 @@
               <strong id="penStateRefillStatus" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Last confirmed fill:</span>
+              <span class="metric-label panel-metric-label">Last confirmed refill:</span>
               <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Average fill interval:</span>
+              <span class="metric-label panel-metric-label">Average refill interval:</span>
               <strong id="penFillAverageInterval" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Recent fill spacing:</span>
+              <span class="metric-label panel-metric-label">Recent refill spacing:</span>
               <strong id="penFillRecentIntervals" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
@@ -476,31 +495,31 @@
             </div>
           </div>
           <div class="timing-group panel-section">
-            <h3 class="timing-group-heading panel-section-title">Next fill</h3>
+            <h3 class="timing-group-heading panel-section-title">Next refill</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Next fill:</span>
+              <span class="metric-label panel-metric-label">Next refill:</span>
               <strong id="penFillForecastNext" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Fill reminder:</span>
+              <span class="metric-label panel-metric-label">Refill reminder:</span>
               <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
             </div>
           </div>
           <div class="timing-group panel-section">
-            <h3 class="timing-group-heading panel-section-title">Final fill forecast</h3>
+            <h3 class="timing-group-heading panel-section-title">Final refill forecast</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Final projected fill:</span>
+              <span class="metric-label panel-metric-label">Final projected refill:</span>
               <strong id="penFillForecastFinal" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Final fill status:</span>
+              <span class="metric-label panel-metric-label">Final refill status:</span>
               <strong id="penFillForecastStatus" class="panel-metric-value">—</strong>
             </div>
           </div>
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Strategy</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Fill strategy:</span>
+              <span class="metric-label panel-metric-label">Refill strategy:</span>
               <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
@@ -512,7 +531,7 @@
             <h3 id="penFillConfirmHeading" class="timing-group-heading panel-section-title">Confirmation</h3>
             <div id="penFillConfirmInstruction" class="pen-fill-confirm-instruction">—</div>
             <div class="metric-row panel-metric-row pen-fill-confirm-status-row">
-              <span class="metric-label panel-metric-label">Fill confirmation:</span>
+              <span class="metric-label panel-metric-label">Refill confirmation:</span>
               <strong id="penFillConfirmStatus" class="panel-metric-value pen-fill-confirm-status" role="status" aria-live="polite">—</strong>
             </div>
           </div>
@@ -656,9 +675,9 @@
                 <th>Sheep #</th>
                 <th class="sheep-log-time-col">Start Time</th>
                 <th class="sheep-log-time-col">End Time</th>
-                <th class="sheep-log-time-col">Shear Duration</th>
                 <th class="sheep-log-time-col">Catch Duration</th>
-                <th class="sheep-log-time-col">Catch-to-Release Time</th>
+                <th class="sheep-log-time-col">Shear Duration</th>
+                <th class="sheep-log-time-col">Catch, Shear, Release</th>
                 <th>Marker / Note</th>
               </tr>
             </thead>
@@ -700,11 +719,11 @@
           </header>
           <div class="panel-section-content">
             <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-              <span><strong>Blue</strong> Avg catch-to-release</span>
+              <span><strong>Blue</strong> Avg Catch, Shear, Release</span>
               <span><strong>Green</strong> Avg catch</span>
               <span><strong>Orange</strong> Target cycle</span>
             </div>
-            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg catch-to-release 0.000s • Target 0.000s • Set target for pace comparison.</div>
+            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg Catch, Shear, Release 0.000s • Target 0.000s • Set target for pace comparison.</div>
             <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
             <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
           </div>
@@ -828,14 +847,14 @@
           <li>End time</li>
           <li>Shear duration</li>
           <li>Catch duration</li>
-          <li>Catch-to-release time</li>
+          <li>Catch, Shear, Release</li>
           <li>Marker / Note</li>
         </ul>
 
         <h4 class="connection-help-title">Duration columns</h4>
         <p><strong>Shear Duration:</strong><br />How long the motor was running for that sheep.</p>
         <p><strong>Catch Duration:</strong><br />How long it took from the end of one sheep to the start of the next sheep.</p>
-        <p><strong>Catch-to-Release Time:</strong><br />The full time from starting the catch through to releasing the sheep. This combines catch time and shear time.</p>
+        <p><strong>Catch, Shear, Release:</strong><br />The full time from starting the catch through to releasing the sheep. This combines catch time and shear time.</p>
 
         <h4 class="connection-help-title">Colour shading</h4>
         <p>Yellow/orange shading means that time was longer than normal compared with the average for that same column.</p>
@@ -856,7 +875,7 @@
         <ul class="connection-help-list">
           <li><strong>Normal / no colour:</strong> The time is close to the average for that column.</li>
         </ul>
-        <p><strong>What “average for that column” means:</strong><br />Each duration column is compared with its own average: Shear Duration with average shear duration, Catch Duration with average catch duration, and Catch-to-Release Time with average catch-to-release time.</p>
+        <p><strong>What “average for that column” means:</strong><br />Each duration column is compared with its own average: Shear Duration with average shear duration, Catch Duration with average catch duration, and Catch, Shear, Release with average Catch, Shear, Release.</p>
         <p><strong>Example (catch duration):</strong><br />If the average catch duration is 7 seconds, 8 or 9 seconds may stay normal, around 12 seconds may show light yellow, around 20 seconds may show strong yellow, and around 25 seconds or more may show orange. This is an example only.</p>
         <p>The colour does not automatically mean something went wrong. It is only a quick way to spot times worth checking.</p>
 
@@ -890,7 +909,7 @@
       </div>
       <div class="connection-help-modal-content">
         <div class="sheep-log-sort-controls panel-section" aria-label="Sheep log sorting controls">
-          <div class="sheep-log-sort-control"><label for="sheepLogSortBy">Sort:</label><select id="sheepLogSortBy"><option value="number">Sheep number</option><option value="shearDuration">Shear time</option><option value="catchDuration">Catch time</option><option value="fullCycle">Catch-to-release time</option></select></div>
+          <div class="sheep-log-sort-control"><label for="sheepLogSortBy">Sort:</label><select id="sheepLogSortBy"><option value="number">Sheep number</option><option value="shearDuration">Shear time</option><option value="catchDuration">Catch time</option><option value="fullCycle">Catch, Shear, Release</option></select></div>
           <div class="sheep-log-sort-control"><label for="sheepLogSortOrder">Order:</label><select id="sheepLogSortOrder"><option value="asc">Fastest first</option><option value="desc">Slowest first</option></select></div>
           <div class="sheep-log-sort-control"><label for="sheepLogFillDirection">Fill:</label><select id="sheepLogFillDirection"><option value="latestFirst">Latest first</option><option value="oldestFirst">Oldest first</option></select></div>
           <div class="sheep-log-sort-control"><button id="markerSettingsToggle" class="marker-settings-toggle panel-settings-btn" type="button" aria-expanded="false">⚙ Marker Settings</button></div>
@@ -945,7 +964,7 @@
         <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
         <h4>Required section</h4>
         <ul>
-          <li><strong>Required average total time per sheep:</strong> Average catch-to-release time needed to hit the run target.</li>
+          <li><strong>Required average total time per sheep:</strong> Average Catch, Shear, Release time needed to hit the run target.</li>
           <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
           <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
           <li><strong>Required run total:</strong> Target sheep count for this run.</li>
@@ -1018,7 +1037,7 @@
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 2 sheep are left. That means the alert is based on every 8 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
         <p><strong>Pen refill:</strong><br />Shows the quick live refill alert: 2 sheep away, 1 sheep away, or refill allowed now.</p>
-        <p>Detailed refill forecast, reminder, strategy, pen state, and fill confirmation status now live in the Pen Fill Planner panel.</p>
+        <p>Detailed refill forecast, reminder, strategy, pen state, and refill confirmation status now live in the Pen Refill Planner panel.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
       </div>
     </div>
@@ -1027,19 +1046,19 @@
   <div id="penFillPlannerHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="penFillPlannerHelpModalTitle">
       <div class="connection-help-modal-header">
-        <h3 id="penFillPlannerHelpModalTitle">Pen Fill Planner Help</h3>
-        <button id="penFillPlannerHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Pen Fill Planner help">✕</button>
+        <h3 id="penFillPlannerHelpModalTitle">Pen Refill Planner Help</h3>
+        <button id="penFillPlannerHelpModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Pen Refill Planner help">✕</button>
       </div>
       <div class="connection-help-modal-content pen-fill-planner-help-content">
         <h4 class="connection-help-title">What this panel shows</h4>
-        <p>The Pen Fill Planner keeps the refill forecast and pen-state details separate from the live Timing Panel alert.</p>
-        <p><strong>Pen state:</strong><br />Shows pen count, refill status, last confirmed fill, and whether the model is using confirmed or assumed full fills.</p>
-        <p><strong>Average fill interval:</strong><br />Shows the average time between confirmed pen fills.</p>
-        <p><strong>Recent fill spacing:</strong><br />Shows the last few confirmed fill intervals.</p>
-        <p><strong>Next fill:</strong><br />Shows the next projected refill sheep and a short live reminder.</p>
-        <p><strong>Final fill forecast:</strong><br />Shows the last projected refill before the run ends and whether it is early, on target, or late.</p>
-        <p><strong>Strategy:</strong><br />Shows whether to keep full fills or use a smaller recommended fill.</p>
-        <p><strong>Confirmation:</strong><br />Only appears when a smaller-than-full fill needs confirmation.</p>
+        <p>The Pen Refill Planner keeps the refill forecast and pen-state details separate from the live Timing Panel alert.</p>
+        <p><strong>Pen state:</strong><br />Shows pen count, refill status, last confirmed refill, and whether the model is using confirmed or assumed full refills.</p>
+        <p><strong>Average refill interval:</strong><br />Shows the average time between confirmed pen refills.</p>
+        <p><strong>Recent refill spacing:</strong><br />Shows the last few confirmed refill intervals.</p>
+        <p><strong>Next refill:</strong><br />Shows the next projected refill sheep and a short live reminder.</p>
+        <p><strong>Final refill forecast:</strong><br />Shows the last projected refill before the run ends and whether it is early, on target, or late.</p>
+        <p><strong>Strategy:</strong><br />Shows whether to keep full refills or use a smaller recommended refill.</p>
+        <p><strong>Confirmation:</strong><br />Only appears when a smaller-than-full refill needs confirmation.</p>
       </div>
     </div>
   </div>
@@ -1061,11 +1080,11 @@
         <h4 class="connection-help-title">Averages</h4>
         <p><strong>Average shear time:</strong><br />The average time spent shearing each completed sheep.</p>
         <p><strong>Average catch time:</strong><br />The average time between finishing one sheep and starting the next sheep.</p>
-        <p><strong>Average catch-to-release time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
+        <p><strong>Average Catch, Shear, Release time:</strong><br />The average full cycle time per sheep. This includes catch time plus shear time.</p>
         <p><strong>Sheep per hour:</strong><br />The current average number of sheep being completed per hour.</p>
 
-        <h4 class="connection-help-title">Average catch-to-release colour</h4>
-        <p>The catch-to-release value may show a coloured outline or background.</p>
+        <h4 class="connection-help-title">Average Catch, Shear, Release colour</h4>
+        <p>The Catch, Shear, Release value may show a coloured outline or background.</p>
         <p>The colour helps show whether the average full cycle time is on pace, close to target, or falling behind.</p>
 
         <h4 class="connection-help-title">Sheep Times</h4>
