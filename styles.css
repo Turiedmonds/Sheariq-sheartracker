@@ -1942,3 +1942,19 @@ td.pace-neutral {
 #panel-cycle .pen-fill-status-neutral {
   color: #4b5563;
 }
+
+#panel-cycle .pen-fill-strategy-ok {
+  color: #166534;
+}
+
+#panel-cycle .pen-fill-strategy-recommend {
+  color: #0369a1;
+}
+
+#panel-cycle .pen-fill-strategy-warning {
+  color: #92400e;
+}
+
+#panel-cycle .pen-fill-strategy-neutral {
+  color: #4b5563;
+}
