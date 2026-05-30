@@ -3854,7 +3854,8 @@ function generateRunReview() {
   const verdict = segs.length > 1 && segs[segs.length - 1].avgCycle < segs[0].avgCycle ? "Strong finish" : "Maintained pace throughout";
   const lostRange = worst ? buildRangeLabel(worst.startElapsed, worst.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
   const bestRange = best ? buildRangeLabel(best.startElapsed, best.startElapsed + appState.trendBucketMinutes * 60) : "n/a";
-  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s catch-to-release time. First half averaged ${avg(firstHalf)}s catch-to-release time. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.`;
+  const markerSummary = formatMarkerStatsSummary(buildMarkerStats(appState.sheep, appState.markerSettings));
+  appState.runReviewText = `First quarter averaged ${avg(firstQuarter)}s catch-to-release time. First half averaged ${avg(firstHalf)}s catch-to-release time. Best segment: ${bestRange}. Worst segment: ${lostRange}. Recovery strongest in ${bestRange}. ${verdict}.\n\n${markerSummary}`;
   elements.runReviewText.textContent = appState.runReviewText;
 }
 
@@ -4464,10 +4465,10 @@ function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText) {
   return editor;
 }
 
-function getPlannedDelayMarkersBySheepNumber() {
+function buildPlannedDelayMarkerMap(entries, markerSettings) {
   const markersBySheep = new Map();
-  if (!Array.isArray(appState.sheep) || appState.sheep.length < 4) return markersBySheep;
-  const catchEntries = appState.sheep.filter((entry) => Number.isFinite(entry?.catchDuration) && entry.catchDuration > 0);
+  if (!Array.isArray(entries) || entries.length < 4) return markersBySheep;
+  const catchEntries = entries.filter((entry) => Number.isFinite(entry?.catchDuration) && entry.catchDuration > 0);
   if (catchEntries.length < 4) return markersBySheep;
   const catchAverage = catchEntries.reduce((sum, entry) => sum + entry.catchDuration, 0) / catchEntries.length;
   if (!Number.isFinite(catchAverage) || catchAverage <= 0) return markersBySheep;
@@ -4478,11 +4479,11 @@ function getPlannedDelayMarkersBySheepNumber() {
     return nearestMultiple > 0 && Math.abs(elapsedSeconds - nearestMultiple) <= toleranceSeconds;
   };
 
-  appState.sheep.forEach((entry) => {
+  entries.forEach((entry) => {
     const catchDuration = Number(entry?.catchDuration);
     const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
     const markers = [];
-    const { drink, cutter, comb } = appState.markerSettings;
+    const { drink, cutter, comb } = markerSettings || {};
     const extraSeconds = catchDuration - catchAverage;
     const matchesMarkerRange = (rule) => {
       const min = Number(rule?.minExtraSeconds);
@@ -4511,6 +4512,79 @@ function getPlannedDelayMarkersBySheepNumber() {
     }
   });
   return markersBySheep;
+}
+
+function createMarkerStatBucket() {
+  return { count: 0, catchTotal: 0, catchCount: 0 };
+}
+
+function addMarkerStatCatchDuration(bucket, catchDuration) {
+  if (!bucket) return;
+  bucket.count += 1;
+  const numericCatchDuration = Number(catchDuration);
+  if (Number.isFinite(numericCatchDuration)) {
+    bucket.catchTotal += numericCatchDuration;
+    bucket.catchCount += 1;
+  }
+}
+
+function buildMarkerStats(entries, markerSettings) {
+  const markerTypes = Object.keys(MANUAL_MARKER_TYPES);
+  const stats = {
+    suggested: Object.fromEntries(markerTypes.map((type) => [type, createMarkerStatBucket()])),
+    manual: Object.fromEntries(markerTypes.map((type) => [type, createMarkerStatBucket()])),
+    customManualCount: 0
+  };
+  if (!Array.isArray(entries)) return stats;
+
+  const suggestedMarkersBySheep = buildPlannedDelayMarkerMap(entries, markerSettings);
+  entries.forEach((entry) => {
+    const catchDuration = entry?.catchDuration;
+    const suggestedMarkers = Number.isFinite(entry?.number) ? suggestedMarkersBySheep.get(entry.number) : null;
+    if (Array.isArray(suggestedMarkers)) {
+      suggestedMarkers.forEach((marker) => {
+        if (stats.suggested[marker.type]) addMarkerStatCatchDuration(stats.suggested[marker.type], catchDuration);
+      });
+    }
+
+    const manualMarker = sanitizeManualMarker(entry?.manualMarker);
+    if (!manualMarker) return;
+    if (manualMarker.type === MANUAL_MARKER_CUSTOM_TYPE) {
+      stats.customManualCount += 1;
+      return;
+    }
+    if (stats.manual[manualMarker.type]) addMarkerStatCatchDuration(stats.manual[manualMarker.type], catchDuration);
+  });
+
+  return stats;
+}
+
+function formatMarkerStatLine(label, bucket) {
+  if (!bucket?.count) return `${label}: 0`;
+  const averageCatch = bucket.catchCount > 0 ? bucket.catchTotal / bucket.catchCount : null;
+  const averageText = Number.isFinite(averageCatch) ? `, avg catch ${averageCatch.toFixed(1)}s` : "";
+  return `${label}: ${bucket.count}${averageText}`;
+}
+
+function formatMarkerStatsSummary(stats) {
+  const markerTypes = Object.keys(MANUAL_MARKER_TYPES);
+  const hasSuggestedStats = markerTypes.some((type) => stats?.suggested?.[type]?.count > 0);
+  const hasManualStats = markerTypes.some((type) => stats?.manual?.[type]?.count > 0) || stats?.customManualCount > 0;
+  if (!hasSuggestedStats && !hasManualStats) return "Marker Summary: No marker data recorded for this run.";
+
+  const formatGroup = (groupStats) => markerTypes
+    .map((type) => formatMarkerStatLine(MANUAL_MARKER_TYPES[type], groupStats[type]))
+    .join("; ");
+
+  return [
+    "Marker Summary",
+    `Suggested markers: ${formatGroup(stats.suggested)}`,
+    `Manual markers: ${formatGroup(stats.manual)}; Custom: ${stats.customManualCount || 0}`
+  ].join("\n");
+}
+
+function getPlannedDelayMarkersBySheepNumber() {
+  return buildPlannedDelayMarkerMap(appState.sheep, appState.markerSettings);
 }
 
 function getDefaultMarkerSettings() {
