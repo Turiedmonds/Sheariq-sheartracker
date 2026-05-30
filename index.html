@@ -471,6 +471,22 @@
               <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Reason:</span>
+              <strong id="penFillPlannerReason" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Last full fill:</span>
+              <strong id="penFillPlannerLastFullFill" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Remaining fills:</span>
+              <strong id="penFillPlannerRemainingFills" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Final 3 min:</span>
+              <strong id="penFillPlannerFinalThreeMinutes" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Fill reminder:</span>
               <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
             </div>
@@ -1026,6 +1042,9 @@
         <p><strong>Assumption:</strong><br />Shows whether the forecast assumes full fills or uses confirmed fills.</p>
         <p><strong>Final fill status:</strong><br />Shows if the final projected fill is early, on target, or late.</p>
         <p><strong>Fill strategy:</strong><br />Read-only advice for the projected final fill timing.</p>
+        <p><strong>Last full fill:</strong><br />Shows when the app thinks the final maximum fill is due before smaller fills may be needed.</p>
+        <p><strong>Remaining fills:</strong><br />Shows the planned fill amounts from now to the final fill.</p>
+        <p><strong>Final 3 min:</strong><br />Estimates how many sheep may be caught/shorn in the final 3 minutes based on current average cycle time.</p>
         <p><strong>Fill reminder:</strong><br />Warns when the next fill is 2 sheep away, 1 sheep away, or due now.</p>
         <p><strong>Pen state:</strong><br />Shows sheep left, refill status, last confirmed fill, and the active pen model.</p>
         <p><strong>Fill confirmation pop-up:</strong><br />At a due fill point, confirm the recommended amount or enter the actual amount added.</p>
