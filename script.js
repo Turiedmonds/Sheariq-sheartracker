@@ -1892,6 +1892,9 @@ const elements = {
   timingPanelHelpBtn: document.getElementById("timingPanelHelpBtn"),
   timingPanelHelpModalOverlay: document.getElementById("timingPanelHelpModalOverlay"),
   timingPanelHelpModalCloseBtn: document.getElementById("timingPanelHelpModalCloseBtn"),
+  penFillPlannerHelpBtn: document.getElementById("penFillPlannerHelpBtn"),
+  penFillPlannerHelpModalOverlay: document.getElementById("penFillPlannerHelpModalOverlay"),
+  penFillPlannerHelpModalCloseBtn: document.getElementById("penFillPlannerHelpModalCloseBtn"),
   performancePanelHelpBtn: document.getElementById("performancePanelHelpBtn"),
   performancePanelHelpModalOverlay: document.getElementById("performancePanelHelpModalOverlay"),
   performancePanelHelpModalCloseBtn: document.getElementById("performancePanelHelpModalCloseBtn"),
@@ -2057,6 +2060,7 @@ function closeShortcutSettingsModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
   ) {
@@ -5338,6 +5342,11 @@ function loadPanelState() {
         const panel = byId.get(id);
         if (panel) elements.dashboardPanels.appendChild(panel);
       });
+      const penFillPlannerPanel = byId.get("panel-pen-fill-planner");
+      const timingPanel = byId.get("panel-cycle");
+      if (penFillPlannerPanel && timingPanel && !storedOrder.includes("panel-pen-fill-planner")) {
+        timingPanel.insertAdjacentElement("afterend", penFillPlannerPanel);
+      }
     }
   } catch (error) {
     console.debug("Failed to load panel order", error);
@@ -6514,6 +6523,7 @@ function closeConnectionHelpModal() {
     elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6537,6 +6547,7 @@ function closeDayConfigHelpModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6567,6 +6578,7 @@ function closeSheepLogSettingsModal() {
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
     && elements.targetPaceHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6583,6 +6595,7 @@ function closeSheepLogHelpModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6611,6 +6624,7 @@ function closeTargetPaceHelpModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6627,6 +6641,7 @@ function closeTimingPanelHelpModal() {
     elements.connectionHelpModalOverlay?.hidden !== false
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
@@ -6636,6 +6651,31 @@ function closeTimingPanelHelpModal() {
   }
 }
 
+
+
+function openPenFillPlannerHelpModal() {
+  if (!elements.penFillPlannerHelpModalOverlay) return;
+  elements.penFillPlannerHelpModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closePenFillPlannerHelpModal() {
+  if (!elements.penFillPlannerHelpModalOverlay) return;
+  elements.penFillPlannerHelpModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.targetPaceHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
 
 function openPerformancePanelHelpModal() {
   if (!elements.performancePanelHelpModalOverlay) return;
@@ -6651,6 +6691,7 @@ function closePerformancePanelHelpModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.simulationControlsHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
@@ -6673,6 +6714,7 @@ function closeSimulationControlsHelpModal() {
     && elements.dayConfigHelpModalOverlay?.hidden !== false
     && elements.sheepLogHelpModalOverlay?.hidden !== false
     && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
@@ -6931,6 +6973,13 @@ function bindEvents() {
       if (event.target === elements.timingPanelHelpModalOverlay) closeTimingPanelHelpModal();
     });
   }
+  if (elements.penFillPlannerHelpBtn) elements.penFillPlannerHelpBtn.addEventListener("click", openPenFillPlannerHelpModal);
+  if (elements.penFillPlannerHelpModalCloseBtn) elements.penFillPlannerHelpModalCloseBtn.addEventListener("click", closePenFillPlannerHelpModal);
+  if (elements.penFillPlannerHelpModalOverlay) {
+    elements.penFillPlannerHelpModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.penFillPlannerHelpModalOverlay) closePenFillPlannerHelpModal();
+    });
+  }
   if (elements.performancePanelHelpBtn) elements.performancePanelHelpBtn.addEventListener("click", openPerformancePanelHelpModal);
   if (elements.performancePanelHelpModalCloseBtn) elements.performancePanelHelpModalCloseBtn.addEventListener("click", closePerformancePanelHelpModal);
   if (elements.performancePanelHelpModalOverlay) {
@@ -6954,6 +7003,7 @@ function bindEvents() {
       closeSheepLogSettingsModal();
       closeTargetPaceHelpModal();
       closeTimingPanelHelpModal();
+      closePenFillPlannerHelpModal();
       closePerformancePanelHelpModal();
       closeSimulationControlsHelpModal();
       closeShortcutSettingsModal();
