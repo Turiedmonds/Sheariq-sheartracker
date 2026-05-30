@@ -452,6 +452,10 @@
               <span class="metric-label panel-metric-label">Fill strategy:</span>
               <strong id="penFillStrategyRecommendation" class="panel-metric-value">—</strong>
             </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Fill reminder:</span>
+              <strong id="penFillEarlyReminder" class="panel-metric-value" role="status" aria-live="polite">—</strong>
+            </div>
             <h4 class="timing-group-heading panel-section-title">Pen state</h4>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Pen count:</span>
@@ -981,9 +985,11 @@
         <p><strong>Strong wool lambs:</strong><br />Pen starts with 20 sheep. Refill is allowed when 5 sheep are left. That means the alert is based on every 15 sheep taken from the pen.</p>
         <p><strong>Strong wool ewes:</strong><br />Pen starts with 10 sheep. Refill is allowed when 2 sheep are left. That means the alert is based on every 8 sheep taken from the pen.</p>
         <p>The app counts sheep taken from the pen, not only sheep fully completed. If a sheep is currently on the board being shorn, it counts as taken from the pen.</p>
-        <p><strong>Pen fill forecast:</strong><br />Shows the next and final projected refill points assuming full fills. It uses physical sheep taken from the pen, not official count.</p>
+        <p><strong>Pen fill forecast:</strong><br />Shows the next and final projected refill points. It uses physical sheep taken from the pen, not official count.</p>
+        <p><strong>Fill reminder:</strong><br />Shows when the next fill is 2 sheep away, 1 sheep away, or due now.</p>
+        <p><strong>Forecast assumption:</strong><br />If fills are confirmed, the forecast uses confirmed fill amounts. If not, it assumes full fills.</p>
         <p><strong>Final fill status:</strong><br />Shows whether the final projected fill is too early, on target, or too late. The target window is around 2–4 minutes before end of run.</p>
-        <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version and assumes previous fills were full.</p>
+        <p><strong>Fill strategy:</strong><br />Shows the suggested fill approach based on the final-fill timing forecast. It is read-only advice in this version.</p>
         <p><strong>Pen state:</strong><br />Shows the current estimated sheep left in the pen, whether a refill is due, and whether the app is assuming full fills or using confirmed fills.</p>
         <p><strong>Fill confirmation:</strong><br />When a refill is due, the app asks whether the recommended amount was added. If not, enter the actual amount so Pen State can update.</p>
         <p>Pen refill uses pink so it is separate from the other Timing alert colours.</p>
