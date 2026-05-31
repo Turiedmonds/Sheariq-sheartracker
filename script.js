@@ -3230,6 +3230,18 @@ function formatSecondsFromMidnightClock(secondsFromMidnight) {
   return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function formatSecondsFromMidnightClockAmPm(secondsFromMidnight) {
+  if (!Number.isFinite(secondsFromMidnight)) return "";
+  const daySeconds = 24 * 3600;
+  const safeSeconds = ((Math.floor(secondsFromMidnight) % daySeconds) + daySeconds) % daySeconds;
+  const hours24 = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  const hours12 = hours24 % 12 || 12;
+  const meridiem = hours24 < 12 ? "AM" : "PM";
+  return `${hours12}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")} ${meridiem}`;
+}
+
 function formatClock(ms) {
   if (Number.isFinite(appState.runStartTime) && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
     const elapsedSecondsFromRunStart = (ms - appState.runStartTime) / 1000;
@@ -3795,10 +3807,10 @@ function updateDayClockDisplay() {
   }
   const dayClockSeconds = getCurrentDayClockSeconds();
   if (!Number.isFinite(dayClockSeconds)) {
-    setText(elements.dayClock, "00:00:00");
+    setText(elements.dayClock, "12:00:00 AM");
     return;
   }
-  setText(elements.dayClock, formatSecondsFromMidnightClock(dayClockSeconds));
+  setText(elements.dayClock, formatSecondsFromMidnightClockAmPm(dayClockSeconds));
 }
 
 function resetRunState() {
@@ -6095,11 +6107,13 @@ function formatPenFillCountdownDisplay(totalSeconds) {
   const hours = Math.floor(safeSeconds / 3600);
   const minutes = Math.floor((safeSeconds % 3600) / 60);
   const seconds = safeSeconds % 60;
-  const parts = [];
-  if (hours > 0) parts.push(`${hours}h`);
-  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
-  parts.push(`${seconds}s`);
-  return parts.join(" ");
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  return `${seconds}s`;
 }
 
 function formatPenFillDueClock(point) {
@@ -6116,21 +6130,18 @@ function formatPenFillDueClock(point) {
 }
 
 function formatPenFillClockAmPm(secondsFromMidnight) {
-  if (!Number.isFinite(secondsFromMidnight)) return "";
-  const daySeconds = 24 * 3600;
-  const safeSeconds = ((Math.floor(secondsFromMidnight) % daySeconds) + daySeconds) % daySeconds;
-  const hours24 = Math.floor(safeSeconds / 3600);
-  const minutes = Math.floor((safeSeconds % 3600) / 60);
-  const hours12 = hours24 % 12 || 12;
-  const meridiem = hours24 < 12 ? "AM" : "PM";
-  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
+  return formatSecondsFromMidnightClockAmPm(secondsFromMidnight);
 }
 
 function formatFinalPenFillForecastPoint(point) {
   const secondsBeforeRunEnd = Number(point?.secondsBeforeRunEnd);
   if (!Number.isFinite(secondsBeforeRunEnd)) return "No final refill projected before end";
-  if (secondsBeforeRunEnd <= 0) return `${point.label} — at end`;
-  return `${point.label} — ${formatCountdown(secondsBeforeRunEnd)} before end`;
+  const effectiveElapsedSeconds = Number(point?.effectiveElapsedSeconds);
+  const clockText = Number.isFinite(appState.dayClockStartSecondsFromMidnight) && Number.isFinite(effectiveElapsedSeconds)
+    ? formatPenFillClockAmPm(appState.dayClockStartSecondsFromMidnight + effectiveElapsedSeconds)
+    : "";
+  if (secondsBeforeRunEnd <= 0) return `${point.label} — at end${clockText ? ` — about ${clockText}` : ""}`;
+  return `${point.label} — ${formatPenFillCountdownDisplay(secondsBeforeRunEnd)} before end${clockText ? ` — about ${clockText}` : ""}`;
 }
 
 function analyzeFinalFillWindow(forecastPoints, options = {}) {
@@ -6240,12 +6251,12 @@ function updatePenFillIntervalDisplay(refillEvents = getCurrentRunPenFillEvents(
 
   setText(
     elements.penFillAverageInterval,
-    averageInterval ? formatCountdown(averageInterval.averageSeconds) : "—"
+    averageInterval ? formatPenFillCountdownDisplay(averageInterval.averageSeconds) : "—"
   );
   setText(
     elements.penFillRecentIntervals,
     recentIntervals.length
-      ? recentIntervals.map((interval) => formatCountdown(interval.seconds)).join(", ")
+      ? recentIntervals.map((interval) => formatPenFillCountdownDisplay(interval.seconds)).join(", ")
       : "—"
   );
 }
