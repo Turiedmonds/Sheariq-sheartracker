@@ -2103,6 +2103,7 @@ const elements = {
   breakRemaining: document.getElementById("breakRemaining"),
   breakNextRun: document.getElementById("breakNextRun"),
   breakNextRunStarts: document.getElementById("breakNextRunStarts"),
+  breakOverlayShowBtn: document.getElementById("breakOverlayShowBtn"),
   breakOverlay: document.getElementById("breakOverlay"),
   breakOverlayStatus: document.getElementById("breakOverlayStatus"),
   breakOverlayLabel: document.getElementById("breakOverlayLabel"),
@@ -3417,6 +3418,9 @@ function updateBreakTimingDisplay() {
   const preparedForNextRunBreak = isPreparedForNextRunBreak();
   const details = getBreakDisplayDetails();
   if (elements.breakTimingRows) elements.breakTimingRows.hidden = !preparedForNextRunBreak;
+  if (elements.breakOverlayShowBtn) {
+    elements.breakOverlayShowBtn.hidden = !(preparedForNextRunBreak && appState.breakBannerDismissedForCurrentBreak);
+  }
   setText(elements.breakStatus, details.status);
   setText(elements.breakStartedTime, details.started);
   setText(elements.breakRemaining, details.remaining);
@@ -3448,6 +3452,16 @@ function updateBreakOverlayDisplay() {
 function hideBreakBannerForCurrentBreak() {
   appState.breakBannerDismissedForCurrentBreak = true;
   updateBreakOverlayDisplay();
+  updateBreakTimingDisplay();
+  if (typeof autosaveState === "function") {
+    autosaveState();
+  }
+}
+
+function showBreakBannerForCurrentBreak() {
+  appState.breakBannerDismissedForCurrentBreak = false;
+  updateBreakOverlayDisplay();
+  updateBreakTimingDisplay();
   if (typeof autosaveState === "function") {
     autosaveState();
   }
@@ -7974,6 +7988,7 @@ function bindEvents() {
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
   if (elements.breakOverlayDismissBtn) elements.breakOverlayDismissBtn.addEventListener("click", hideBreakBannerForCurrentBreak);
+  if (elements.breakOverlayShowBtn) elements.breakOverlayShowBtn.addEventListener("click", showBreakBannerForCurrentBreak);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
   if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
   if (elements.trendBucketSize) {
