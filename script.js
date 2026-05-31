@@ -3599,6 +3599,7 @@ function resetRunState() {
   appState.targetPacePredictionSnapshot = null;
   appState.pendingPenFillPromptKey = null;
   appState.dismissedPenFillPromptKey = null;
+  resetPenFillForecastCountdownTarget();
   calculateAverages();
 }
 
@@ -3709,6 +3710,7 @@ function startRun() {
   appState.targetPacePredictionSnapshot = null;
   appState.pendingPenFillPromptKey = null;
   appState.dismissedPenFillPromptKey = null;
+  resetPenFillForecastCountdownTarget();
 
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
@@ -3748,6 +3750,7 @@ function stopRun() {
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.runEndTimeMs = null;
+  resetPenFillForecastCountdownTarget();
 
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
@@ -3789,6 +3792,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   appState.runEndTimeMs = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = null;
+  resetPenFillForecastCountdownTarget();
 
   appState.preparedForNextRunBreak = true;
   appState.breakBannerDismissedForCurrentBreak = false;
@@ -5963,6 +5967,87 @@ function updatePenFillIntervalDisplay(refillEvents = getCurrentRunPenFillEvents(
   );
 }
 
+let penFillForecastCountdownTarget = null;
+
+function resetPenFillForecastCountdownTarget() {
+  penFillForecastCountdownTarget = null;
+}
+
+function buildPenFillCountdownEventSignature(events = getCurrentRunPenFillEvents()) {
+  if (!Array.isArray(events) || events.length === 0) return "none";
+  return events
+    .map((event) => [
+      event.id || "",
+      Number(event.runIndex),
+      Number(event.physicalSheepTakenFromPen),
+      Number(event.actualFillAmount),
+      Number(event.resultingPenCount),
+      Number(event.effectiveElapsedSeconds),
+      Number(event.wallClockTime),
+      Number(event.createdAt)
+    ].join(":"))
+    .join("|");
+}
+
+function getPenFillForecastCountdownTarget(point, context = {}) {
+  const sheepNumber = Number(point?.sheepNumber);
+  const targetEffectiveElapsedSeconds = Number(point?.effectiveElapsedSeconds);
+  if (!Number.isFinite(sheepNumber) || !Number.isFinite(targetEffectiveElapsedSeconds)) return null;
+
+  const targetKey = {
+    runIndex: Number(appState.currentRunIndex),
+    recordType: appState.recordType || "none",
+    sheepNumber,
+    label: point?.label || `Sheep ${sheepNumber}`,
+    recordSource: context.hasConfirmedEvents ? "confirmed" : "assumed",
+    assumption: context.assumption || "",
+    eventSignature: context.eventSignature || "none",
+    dayClockStartSecondsFromMidnight: Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+      ? Math.floor(appState.dayClockStartSecondsFromMidnight)
+      : null
+  };
+  const key = JSON.stringify(targetKey);
+
+  if (!penFillForecastCountdownTarget || penFillForecastCountdownTarget.key !== key) {
+    const dueClockSeconds = Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+      ? appState.dayClockStartSecondsFromMidnight + targetEffectiveElapsedSeconds
+      : null;
+    penFillForecastCountdownTarget = {
+      key,
+      sheepNumber,
+      label: targetKey.label,
+      targetEffectiveElapsedSeconds,
+      dueClockSeconds,
+      recordType: targetKey.recordType,
+      runIndex: targetKey.runIndex,
+      recordSource: targetKey.recordSource,
+      assumption: targetKey.assumption,
+      eventSignature: targetKey.eventSignature
+    };
+  }
+
+  return penFillForecastCountdownTarget;
+}
+
+function formatPenFillForecastCountdownTarget(target, point = null) {
+  const label = target?.label || "Next refill";
+  const targetEffectiveElapsedSeconds = Number(target?.targetEffectiveElapsedSeconds);
+  const currentEffectiveElapsedSeconds = Number(getEffectiveElapsedSeconds());
+  if (!Number.isFinite(targetEffectiveElapsedSeconds) || !Number.isFinite(currentEffectiveElapsedSeconds)) return `${label} — Waiting for pace data`;
+
+  const remainingSeconds = targetEffectiveElapsedSeconds - currentEffectiveElapsedSeconds;
+  if (remainingSeconds <= 0) {
+    const overdueSeconds = Math.abs(remainingSeconds);
+    if (overdueSeconds < 1) return `${label} — refill due now`;
+    return `${label} — overdue by ${formatPenFillCountdownDisplay(overdueSeconds)}`;
+  }
+  if (point?.isCurrentFill) return `${label} — refill due now`;
+
+  const dueClockSeconds = Number(target?.dueClockSeconds);
+  const clockText = Number.isFinite(dueClockSeconds) ? formatPenFillClockAmPm(dueClockSeconds) : "";
+  return `${label} — next refill in ${formatPenFillCountdownDisplay(remainingSeconds)}${clockText ? ` — due about ${clockText}` : ""}`;
+}
+
 function updatePenStateDisplay() {
   const refillStatusClassNames = ["pen-state-refill-now", "pen-state-refill-neutral"];
   const modelClassNames = ["pen-state-model-confirmed", "pen-state-model-assumed", "pen-state-model-neutral"];
@@ -6091,7 +6176,8 @@ function updatePenFillForecastDisplay() {
     forecastPoints
   });
 
-  const setForecastDisplay = (nextText, finalText, assumptionText, analysis = { status: "waiting", message: "—" }, planner = buildPlanner()) => {
+  const setForecastDisplay = (nextText, finalText, assumptionText, analysis = { status: "waiting", message: "—" }, planner = buildPlanner(), options = {}) => {
+    if (options.resetCountdownTarget !== false) resetPenFillForecastCountdownTarget();
     setText(elements.penFillForecastNext, nextText);
     setText(elements.penFillForecastFinal, finalText);
     setText(elements.penFillForecastAssumption, assumptionText);
@@ -6112,12 +6198,19 @@ function updatePenFillForecastDisplay() {
 
   const avgCycleSeconds = appState.currentStats.avgCycle;
   if (!Number.isFinite(avgCycleSeconds) || avgCycleSeconds <= 0) {
-    setForecastDisplay("—", "—", "Waiting for pace data");
+    setForecastDisplay("Waiting for pace data", "—", "Waiting for pace data");
     return;
   }
 
-  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
-  const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
+  const rawElapsedSeconds = Number(getEffectiveElapsedSeconds());
+  const rawRunDurationSeconds = Number(getCurrentRunDurationSeconds());
+  if (!Number.isFinite(rawElapsedSeconds) || rawElapsedSeconds < 0 || !Number.isFinite(rawRunDurationSeconds) || rawRunDurationSeconds <= 0) {
+    setForecastDisplay("—", "—", "Waiting for valid run timing");
+    return;
+  }
+
+  const elapsedSeconds = Math.max(rawElapsedSeconds, 0);
+  const runDurationSeconds = Math.max(rawRunDurationSeconds, 0);
   const remainingRunSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
   const routedForecast = getPenFillForecastPoints({
     recordType: appState.recordType,
@@ -6129,6 +6222,7 @@ function updatePenFillForecastDisplay() {
   });
   const displayForecastPoints = routedForecast.points;
   const assumptionText = routedForecast.assumption;
+  const eventSignature = buildPenFillCountdownEventSignature(getCurrentRunPenFillEvents());
   const finalRefillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
   const planner = buildPlanner(displayForecastPoints, remainingRunSeconds);
 
@@ -6139,12 +6233,18 @@ function updatePenFillForecastDisplay() {
 
   const nextRefill = displayForecastPoints[0];
   const finalRefill = displayForecastPoints[displayForecastPoints.length - 1];
+  const countdownTarget = getPenFillForecastCountdownTarget(nextRefill, {
+    assumption: assumptionText,
+    hasConfirmedEvents: routedForecast.hasConfirmedEvents,
+    eventSignature
+  });
   setForecastDisplay(
-    formatPenFillForecastPoint(nextRefill),
+    countdownTarget ? formatPenFillForecastCountdownTarget(countdownTarget, nextRefill) : formatPenFillForecastPoint(nextRefill),
     formatFinalPenFillForecastPoint(finalRefill),
     assumptionText,
     finalRefillAnalysis,
-    planner
+    planner,
+    { resetCountdownTarget: false }
   );
 }
 
