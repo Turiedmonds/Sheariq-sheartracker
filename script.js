@@ -2230,7 +2230,9 @@ const appState = {
     resetRun: "R",
     finishRunBreak: "+",
     motorOn: "O",
-    motorOff: "ENTER"
+    motorOff: "ENTER",
+    toggleSimulationMode: "M",
+    resetCurrentSheep: ""
   }
 };
 
@@ -2363,6 +2365,7 @@ const elements = {
   simulationRunLengthIndicator: document.getElementById("simulationRunLengthIndicator"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
+  resetCurrentSheepBtn: document.getElementById("resetCurrentSheepBtn"),
   shortcutMessage: document.getElementById("shortcutMessage"),
   shortcutStartRun: document.getElementById("shortcutStartRun"),
   shortcutStopRun: document.getElementById("shortcutStopRun"),
@@ -2371,6 +2374,8 @@ const elements = {
   shortcutFinishRunBreak: document.getElementById("shortcutFinishRunBreak"),
   shortcutMotorOn: document.getElementById("shortcutMotorOn"),
   shortcutMotorOff: document.getElementById("shortcutMotorOff"),
+  shortcutToggleSimulationMode: document.getElementById("shortcutToggleSimulationMode"),
+  shortcutResetCurrentSheep: document.getElementById("shortcutResetCurrentSheep"),
   resetShortcutsBtn: document.getElementById("resetShortcutsBtn"),
   shortcutSettingsBtn: document.getElementById("shortcutSettingsBtn"),
   shortcutSettingsModalOverlay: document.getElementById("shortcutSettingsModalOverlay"),
@@ -2455,7 +2460,9 @@ const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   resetRun: "R",
   finishRunBreak: "+",
   motorOn: "O",
-  motorOff: "ENTER"
+  motorOff: "ENTER",
+  toggleSimulationMode: "M",
+  resetCurrentSheep: ""
 });
 
 const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
@@ -2465,7 +2472,9 @@ const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   resetRun: "R",
   finishRunBreak: "",
   motorOn: "O",
-  motorOff: "F"
+  motorOff: "F",
+  toggleSimulationMode: "",
+  resetCurrentSheep: ""
 });
 
 const SHORTCUT_ACTIONS = [
@@ -2474,8 +2483,10 @@ const SHORTCUT_ACTIONS = [
   { key: "pauseRun", label: "Pause / Resume", elementKey: "shortcutPauseRun", buttonKey: "pauseRunBtn", titleSuffix: "" },
   { key: "resetRun", label: "Reset Run", elementKey: "shortcutResetRun", buttonKey: "resetRunBtn", titleSuffix: "" },
   { key: "finishRunBreak", label: "Finish Run / Break", elementKey: "shortcutFinishRunBreak", buttonKey: "finishRunBreakBtn", titleSuffix: "" },
-  { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only" },
-  { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only" }
+  { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOnShortcut },
+  { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOffShortcut },
+  { key: "toggleSimulationMode", label: "Toggle Simulation Mode", elementKey: "shortcutToggleSimulationMode", handler: toggleSimulationModeShortcut, titleSuffix: "" },
+  { key: "resetCurrentSheep", label: "Reset Current Sheep", elementKey: "shortcutResetCurrentSheep", buttonKey: "resetCurrentSheepBtn", titleSuffix: " — Simulation Mode active run only", canRun: canResetCurrentSheepTiming }
 ];
 
 const SPECIAL_SHORTCUT_KEYS = Object.freeze({
@@ -2519,15 +2530,30 @@ function normalizeShortcuts(payload) {
   const source = payload && typeof payload === "object" ? payload : {};
   const next = {};
   const used = new Set();
+
   for (const action of SHORTCUT_ACTIONS) {
-    const fallback = DEFAULT_KEYBOARD_SHORTCUTS[action.key] || "";
-    const candidate = Object.prototype.hasOwnProperty.call(source, action.key) ? source[action.key] : fallback;
+    const hasStoredValue = Object.prototype.hasOwnProperty.call(source, action.key);
+    let candidate = hasStoredValue ? source[action.key] : DEFAULT_KEYBOARD_SHORTCUTS[action.key];
+
+    if (action.key === "motorOff" && (!hasStoredValue || sanitizeShortcutKey(candidate) === "")) {
+      candidate = used.has(DEFAULT_KEYBOARD_SHORTCUTS.motorOff) ? "" : DEFAULT_KEYBOARD_SHORTCUTS.motorOff;
+    }
+
+    if (action.key === "toggleSimulationMode" && !hasStoredValue && used.has(DEFAULT_KEYBOARD_SHORTCUTS.toggleSimulationMode)) {
+      candidate = "";
+      console.warn("Toggle Simulation Mode shortcut default M was not applied because it conflicts with an existing shortcut.");
+    }
+
     const raw = sanitizeShortcutKey(candidate);
     if (!raw) {
       next[action.key] = "";
       continue;
     }
-    if (used.has(raw)) return getFallbackShortcuts();
+    if (used.has(raw)) {
+      next[action.key] = "";
+      console.warn(`${action.label} shortcut was left unset because ${formatShortcutLabel(raw)} conflicts with another shortcut.`);
+      continue;
+    }
     next[action.key] = raw;
     used.add(raw);
   }
@@ -2612,18 +2638,34 @@ function applyShortcutAssignment(actionKey, proposedValue) {
   renderShortcutSettings();
 }
 
+function canRunShortcutAction(action) {
+  if (typeof action.canRun === "function" && !action.canRun()) return false;
+  if (action.buttonKey) {
+    const button = elements[action.buttonKey];
+    return Boolean(button && !button.disabled);
+  }
+  return typeof action.handler === "function";
+}
+
+function runShortcutAction(action) {
+  if (typeof action.handler === "function") {
+    action.handler();
+    return;
+  }
+  const button = elements[action.buttonKey];
+  if (button && !button.disabled) button.click();
+}
+
 function handleShortcutKeydown(event) {
   if (event.repeat || isTypingTarget(event.target)) return;
   const key = sanitizeShortcutKey(event.key);
   if (!key) return;
   for (const action of SHORTCUT_ACTIONS) {
     if (appState.keyboardShortcuts[action.key] !== key) continue;
+    if (!canRunShortcutAction(action)) return;
     event.preventDefault();
     event.stopPropagation();
-    if ((action.key === "motorOn" || action.key === "motorOff") && !appState.simulationMode) return;
-    const button = elements[action.buttonKey];
-    if (!button || button.disabled) return;
-    button.click();
+    runShortcutAction(action);
     return;
   }
 }
@@ -3517,6 +3559,7 @@ function setSimulationRunLengthMode(mode) {
 
   appState.simulationRunLengthMode = appState.simulationMode ? getValidSimulationRunLengthMode(mode) : "real";
   updateSimulationRunLengthControls();
+  updateResetCurrentSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -3529,6 +3572,7 @@ function setSimulationCustomMinutes(value) {
 
   appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(value);
   updateSimulationRunLengthControls();
+  updateResetCurrentSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -3881,6 +3925,7 @@ function startRun() {
   elements.stopRunBtn.disabled = false;
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
+  updateResetCurrentSheepButtonUI();
 
   setPaused(false);
   updatePauseButtonUI();
@@ -3921,6 +3966,7 @@ function stopRun() {
   elements.stopRunBtn.disabled = true;
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
+  updateResetCurrentSheepButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Stopped";
@@ -3974,6 +4020,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   updatePauseButtonUI();
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
+  updateResetCurrentSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
   renderReviewList();
@@ -3995,6 +4042,7 @@ function resetRun() {
   elements.stopRunBtn.disabled = true;
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
+  updateResetCurrentSheepButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Idle";
@@ -4066,6 +4114,46 @@ function maybeAutoStartNextRunAfterBreak(now = Date.now()) {
 
 function isCountingPaused() {
   return appState.paused || isCountingPausedForBreak();
+}
+
+function canRunSimulationMotorOnShortcut() {
+  return Boolean(appState.simulationMode && appState.runActive && !isCountingPaused() && !appState.currentCycle.motorOn);
+}
+
+function canRunSimulationMotorOffShortcut() {
+  return Boolean(appState.simulationMode && appState.runActive && !isCountingPaused());
+}
+
+function toggleSimulationModeShortcut() {
+  setSimulationMode(!appState.simulationMode);
+}
+
+function canResetCurrentSheepTiming() {
+  return Boolean(
+    appState.simulationMode
+    && appState.runActive
+    && !appState.breakActive
+    && !appState.preparedForNextRunBreak
+  );
+}
+
+function updateResetCurrentSheepButtonUI() {
+  if (!elements.resetCurrentSheepBtn) return;
+  elements.resetCurrentSheepBtn.disabled = !canResetCurrentSheepTiming();
+}
+
+function resetCurrentSheepTiming() {
+  if (!canResetCurrentSheepTiming()) return;
+
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = Date.now();
+  appState.currentMotorDisplay = "OFF";
+  setPaused(true);
+  updateResetCurrentSheepButtonUI();
+  updateLivePanel();
+  updateStatsPanel();
+  autosaveState();
 }
 
 
@@ -6555,6 +6643,7 @@ function updateLivePanel() {
   updateBreakOverlayDisplay();
   updateRunBadge();
   updateStartRunButtonUI();
+  updateResetCurrentSheepButtonUI();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
@@ -8523,6 +8612,7 @@ function setSimulationMode(enabled) {
   if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
   if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
   updateSimulationRunLengthControls();
+  updateResetCurrentSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 
@@ -9005,6 +9095,7 @@ function bindEvents() {
   }
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  if (elements.resetCurrentSheepBtn) elements.resetCurrentSheepBtn.addEventListener("click", resetCurrentSheepTiming);
   if (elements.shortcutSettingsBtn) elements.shortcutSettingsBtn.addEventListener("click", openShortcutSettingsModal);
   if (elements.shortcutSettingsModalCloseBtn) elements.shortcutSettingsModalCloseBtn.addEventListener("click", closeShortcutSettingsModal);
   if (elements.shortcutSettingsModalOverlay) {
