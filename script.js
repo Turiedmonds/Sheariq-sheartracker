@@ -168,6 +168,27 @@ function isOfficialCounted(entry) {
   return getSheepStatus(entry) !== SHEEP_STATUS.REJECTED;
 }
 
+function isRejectedSheep(entry) {
+  return getSheepStatus(entry) === SHEEP_STATUS.REJECTED;
+}
+
+// Official counts exclude rejected sheep for future record target progress.
+function getOfficialRunSheepCount() {
+  return appState.sheep.filter(isOfficialCounted).length;
+}
+
+function getOfficialDaySheepCount() {
+  return appState.daySheep.filter(isOfficialCounted).length;
+}
+
+function getRejectedRunSheepCount() {
+  return appState.sheep.filter(isRejectedSheep).length;
+}
+
+function getRejectedDaySheepCount() {
+  return appState.daySheep.filter(isRejectedSheep).length;
+}
+
 // Physical counts are used for timing, pen movement, and refill planning.
 function getPhysicalRunSheepCount() {
   return appState.sheep.length;
@@ -2081,22 +2102,6 @@ function planFinalFillStrategy(options = {}) {
   });
 }
 
-// Official counts exclude rejected sheep for future record target progress.
-function getOfficialRunSheepCount() {
-  return appState.sheep.filter(isOfficialCounted).length;
-}
-
-function getOfficialDaySheepCount() {
-  return appState.daySheep.filter(isOfficialCounted).length;
-}
-
-function getRejectedRunSheepCount() {
-  return appState.sheep.filter((entry) => getSheepStatus(entry) === SHEEP_STATUS.REJECTED).length;
-}
-
-function getRejectedDaySheepCount() {
-  return appState.daySheep.filter((entry) => getSheepStatus(entry) === SHEEP_STATUS.REJECTED).length;
-}
 
 const appState = {
   runActive: false,
