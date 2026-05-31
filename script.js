@@ -36,6 +36,7 @@ const SW_CACHE_NAME = "sheariq-shear-tracker-v4";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
+const QUALITY_RATING_PERIOD_SECONDS = 1800;
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -2160,6 +2161,7 @@ const appState = {
   daySheep: [],
   penFillEvents: [],
   qualityRatings: [],
+  qualityRatingEditId: "",
   currentCycle: {
     motorOn: false,
     shearStart: null,
@@ -2313,6 +2315,21 @@ const elements = {
   totalSheep: document.getElementById("totalSheep"),
   officialRejectedCount: document.getElementById("officialRejectedCount"),
   qualityRatingSummary: document.getElementById("qualityRatingSummary"),
+  qualityRatingModalOverlay: document.getElementById("qualityRatingModalOverlay"),
+  qualityRatingModalCloseBtn: document.getElementById("qualityRatingModalCloseBtn"),
+  qualityRatingCloseBtn: document.getElementById("qualityRatingCloseBtn"),
+  qualityRatingLatestSummary: document.getElementById("qualityRatingLatestSummary"),
+  qualityRatingValidation: document.getElementById("qualityRatingValidation"),
+  qualityRatingForm: document.getElementById("qualityRatingForm"),
+  qualityRatingEditId: document.getElementById("qualityRatingEditId"),
+  qualityRatingPeriodInput: document.getElementById("qualityRatingPeriodInput"),
+  qualityRatingInput: document.getElementById("qualityRatingInput"),
+  qualityRatingOfficialCountInput: document.getElementById("qualityRatingOfficialCountInput"),
+  qualityRatingPhysicalCountInput: document.getElementById("qualityRatingPhysicalCountInput"),
+  qualityRatingNotesInput: document.getElementById("qualityRatingNotesInput"),
+  qualityRatingSaveBtn: document.getElementById("qualityRatingSaveBtn"),
+  qualityRatingClearBtn: document.getElementById("qualityRatingClearBtn"),
+  qualityRatingHistory: document.getElementById("qualityRatingHistory"),
   avgShear: document.getElementById("avgShear"),
   avgCatch: document.getElementById("avgCatch"),
   avgCycle: document.getElementById("avgCycle"),
@@ -3313,6 +3330,253 @@ function getLatestQualityRating() {
 function formatQualityRatingSummary() {
   const latestRating = getLatestQualityRating();
   return latestRating ? latestRating.qualityRating : "—";
+}
+
+function getCurrentQualityPeriodNumber() {
+  const effectiveElapsedSeconds = Math.max(Number(getEffectiveElapsedSeconds()) || 0, 0);
+  return Math.floor(effectiveElapsedSeconds / QUALITY_RATING_PERIOD_SECONDS) + 1;
+}
+
+function getQualityPeriodBounds(periodNumber) {
+  const safePeriodNumber = Math.max(Math.floor(Number(periodNumber)) || 1, 1);
+  const start = (safePeriodNumber - 1) * QUALITY_RATING_PERIOD_SECONDS;
+  return {
+    periodNumber: safePeriodNumber,
+    start,
+    end: safePeriodNumber * QUALITY_RATING_PERIOD_SECONDS
+  };
+}
+
+function formatQualityPeriodLabel(record) {
+  const periodNumber = Math.max(Math.floor(Number(record?.periodNumber)) || 1, 1);
+  const start = Number.isFinite(Number(record?.blockStartElapsedSeconds))
+    ? Number(record.blockStartElapsedSeconds)
+    : getQualityPeriodBounds(periodNumber).start;
+  const end = Number.isFinite(Number(record?.blockEndElapsedSeconds))
+    ? Number(record.blockEndElapsedSeconds)
+    : getQualityPeriodBounds(periodNumber).end;
+  return `Period ${periodNumber} (${formatCountdown(start)}–${formatCountdown(end)})`;
+}
+
+function getQualityPeriodDefaultCounts(periodNumber) {
+  const bounds = getQualityPeriodBounds(periodNumber);
+  const entries = Array.isArray(appState.sheep) ? appState.sheep.filter((entry) => {
+    const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
+    return Number.isFinite(elapsedSeconds) && elapsedSeconds >= bounds.start && elapsedSeconds < bounds.end;
+  }) : [];
+  return {
+    officialCountForPeriod: entries.filter(isOfficialCounted).length,
+    physicalCountForPeriod: entries.length
+  };
+}
+
+function setQualityRatingValidation(message = "") {
+  if (!elements.qualityRatingValidation) return;
+  elements.qualityRatingValidation.textContent = message;
+  elements.qualityRatingValidation.hidden = !message;
+}
+
+function setQualityRatingCountDefaults(periodNumber) {
+  const counts = getQualityPeriodDefaultCounts(periodNumber);
+  if (elements.qualityRatingOfficialCountInput) elements.qualityRatingOfficialCountInput.value = String(counts.officialCountForPeriod);
+  if (elements.qualityRatingPhysicalCountInput) elements.qualityRatingPhysicalCountInput.value = String(counts.physicalCountForPeriod);
+}
+
+function createQualityRatingRecordFromForm() {
+  const periodNumber = Math.max(Math.floor(Number(elements.qualityRatingPeriodInput?.value)) || 0, 0);
+  const qualityRating = (elements.qualityRatingInput?.value || "").trim();
+  const officialCountRaw = elements.qualityRatingOfficialCountInput?.value ?? "";
+  const physicalCountRaw = elements.qualityRatingPhysicalCountInput?.value ?? "";
+  const notes = elements.qualityRatingNotesInput?.value || "";
+
+  if (!qualityRating) return { error: "Enter a quality rating before saving." };
+  if (periodNumber <= 0) return { error: "Enter a positive period number." };
+
+  const officialCountForPeriod = officialCountRaw === "" ? null : Number(officialCountRaw);
+  if (officialCountRaw !== "" && (!Number.isFinite(officialCountForPeriod) || officialCountForPeriod < 0)) {
+    return { error: "Official count must be a non-negative number." };
+  }
+
+  const physicalCountForPeriod = physicalCountRaw === "" ? null : Number(physicalCountRaw);
+  if (physicalCountRaw !== "" && (!Number.isFinite(physicalCountForPeriod) || physicalCountForPeriod < 0)) {
+    return { error: "Physical count must be a non-negative number." };
+  }
+
+  const bounds = getQualityPeriodBounds(periodNumber);
+  const editId = elements.qualityRatingEditId?.value || appState.qualityRatingEditId || "";
+  return {
+    record: {
+      id: editId || `quality-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      qualityRating,
+      periodNumber,
+      blockStartElapsedSeconds: bounds.start,
+      blockEndElapsedSeconds: bounds.end,
+      officialCountForPeriod,
+      physicalCountForPeriod,
+      notes,
+      enteredAt: editId
+        ? (appState.qualityRatings.find((rating) => rating.id === editId)?.enteredAt || Date.now())
+        : Date.now()
+    }
+  };
+}
+
+function sortQualityRatings() {
+  appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings).sort((a, b) => {
+    const periodDelta = (Number(a.periodNumber) || 0) - (Number(b.periodNumber) || 0);
+    if (periodDelta) return periodDelta;
+    return (Number(a.enteredAt) || 0) - (Number(b.enteredAt) || 0);
+  });
+}
+
+function saveQualityRatingFromForm(event) {
+  if (event) event.preventDefault();
+  const result = createQualityRatingRecordFromForm();
+  if (result.error) {
+    setQualityRatingValidation(result.error);
+    return;
+  }
+
+  const sanitizedRecord = sanitizeQualityRatingRecord(result.record);
+  if (!sanitizedRecord) {
+    setQualityRatingValidation("Enter a valid quality rating before saving.");
+    return;
+  }
+
+  const editId = elements.qualityRatingEditId?.value || appState.qualityRatingEditId || "";
+  const ratings = sanitizeQualityRatings(appState.qualityRatings);
+  const existingIndex = editId ? ratings.findIndex((rating) => rating.id === editId) : -1;
+  if (existingIndex >= 0) ratings[existingIndex] = sanitizedRecord;
+  else ratings.push(sanitizedRecord);
+  appState.qualityRatings = ratings;
+  sortQualityRatings();
+  resetQualityRatingForm();
+  updateStatsPanel();
+  renderQualityRatingModal();
+  autosaveState();
+}
+
+function editQualityRating(recordId) {
+  const record = sanitizeQualityRatings(appState.qualityRatings).find((rating) => rating.id === recordId);
+  if (!record) {
+    setQualityRatingValidation("Could not find that quality rating.");
+    return;
+  }
+  appState.qualityRatingEditId = record.id;
+  if (elements.qualityRatingEditId) elements.qualityRatingEditId.value = record.id;
+  if (elements.qualityRatingPeriodInput) elements.qualityRatingPeriodInput.value = record.periodNumber || getCurrentQualityPeriodNumber();
+  if (elements.qualityRatingInput) elements.qualityRatingInput.value = record.qualityRating;
+  if (elements.qualityRatingOfficialCountInput) elements.qualityRatingOfficialCountInput.value = record.officialCountForPeriod ?? "";
+  if (elements.qualityRatingPhysicalCountInput) elements.qualityRatingPhysicalCountInput.value = record.physicalCountForPeriod ?? "";
+  if (elements.qualityRatingNotesInput) elements.qualityRatingNotesInput.value = record.notes || "";
+  if (elements.qualityRatingSaveBtn) elements.qualityRatingSaveBtn.textContent = "Save Rating";
+  setQualityRatingValidation("");
+  elements.qualityRatingInput?.focus();
+}
+
+async function deleteQualityRating(recordId) {
+  const confirmed = await confirmModal({
+    title: "Delete quality rating?",
+    message: "Delete this quality rating record? This cannot be undone.",
+    confirmText: "Delete",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
+
+  appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings).filter((rating) => rating.id !== recordId);
+  if (appState.qualityRatingEditId === recordId) resetQualityRatingForm();
+  updateStatsPanel();
+  renderQualityRatingModal();
+  autosaveState();
+}
+
+function renderQualityRatingModal() {
+  const ratings = sanitizeQualityRatings(appState.qualityRatings);
+  if (ratings.length !== appState.qualityRatings.length) appState.qualityRatings = ratings;
+  const latestRating = getLatestQualityRating();
+  setText(elements.qualityRatingLatestSummary, latestRating ? `Latest: ${latestRating.qualityRating}` : "No quality ratings yet.");
+
+  if (!elements.qualityRatingHistory) return;
+  elements.qualityRatingHistory.innerHTML = "";
+  if (!ratings.length) {
+    elements.qualityRatingHistory.textContent = "No quality ratings yet.";
+    return;
+  }
+
+  const fragment = document.createDocumentFragment();
+  [...ratings].sort((a, b) => {
+    const periodDelta = (Number(a.periodNumber) || 0) - (Number(b.periodNumber) || 0);
+    if (periodDelta) return periodDelta;
+    return (Number(a.enteredAt) || 0) - (Number(b.enteredAt) || 0);
+  }).forEach((record) => {
+    const row = document.createElement("div");
+    row.className = "quality-rating-history-row";
+
+    const details = document.createElement("div");
+    details.className = "quality-rating-history-details";
+
+    const heading = document.createElement("strong");
+    heading.textContent = `${formatQualityPeriodLabel(record)} • Rating ${record.qualityRating}`;
+    details.appendChild(heading);
+
+    const meta = document.createElement("span");
+    meta.textContent = `Official ${record.officialCountForPeriod ?? "—"} • Physical ${record.physicalCountForPeriod ?? "—"}`;
+    details.appendChild(meta);
+
+    if (record.notes) {
+      const notes = document.createElement("span");
+      notes.className = "quality-rating-history-notes";
+      notes.textContent = record.notes.length > 80 ? `${record.notes.slice(0, 77)}…` : record.notes;
+      details.appendChild(notes);
+    }
+
+    const actions = document.createElement("div");
+    actions.className = "quality-rating-history-actions";
+
+    const editBtn = document.createElement("button");
+    editBtn.type = "button";
+    editBtn.textContent = "Edit";
+    editBtn.dataset.action = "editQualityRating";
+    editBtn.dataset.ratingId = record.id;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.type = "button";
+    deleteBtn.textContent = "Delete";
+    deleteBtn.dataset.action = "deleteQualityRating";
+    deleteBtn.dataset.ratingId = record.id;
+
+    actions.append(editBtn, deleteBtn);
+    row.append(details, actions);
+    fragment.appendChild(row);
+  });
+  elements.qualityRatingHistory.appendChild(fragment);
+}
+
+function resetQualityRatingForm() {
+  appState.qualityRatingEditId = "";
+  const periodNumber = getCurrentQualityPeriodNumber();
+  if (elements.qualityRatingEditId) elements.qualityRatingEditId.value = "";
+  if (elements.qualityRatingPeriodInput) elements.qualityRatingPeriodInput.value = String(periodNumber);
+  if (elements.qualityRatingInput) elements.qualityRatingInput.value = "";
+  if (elements.qualityRatingNotesInput) elements.qualityRatingNotesInput.value = "";
+  if (elements.qualityRatingSaveBtn) elements.qualityRatingSaveBtn.textContent = "Save Rating";
+  setQualityRatingCountDefaults(periodNumber);
+  setQualityRatingValidation("");
+}
+
+function openQualityRatingModal() {
+  if (!elements.qualityRatingModalOverlay) return;
+  resetQualityRatingForm();
+  renderQualityRatingModal();
+  elements.qualityRatingModalOverlay.hidden = false;
+  setLayoutScrollLock(true);
+  elements.qualityRatingInput?.focus();
+}
+
+function closeQualityRatingModal() {
+  if (!elements.qualityRatingModalOverlay) return;
+  elements.qualityRatingModalOverlay.hidden = true;
+  setLayoutScrollLock(false);
 }
 
 function formatCountdown(totalSeconds) {
@@ -9740,10 +10004,6 @@ function closePenFillPlannerHelpModal() {
   }
 }
 
-function showQualityRatingPlaceholder() {
-  window.alert("Quality rating entry and history will be added in the next step.");
-}
-
 function openPerformancePanelHelpModal() {
   if (!elements.performancePanelHelpModalOverlay) return;
   elements.performancePanelHelpModalOverlay.hidden = false;
@@ -10082,7 +10342,29 @@ function bindEvents() {
     });
   }
   if (elements.performancePanelHelpBtn) elements.performancePanelHelpBtn.addEventListener("click", openPerformancePanelHelpModal);
-  if (elements.qualityRatingSummary) elements.qualityRatingSummary.addEventListener("click", showQualityRatingPlaceholder);
+  if (elements.qualityRatingSummary) elements.qualityRatingSummary.addEventListener("click", openQualityRatingModal);
+  if (elements.qualityRatingForm) elements.qualityRatingForm.addEventListener("submit", saveQualityRatingFromForm);
+  if (elements.qualityRatingClearBtn) elements.qualityRatingClearBtn.addEventListener("click", resetQualityRatingForm);
+  if (elements.qualityRatingCloseBtn) elements.qualityRatingCloseBtn.addEventListener("click", closeQualityRatingModal);
+  if (elements.qualityRatingModalCloseBtn) elements.qualityRatingModalCloseBtn.addEventListener("click", closeQualityRatingModal);
+  if (elements.qualityRatingPeriodInput) {
+    elements.qualityRatingPeriodInput.addEventListener("change", () => {
+      if (!appState.qualityRatingEditId) setQualityRatingCountDefaults(elements.qualityRatingPeriodInput.value);
+    });
+  }
+  if (elements.qualityRatingHistory) {
+    elements.qualityRatingHistory.addEventListener("click", (event) => {
+      const actionTarget = event.target instanceof HTMLElement ? event.target.closest("[data-action]") : null;
+      if (!(actionTarget instanceof HTMLElement)) return;
+      if (actionTarget.dataset.action === "editQualityRating") editQualityRating(actionTarget.dataset.ratingId || "");
+      if (actionTarget.dataset.action === "deleteQualityRating") deleteQualityRating(actionTarget.dataset.ratingId || "");
+    });
+  }
+  if (elements.qualityRatingModalOverlay) {
+    elements.qualityRatingModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.qualityRatingModalOverlay) closeQualityRatingModal();
+    });
+  }
   if (elements.performancePanelHelpModalCloseBtn) elements.performancePanelHelpModalCloseBtn.addEventListener("click", closePerformancePanelHelpModal);
   if (elements.performancePanelHelpModalOverlay) {
     elements.performancePanelHelpModalOverlay.addEventListener("click", (event) => {
@@ -10107,6 +10389,7 @@ function bindEvents() {
       closeTimingPanelHelpModal();
       closePenFillPlannerHelpModal();
       closePerformancePanelHelpModal();
+      closeQualityRatingModal();
       closeSimulationControlsHelpModal();
       closeAutosaveSettingsModal();
       closeShortcutSettingsModal();
