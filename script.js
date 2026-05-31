@@ -5031,23 +5031,24 @@ function calculateTargetMetrics() {
 
   const requiredRate = runLengthSeconds > 0 ? (requiredRunSheep / runLengthSeconds) * 3600 : 0;
   const requiredCycle = requiredRunSheep > 0 && runLengthSeconds > 0 ? runLengthSeconds / requiredRunSheep : 0;
-  const projectedTotal = appState.currentStats.sheepPerHour > 0 && runLengthSeconds > 0
-    ? Math.round((appState.currentStats.sheepPerHour * runLengthSeconds) / 3600)
-    : appState.sheep.length;
 
   const avgCycleSeconds = appState.currentStats.avgCycle;
-  const sheepDoneThisRun = appState.sheep.length;
+  const physicalSheepDoneThisRun = getPhysicalRunSheepCount();
+  const officialSheepDoneThisRun = getOfficialRunSheepCount();
   const elapsedRunSeconds = elapsedSeconds;
   const runRemainingSeconds = Math.max(runLengthSeconds - elapsedRunSeconds, 0);
-  const remainingToTarget = requiredRunSheep - sheepDoneThisRun;
+  const remainingToTarget = requiredRunSheep - officialSheepDoneThisRun;
+  let projectedFuturePhysicalSheep = 0;
+  let projectedTotal = officialSheepDoneThisRun;
   let targetCatchRunSeconds = elapsedRunSeconds;
   let timeSpareText = "—";
   let timeSpareIsAhead = null;
-  let maxPossibleRunTotal = sheepDoneThisRun;
+  let maxPossibleRunTotal = officialSheepDoneThisRun;
 
   if (avgCycleSeconds > 0) {
-    const maxExtraSheep = Math.floor(runRemainingSeconds / avgCycleSeconds);
-    maxPossibleRunTotal = sheepDoneThisRun + Math.max(maxExtraSheep, 0);
+    projectedFuturePhysicalSheep = Math.max(Math.floor(runRemainingSeconds / avgCycleSeconds), 0);
+    projectedTotal = officialSheepDoneThisRun + projectedFuturePhysicalSheep;
+    maxPossibleRunTotal = projectedTotal;
     const targetCatchOffsetSeconds = remainingToTarget <= 0 ? 0 : remainingToTarget * avgCycleSeconds;
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
@@ -5070,7 +5071,7 @@ function calculateTargetMetrics() {
   maxCatchRunSeconds = Math.min(Math.max(maxCatchRunSeconds, 0), Math.max(runLengthSeconds, 0));
 
   const remainingSeconds = Math.max(runLengthSeconds - elapsedSeconds, 0);
-  const remainingSheep = Math.max(requiredRunSheep - appState.sheep.length, 0);
+  const remainingSheep = Math.max(requiredRunSheep - officialSheepDoneThisRun, 0);
   const requiredCycleRemaining = remainingSheep > 0 ? remainingSeconds / remainingSheep : 0;
 
   return {
@@ -5079,6 +5080,9 @@ function calculateTargetMetrics() {
     projectedTotal,
     requiredCycleRemaining,
     remainingSheep,
+    physicalSheepDoneThisRun,
+    officialSheepDoneThisRun,
+    projectedFuturePhysicalSheep,
     requiredDaySheep,
     requiredRunSheep,
     targetCatchRunSeconds,
@@ -5115,12 +5119,12 @@ function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
     if (hasOutcomeContext) {
       const sheepDiff = projectedTotal - requiredRunSheep;
       if (sheepDiff > 0) {
-        return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+        return `On pace — ${paceDiff}s spare per sheep. Projected official run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
       }
       if (sheepDiff < 0) {
-        return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+        return `On pace — ${paceDiff}s spare per sheep. Projected official run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
       }
-      return `On pace — ${paceDiff}s spare per sheep. Projected run total: ${projectedTotal} sheep, on target.`;
+      return `On pace — ${paceDiff}s spare per sheep. Projected official run total: ${projectedTotal} sheep, on target.`;
     }
     return `On pace — ${paceDiff}s spare per sheep.`;
   }
@@ -5130,18 +5134,18 @@ function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
     if (hasOutcomeContext) {
       const sheepDiff = projectedTotal - requiredRunSheep;
       if (sheepDiff > 0) {
-        return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
+        return `Behind — ${paceDiff}s slow per sheep. Projected official run total: ${projectedTotal} sheep, ${sheepDiff} ahead.`;
       }
       if (sheepDiff < 0) {
-        return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
+        return `Behind — ${paceDiff}s slow per sheep. Projected official run total: ${projectedTotal} sheep, ${Math.abs(sheepDiff)} behind.`;
       }
-      return `Behind — ${paceDiff}s slow per sheep. Projected run total: ${projectedTotal} sheep, on target.`;
+      return `Behind — ${paceDiff}s slow per sheep. Projected official run total: ${projectedTotal} sheep, on target.`;
     }
     return `Behind — ${paceDiff}s slow per sheep.`;
   }
 
   if (hasOutcomeContext) {
-    return `On target — projected finish: ${projectedTotal} sheep.`;
+    return `On target — projected official finish: ${projectedTotal} sheep.`;
   }
 
   return "On target.";
