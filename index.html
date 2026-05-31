@@ -729,10 +729,15 @@
         </div>
       </div>
       <div class="panel-body">
+        <div class="sheep-log-merge-controls" aria-label="Sheep log correction tools">
+          <button id="mergeSelectedSheepBtn" class="btn-inline-small" type="button" disabled>Merge Selected Sheep</button>
+          <span id="mergeSelectedSheepStatus" class="sheep-log-merge-status" aria-live="polite">Select two adjacent sheep to merge.</span>
+        </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">
           <table>
             <thead>
               <tr>
+                <th class="sheep-log-select-col">Select</th>
                 <th>Sheep #</th>
                 <th class="sheep-log-time-col">Start Time</th>
                 <th class="sheep-log-time-col">End Time</th>
