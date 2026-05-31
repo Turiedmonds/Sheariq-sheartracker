@@ -2135,6 +2135,7 @@ const appState = {
   statsTimerId: null,
   paused: false,
   pauseStartedAtMs: null,
+  retryCatchOnResume: false,
   breakActive: false,
   breakStartedAtMs: null,
   breakSource: null,
@@ -3853,6 +3854,7 @@ function resetRunState() {
   appState.currentMotorDisplay = "OFF";
   appState.paused = false;
   appState.pauseStartedAtMs = null;
+  appState.retryCatchOnResume = false;
   appState.breakActive = false;
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
@@ -3955,6 +3957,7 @@ function startRun() {
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = appState.runStartTime;
+  appState.retryCatchOnResume = false;
   appState.lastMotorState = null;
   appState.farm = normalizeFarmName(elements.farmInput.value);
   appState.target.sheep = Math.max(Number(elements.targetSheepInput.value) || 0, 0);
@@ -4019,6 +4022,7 @@ function stopRun() {
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = null;
+  appState.retryCatchOnResume = false;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
   appState.breakActive = false;
@@ -4068,6 +4072,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = null;
+  appState.retryCatchOnResume = false;
   appState.currentMotorDisplay = "OFF";
 
   appState.runEndTimeMs = null;
@@ -4311,6 +4316,7 @@ async function undoLastSheep() {
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = now;
+  appState.retryCatchOnResume = true;
   appState.currentMotorDisplay = "OFF";
 
   const newPhysicalSheepCount = appState.sheep.length;
@@ -4331,6 +4337,7 @@ function resetCurrentSheepTiming() {
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
   appState.currentCycle.catchStart = Date.now();
+  appState.retryCatchOnResume = true;
   appState.currentMotorDisplay = "OFF";
   setPaused(true);
   updateResetCurrentSheepButtonUI();
@@ -7280,6 +7287,24 @@ function setPaused(paused) {
 
   resumeDayClock();
 
+  const shouldRetryCatchOnResume = Boolean(
+    appState.retryCatchOnResume
+    && appState.runActive
+    && appState.currentCycle
+    && appState.currentCycle.motorOn === false
+    && !appState.breakActive
+    && !appState.preparedForNextRunBreak
+  );
+
+  if (shouldRetryCatchOnResume) {
+    appState.currentCycle.catchStart = Date.now();
+    appState.retryCatchOnResume = false;
+    updateLivePanel();
+    if (typeof autosaveState === "function") {
+      autosaveState();
+    }
+  }
+
   if (appState.runActive && appState.effectiveResumeRealMs === null) {
     appState.effectiveResumeRealMs = Date.now();
   }
@@ -7786,6 +7811,7 @@ function getAutosavePayload() {
       recordType: appState.recordType,
       paused: appState.paused,
       pauseStartedAtMs: appState.pauseStartedAtMs,
+      retryCatchOnResume: appState.retryCatchOnResume,
       breakActive: appState.breakActive,
       breakStartedAtMs: appState.breakStartedAtMs,
       breakSource: appState.breakSource,
@@ -8228,6 +8254,7 @@ function restoreSessionPayload(raw, options = {}) {
   if (elements.customHours && elements.runType) {
     elements.customHours.disabled = elements.runType.value !== "custom";
   }
+  appState.retryCatchOnResume = Boolean(appState.retryCatchOnResume);
   appState.simulationMode = Boolean(appState.simulationMode);
   appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
   if (!appState.simulationMode) {
