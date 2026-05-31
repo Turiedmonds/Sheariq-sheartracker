@@ -1982,6 +1982,7 @@ const appState = {
   currentRunIndex: 0,
   dayClockStartRealMs: null,
   dayClockStartSecondsFromMidnight: 0,
+  dayClockPausedSecondsFromMidnight: null,
   dayStartTimeTouched: false,
   dayClockTimerId: null,
   savedFarms: [],
@@ -3540,10 +3541,11 @@ function updateRunBadge() {
 }
 
 function getCurrentDayClockSeconds() {
+  if (appState.paused && Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
+    return appState.dayClockPausedSecondsFromMidnight;
+  }
   if (appState.dayClockStartRealMs === null) {
-    return appState.paused && Number.isFinite(appState.dayClockStartSecondsFromMidnight)
-      ? appState.dayClockStartSecondsFromMidnight
-      : null;
+    return null;
   }
   const elapsedSeconds = (Date.now() - appState.dayClockStartRealMs) / 1000;
   return appState.dayClockStartSecondsFromMidnight + elapsedSeconds;
@@ -3586,6 +3588,7 @@ function resetRunState() {
   appState.currentRunIndex = 0;
   appState.dayClockStartRealMs = null;
   appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(getDefaultDayStartTime());
+  appState.dayClockPausedSecondsFromMidnight = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = null;
   appState.trendBuckets = {};
@@ -3685,6 +3688,7 @@ function startRun() {
     appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
   }
   appState.dayClockStartRealMs = appState.runStartTime;
+  appState.dayClockPausedSecondsFromMidnight = null;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
   appState.breakActive = false;
@@ -6612,6 +6616,28 @@ function updatePauseButtonUI() {
   elements.pauseRunBtn.textContent = appState.paused ? "Unpause" : "Pause";
 }
 
+function pauseDayClock() {
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  appState.dayClockPausedSecondsFromMidnight = Number.isFinite(currentDayClockSeconds)
+    ? currentDayClockSeconds
+    : null;
+  updateDayClockDisplay();
+}
+
+function resumeDayClock() {
+  if (Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
+    const elapsedDayClockMs = Math.max(
+      (appState.dayClockPausedSecondsFromMidnight - appState.dayClockStartSecondsFromMidnight) * 1000,
+      0
+    );
+    appState.dayClockStartRealMs = Date.now() - elapsedDayClockMs;
+  } else if (appState.dayClockStartRealMs === null && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
+    appState.dayClockStartRealMs = Date.now();
+  }
+  appState.dayClockPausedSecondsFromMidnight = null;
+  updateDayClockDisplay();
+}
+
 function setPaused(paused) {
   const nextPaused = Boolean(paused);
   if (appState.paused === nextPaused) return;
@@ -6619,6 +6645,7 @@ function setPaused(paused) {
   appState.paused = nextPaused;
 
   if (appState.paused) {
+    pauseDayClock();
     appState.pauseStartedAtMs = Date.now();
     if (appState.effectiveResumeRealMs !== null) {
       appState.effectiveElapsedBeforePauseMs += Math.max(Date.now() - appState.effectiveResumeRealMs, 0);
@@ -6651,9 +6678,7 @@ function setPaused(paused) {
     appState.pauseStartedAtMs = null;
   }
 
-  if (appState.dayClockStartRealMs === null && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
-    appState.dayClockStartRealMs = Date.now();
-  }
+  resumeDayClock();
 
   if (appState.runActive && appState.effectiveResumeRealMs === null) {
     appState.effectiveResumeRealMs = Date.now();
@@ -7175,6 +7200,7 @@ function getAutosavePayload() {
       currentRunIndex: appState.currentRunIndex,
       dayClockStartRealMs: appState.dayClockStartRealMs,
       dayClockStartSecondsFromMidnight: appState.dayClockStartSecondsFromMidnight,
+      dayClockPausedSecondsFromMidnight: appState.dayClockPausedSecondsFromMidnight,
       trendBucketMinutes: appState.trendBucketMinutes,
       trendBuckets: appState.trendBuckets,
       reviewBlocks: appState.reviewBlocks,
@@ -7609,6 +7635,12 @@ function restoreSessionPayload(raw, options = {}) {
   } else {
     appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
   }
+  const savedDayClockSnapshotSeconds = Number.isFinite(appState.dayClockSnapshotSeconds)
+    ? appState.dayClockSnapshotSeconds
+    : null;
+  appState.dayClockPausedSecondsFromMidnight = Number.isFinite(appState.dayClockPausedSecondsFromMidnight)
+    ? appState.dayClockPausedSecondsFromMidnight
+    : (appState.paused && savedDayClockSnapshotSeconds !== null ? savedDayClockSnapshotSeconds : null);
   appState.breakActive = Boolean(appState.breakActive);
   appState.breakStartedAtMs = Number.isFinite(appState.breakStartedAtMs) ? appState.breakStartedAtMs : null;
   appState.breakSource = typeof appState.breakSource === "string" ? appState.breakSource : null;
@@ -7636,9 +7668,8 @@ function restoreSessionPayload(raw, options = {}) {
       appState.effectiveElapsedBeforePauseMs += Math.max(savedAtMs - appState.effectiveResumeRealMs, 0);
       appState.effectiveResumeRealMs = null;
     }
-    if (Number.isFinite(appState.dayClockSnapshotSeconds)) {
-      appState.dayClockStartSecondsFromMidnight = appState.dayClockSnapshotSeconds;
-      appState.dayClockStartRealMs = null;
+    if (savedDayClockSnapshotSeconds !== null) {
+      appState.dayClockPausedSecondsFromMidnight = savedDayClockSnapshotSeconds;
     }
   }
   if (elements.recordType) elements.recordType.value = appState.recordType;
