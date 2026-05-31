@@ -860,6 +860,81 @@ function findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen = getPhy
   )) || null;
 }
 
+function maybeRecordAssumedPenFillEvent(context = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(context, "recordType") ? context.recordType : appState.recordType;
+  const rule = context.rule || getPenRule(recordType);
+  if (!appState.runActive || appState.paused || !recordType || recordType === "none" || !rule) return null;
+
+  const fullFillAmount = Number(rule.defaultRefillAmount);
+  if (!Number.isInteger(fullFillAmount) || fullFillAmount <= 0) return null;
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(context, "physicalSheepTakenFromPen")
+    ? Number(context.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen < fullFillAmount) return null;
+
+  const assumedFillSheepNumber = Math.floor(physicalSheepTakenFromPen / fullFillAmount) * fullFillAmount;
+  if (!Number.isFinite(assumedFillSheepNumber) || assumedFillSheepNumber <= 0) return null;
+  if (findActivePenFillEventAtCurrentPoint(assumedFillSheepNumber)) return null;
+
+  const promptKey = getPenFillPromptKey(assumedFillSheepNumber);
+  if (
+    appState.penFillPromptModal?.open
+    || appState.pendingPenFillPromptKey === promptKey
+    || appState.dismissedPenFillPromptKey === promptKey
+  ) {
+    return null;
+  }
+
+  const penStateAtFillPoint = getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen: assumedFillSheepNumber
+  });
+  if (!penStateAtFillPoint?.refillAllowedNow) return null;
+
+  const instructionModel = getPenFillInstructionModel({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen: assumedFillSheepNumber,
+    penState: penStateAtFillPoint
+  });
+  const recommendedFillAmount = Number(instructionModel?.recommendedFillAmount);
+  if (
+    !Number.isInteger(recommendedFillAmount)
+    || recommendedFillAmount !== fullFillAmount
+    || penFillInstructionNeedsConfirmation(instructionModel, rule)
+  ) {
+    return null;
+  }
+
+  const sheepPastFillPoint = Math.max(physicalSheepTakenFromPen - assumedFillSheepNumber, 0);
+  const currentEffectiveElapsedSeconds = Number(getEffectiveElapsedSeconds());
+  const avgCycleSeconds = Number(appState.currentStats.avgCycle);
+  const effectiveElapsedSeconds = Number.isFinite(currentEffectiveElapsedSeconds)
+    ? Math.max(currentEffectiveElapsedSeconds - (Number.isFinite(avgCycleSeconds) && avgCycleSeconds > 0 ? sheepPastFillPoint * avgCycleSeconds : 0), 0)
+    : null;
+  const wallClockTime = Number.isFinite(avgCycleSeconds) && avgCycleSeconds > 0
+    ? Date.now() - (sheepPastFillPoint * avgCycleSeconds * 1000)
+    : Date.now();
+
+  const draft = createPenFillEventDraft({
+    recordType,
+    rule,
+    penState: penStateAtFillPoint,
+    physicalSheepTakenFromPen: assumedFillSheepNumber,
+    actualFillAmount: fullFillAmount,
+    recommendedFillAmount: fullFillAmount,
+    source: PEN_FILL_EVENT_SOURCE.ASSUMED_FULL,
+    effectiveElapsedSeconds,
+    wallClockTime
+  });
+  if (draft?.error) return null;
+
+  appState.penFillEvents.push(draft);
+  autosaveState();
+  return draft;
+}
+
 function refreshPenFillConfirmationDisplays(message = "") {
   updatePenFillForecastDisplay();
   updatePenStateDisplay();
@@ -879,10 +954,23 @@ function recordPenFillEvent(options = {}) {
   const recordType = appState.recordType;
   const rule = getPenRule(recordType);
   const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const source = Object.values(PEN_FILL_EVENT_SOURCE).includes(options.source)
+    ? options.source
+    : PEN_FILL_EVENT_SOURCE.CUSTOM;
+  const existingFillEvent = findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+  const shouldOverrideAssumedFill = Boolean(
+    existingFillEvent
+    && existingFillEvent.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL
+    && source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL
+  );
+  const penStateEvents = shouldOverrideAssumedFill
+    ? getCurrentRunPenFillEvents().filter((event) => event.id !== existingFillEvent.id)
+    : undefined;
   const penState = getCurrentPenStateFromEvents({
     recordType,
     rule,
-    physicalSheepTakenFromPen
+    physicalSheepTakenFromPen,
+    ...(penStateEvents ? { events: penStateEvents } : {})
   });
 
   const fail = (message, error = message) => {
@@ -905,7 +993,7 @@ function recordPenFillEvent(options = {}) {
   if (!penState.refillAllowedNow) {
     return fail("Refill not due yet");
   }
-  if (findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen)) {
+  if (existingFillEvent && !shouldOverrideAssumedFill) {
     return fail("Refill already confirmed");
   }
 
@@ -916,7 +1004,7 @@ function recordPenFillEvent(options = {}) {
     physicalSheepTakenFromPen,
     actualFillAmount: options.actualFillAmount,
     recommendedFillAmount: options.recommendedFillAmount,
-    source: options.source
+    source
   });
 
   if (draft?.error) {
@@ -924,6 +1012,13 @@ function recordPenFillEvent(options = {}) {
     return fail(message, draft.error);
   }
 
+  if (shouldOverrideAssumedFill) {
+    const now = Date.now();
+    existingFillEvent.undone = true;
+    existingFillEvent.undoneAt = now;
+    existingFillEvent.overriddenAt = now;
+    existingFillEvent.updatedAt = now;
+  }
   appState.penFillEvents.push(draft);
   autosaveState();
 
@@ -5946,9 +6041,10 @@ function formatPenStateLastConfirmedFill(penState) {
 }
 
 function formatPenStateModel(penState) {
-  if (penState?.source === "confirmed") return "Using confirmed refills";
-  if (penState?.source === "assumedFull") return "Assuming full refills";
-  return "—";
+  const refillAmount = Number(penState?.rule?.defaultRefillAmount);
+  return Number.isInteger(refillAmount) && refillAmount > 0
+    ? `Assumed maximum refill (${refillAmount})`
+    : "Assumed maximum refill";
 }
 
 function updatePenFillIntervalDisplay(refillEvents = getCurrentRunPenFillEvents()) {
@@ -6098,18 +6194,31 @@ function updatePenStateDisplay() {
     return;
   }
 
-  setText(elements.penStateCurrentCount, formatPenStateCurrentCount(penState));
+  const assumedFillEvent = maybeRecordAssumedPenFillEvent({
+    recordType: appState.recordType,
+    rule,
+    physicalSheepTakenFromPen: penState.physicalSheepTakenFromPen
+  });
+  const displayPenState = assumedFillEvent
+    ? getCurrentPenStateFromEvents({
+      recordType: appState.recordType,
+      rule,
+      physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen()
+    }) || penState
+    : penState;
+
+  setText(elements.penStateCurrentCount, formatPenStateCurrentCount(displayPenState));
   setRefillStatus(
-    formatPenStateRefillStatus(penState),
-    penState.refillAllowedNow ? "pen-state-refill-now" : "pen-state-refill-neutral"
+    formatPenStateRefillStatus(displayPenState),
+    displayPenState.refillAllowedNow ? "pen-state-refill-now" : "pen-state-refill-neutral"
   );
-  setText(elements.penStateLastConfirmedFill, formatPenStateLastConfirmedFill(penState));
+  setText(elements.penStateLastConfirmedFill, formatPenStateLastConfirmedFill(displayPenState));
   updatePenFillIntervalDisplay();
   setModel(
-    formatPenStateModel(penState),
-    penState.source === "confirmed"
+    formatPenStateModel(displayPenState),
+    displayPenState.source === "confirmed"
       ? "pen-state-model-confirmed"
-      : (penState.source === "assumedFull" ? "pen-state-model-assumed" : "pen-state-model-neutral")
+      : (displayPenState.source === "assumedFull" ? "pen-state-model-assumed" : "pen-state-model-neutral")
   );
 }
 
