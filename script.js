@@ -30,7 +30,7 @@ const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
-const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v3";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
@@ -5756,16 +5756,15 @@ function updatePenRefillAlertDisplay() {
 function formatPenFillForecastPoint(point) {
   if (point?.isCurrentFill) return `${point.label} — now`;
   const secondsFromNow = Number(point?.secondsFromNow);
-  const clockText = formatProjectedLocalClock(secondsFromNow);
+  const clockText = formatProjectedDayClock(secondsFromNow);
   return `${point.label} — in ${formatCountdown(secondsFromNow)}${clockText ? ` — approx ${clockText}` : ""}`;
 }
 
-function formatProjectedLocalClock(secondsFromNow) {
+function formatProjectedDayClock(secondsFromNow) {
   if (!Number.isFinite(secondsFromNow) || secondsFromNow < 0) return "";
-  return new Date(Date.now() + secondsFromNow * 1000).toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit"
-  });
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  if (!Number.isFinite(currentDayClockSeconds)) return "";
+  return formatSecondsFromMidnightClock(currentDayClockSeconds + secondsFromNow).slice(0, 5);
 }
 
 function formatFinalPenFillForecastPoint(point) {
