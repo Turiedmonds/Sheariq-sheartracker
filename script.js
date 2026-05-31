@@ -30,7 +30,7 @@ const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
-const SW_CACHE_NAME = "sheariq-shear-tracker-v3";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v4";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
@@ -2229,10 +2229,10 @@ const appState = {
     pauseRun: "P",
     resetRun: "R",
     finishRunBreak: "+",
-    motorOn: "O",
+    motorOn: "0",
     motorOff: "ENTER",
     toggleSimulationMode: "M",
-    resetCurrentSheep: ""
+    resetCurrentSheep: "ARROWUP"
   }
 };
 
@@ -2459,10 +2459,10 @@ const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   pauseRun: "P",
   resetRun: "R",
   finishRunBreak: "+",
-  motorOn: "O",
+  motorOn: "0",
   motorOff: "ENTER",
   toggleSimulationMode: "M",
-  resetCurrentSheep: ""
+  resetCurrentSheep: "ARROWUP"
 });
 
 const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
@@ -2526,36 +2526,68 @@ function getFallbackShortcuts() {
   return { ...DEFAULT_KEYBOARD_SHORTCUTS };
 }
 
+function findShortcutConflict(value, actionKey, shortcuts) {
+  return SHORTCUT_ACTIONS.find((action) => action.key !== actionKey && shortcuts[action.key] === value);
+}
+
+function shouldApplyDefaultShortcut(actionKey, hasStoredValue, storedValue) {
+  if (!hasStoredValue) return true;
+  const sanitized = sanitizeShortcutKey(storedValue);
+  if (actionKey === "motorOff" || actionKey === "resetCurrentSheep") return sanitized === "";
+  if (actionKey === "motorOn") return sanitized === "" || sanitized === LEGACY_DEFAULT_KEYBOARD_SHORTCUTS.motorOn;
+  return false;
+}
+
 function normalizeShortcuts(payload) {
   const source = payload && typeof payload === "object" ? payload : {};
   const next = {};
-  const used = new Set();
+  const desired = {};
+  const preservedExisting = {};
 
   for (const action of SHORTCUT_ACTIONS) {
     const hasStoredValue = Object.prototype.hasOwnProperty.call(source, action.key);
-    let candidate = hasStoredValue ? source[action.key] : DEFAULT_KEYBOARD_SHORTCUTS[action.key];
+    if (!shouldApplyDefaultShortcut(action.key, hasStoredValue, source[action.key])) {
+      preservedExisting[action.key] = sanitizeShortcutKey(source[action.key]);
+    }
+  }
 
-    if (action.key === "motorOff" && (!hasStoredValue || sanitizeShortcutKey(candidate) === "")) {
-      candidate = used.has(DEFAULT_KEYBOARD_SHORTCUTS.motorOff) ? "" : DEFAULT_KEYBOARD_SHORTCUTS.motorOff;
+  for (const action of SHORTCUT_ACTIONS) {
+    const hasStoredValue = Object.prototype.hasOwnProperty.call(source, action.key);
+    const storedValue = hasStoredValue ? sanitizeShortcutKey(source[action.key]) : "";
+    const defaultValue = sanitizeShortcutKey(DEFAULT_KEYBOARD_SHORTCUTS[action.key]);
+
+    if (shouldApplyDefaultShortcut(action.key, hasStoredValue, source[action.key])) {
+      const conflict = findShortcutConflict(defaultValue, action.key, desired)
+        || findShortcutConflict(defaultValue, action.key, preservedExisting);
+      if (defaultValue && !conflict) {
+        desired[action.key] = defaultValue;
+      } else {
+        desired[action.key] = "";
+        if (defaultValue && conflict) {
+          console.warn(`${action.label} shortcut default ${formatShortcutLabel(defaultValue)} was not applied because it conflicts with ${conflict.label}.`);
+        }
+      }
+      continue;
     }
 
-    if (action.key === "toggleSimulationMode" && !hasStoredValue && used.has(DEFAULT_KEYBOARD_SHORTCUTS.toggleSimulationMode)) {
-      candidate = "";
-      console.warn("Toggle Simulation Mode shortcut default M was not applied because it conflicts with an existing shortcut.");
-    }
+    desired[action.key] = storedValue;
+  }
 
-    const raw = sanitizeShortcutKey(candidate);
-    if (!raw) {
+  for (const action of SHORTCUT_ACTIONS) {
+    const candidate = desired[action.key];
+    if (!candidate) {
       next[action.key] = "";
       continue;
     }
-    if (used.has(raw)) {
+
+    const conflict = findShortcutConflict(candidate, action.key, next);
+    if (conflict) {
       next[action.key] = "";
-      console.warn(`${action.label} shortcut was left unset because ${formatShortcutLabel(raw)} conflicts with another shortcut.`);
+      console.warn(`${action.label} shortcut was left unset because ${formatShortcutLabel(candidate)} conflicts with ${conflict.label}.`);
       continue;
     }
-    next[action.key] = raw;
-    used.add(raw);
+
+    next[action.key] = candidate;
   }
   return next;
 }
@@ -2581,11 +2613,8 @@ function loadKeyboardShortcuts() {
       return;
     }
     const parsed = JSON.parse(stored);
-    const useUpdatedDefaults = matchesLegacyDefaultShortcuts(parsed);
-    appState.keyboardShortcuts = useUpdatedDefaults
-      ? getFallbackShortcuts()
-      : normalizeShortcuts(parsed);
-    if (useUpdatedDefaults) saveKeyboardShortcuts();
+    appState.keyboardShortcuts = normalizeShortcuts(parsed);
+    saveKeyboardShortcuts();
   } catch (error) {
     appState.keyboardShortcuts = getFallbackShortcuts();
   }
