@@ -1969,6 +1969,7 @@ const appState = {
   breakStartedAtMs: null,
   breakSource: null,
   preparedForNextRunBreak: false,
+  dayComplete: false,
   breakBannerDismissedForCurrentBreak: false,
   pendingBreakAfterCurrentSheep: false,
   pendingBreakStartedAtMs: null,
@@ -3469,12 +3470,21 @@ function showBreakBannerForCurrentBreak() {
 
 function updateStartRunButtonUI() {
   if (!elements.startRunBtn) return;
+  if (appState.dayComplete) {
+    elements.startRunBtn.textContent = "Day Complete";
+    elements.startRunBtn.disabled = true;
+    return;
+  }
   elements.startRunBtn.textContent = isPreparedForNextRunBreak() || appState.breakActive
     ? "Start Next Run"
     : "Start Run";
 }
 
 function updateRunBadge() {
+  if (appState.dayComplete) {
+    setText(elements.runBadge, "End of Day");
+    return;
+  }
   if (appState.breakActive || appState.preparedForNextRunBreak) {
     const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex);
     setText(elements.runBadge, breakInfo?.label || "Official Break");
@@ -3522,6 +3532,7 @@ function resetRunState() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.dayComplete = false;
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
@@ -3572,6 +3583,7 @@ function updateFinishRunBreakButtonUI() {
 
   const hasRunData = appState.sheep.length > 0;
   const canFinishBreak =
+    !appState.dayComplete &&
     !appState.breakActive &&
     !appState.preparedForNextRunBreak &&
     (appState.runActive || hasRunData);
@@ -3633,6 +3645,7 @@ function startRun() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.dayComplete = false;
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
@@ -3783,6 +3796,53 @@ function isCountingPausedForBreak() {
 
 function isPreparedForNextRunBreak() {
   return appState.breakActive === true && appState.preparedForNextRunBreak === true;
+}
+
+function isAutoScheduleType() {
+  const runType = elements.runType ? elements.runType.value : "8";
+  return runType === "8" || runType === "9";
+}
+
+function isEndOfDayBreak(runIndex = appState.currentRunIndex) {
+  const breakInfo = getBreakInfoForCompletedRun(runIndex);
+  return breakInfo?.label === "End of Day";
+}
+
+function isBreakComplete(now = Date.now()) {
+  if (!isPreparedForNextRunBreak()) return false;
+  const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex);
+  if (!breakInfo || !Number.isFinite(breakInfo.durationSeconds)) return false;
+  if (!Number.isFinite(appState.breakStartedAtMs)) return false;
+  const breakEndMs = appState.breakStartedAtMs + (breakInfo.durationSeconds * 1000);
+  return now >= breakEndMs;
+}
+
+function maybeAutoStartNextRunAfterBreak(now = Date.now()) {
+  if (!isAutoScheduleType()) return false;
+  if (!isPreparedForNextRunBreak()) return false;
+  if (appState.runActive) return false;
+  if (appState.pendingBreakAfterCurrentSheep) return false;
+  if (appState.dayComplete) return false;
+
+  if (isEndOfDayBreak(appState.currentRunIndex)) {
+    appState.dayComplete = true;
+    if (elements.runStatus) elements.runStatus.textContent = "End of Day";
+    updateStartRunButtonUI();
+    updateRunBadge();
+    updateBreakTimingDisplay();
+    updateBreakOverlayDisplay();
+    if (typeof autosaveState === "function") {
+      autosaveState();
+    }
+    console.log("End of day reached");
+    return false;
+  }
+
+  if (!isBreakComplete(now)) return false;
+
+  console.log("Break complete; starting next run automatically");
+  startRun();
+  return true;
 }
 
 function isCountingPaused() {
@@ -6087,6 +6147,8 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
 
 function updateLivePanel() {
   maybeHandleRunEndExpired();
+  const autoStartedNextRun = maybeAutoStartNextRunAfterBreak();
+  if (autoStartedNextRun) return;
   const preparedForNextRunBreak = isPreparedForNextRunBreak();
   const shearCurrent = !preparedForNextRunBreak && appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
@@ -7049,6 +7111,7 @@ function getAutosavePayload() {
       breakStartedAtMs: appState.breakStartedAtMs,
       breakSource: appState.breakSource,
       preparedForNextRunBreak: appState.preparedForNextRunBreak,
+      dayComplete: appState.dayComplete,
       breakBannerDismissedForCurrentBreak: appState.breakBannerDismissedForCurrentBreak,
       pendingBreakAfterCurrentSheep: appState.pendingBreakAfterCurrentSheep,
       pendingBreakStartedAtMs: appState.pendingBreakStartedAtMs,
@@ -7205,6 +7268,7 @@ function loadLastSave() {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
     appState.preparedForNextRunBreak = Boolean(appState.preparedForNextRunBreak);
+    appState.dayComplete = Boolean(appState.dayComplete);
     appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
     appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
     appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
@@ -7237,7 +7301,7 @@ function loadLastSave() {
     applyPanelSizes();
     if (appState.layoutEditMode) ensureInitialPanelLayout();
     applyPanelLayout();
-    if (elements.runStatus) elements.runStatus.textContent = appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped';
+    if (elements.runStatus) elements.runStatus.textContent = appState.dayComplete ? 'End of Day' : (appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped');
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
     updateFinishRunBreakButtonUI();
