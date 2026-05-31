@@ -5787,17 +5787,57 @@ function updatePenRefillAlertDisplay() {
 }
 
 function formatPenFillForecastPoint(point) {
-  if (point?.isCurrentFill) return `${point.label} — now`;
+  const label = point?.label || "Next refill";
+  if (point?.isCurrentFill) return `${label} — refill due now`;
+
+  const effectiveElapsedSeconds = Number(point?.effectiveElapsedSeconds);
+  const currentEffectiveElapsedSeconds = Number(getEffectiveElapsedSeconds());
+  if (Number.isFinite(effectiveElapsedSeconds) && Number.isFinite(currentEffectiveElapsedSeconds)) {
+    const overdueSeconds = currentEffectiveElapsedSeconds - effectiveElapsedSeconds;
+    if (overdueSeconds >= 1) {
+      return `${label} — overdue by ${formatPenFillCountdownDisplay(overdueSeconds)}`;
+    }
+  }
+
   const secondsFromNow = Number(point?.secondsFromNow);
-  const clockText = formatProjectedDayClock(secondsFromNow);
-  return `${point.label} — in ${formatCountdown(secondsFromNow)}${clockText ? ` — approx ${clockText}` : ""}`;
+  const clockText = formatPenFillDueClock(point);
+  return `${label} — next refill in ${formatPenFillCountdownDisplay(secondsFromNow)}${clockText ? ` — due about ${clockText}` : ""}`;
 }
 
-function formatProjectedDayClock(secondsFromNow) {
+function formatPenFillCountdownDisplay(totalSeconds) {
+  const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  const parts = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
+function formatPenFillDueClock(point) {
+  const effectiveElapsedSeconds = Number(point?.effectiveElapsedSeconds);
+  if (Number.isFinite(appState.dayClockStartSecondsFromMidnight) && Number.isFinite(effectiveElapsedSeconds)) {
+    return formatPenFillClockAmPm(appState.dayClockStartSecondsFromMidnight + effectiveElapsedSeconds);
+  }
+
+  const secondsFromNow = Number(point?.secondsFromNow);
   if (!Number.isFinite(secondsFromNow) || secondsFromNow < 0) return "";
   const currentDayClockSeconds = getCurrentDayClockSeconds();
   if (!Number.isFinite(currentDayClockSeconds)) return "";
-  return formatSecondsFromMidnightClock(currentDayClockSeconds + secondsFromNow).slice(0, 5);
+  return formatPenFillClockAmPm(currentDayClockSeconds + secondsFromNow);
+}
+
+function formatPenFillClockAmPm(secondsFromMidnight) {
+  if (!Number.isFinite(secondsFromMidnight)) return "";
+  const daySeconds = 24 * 3600;
+  const safeSeconds = ((Math.floor(secondsFromMidnight) % daySeconds) + daySeconds) % daySeconds;
+  const hours24 = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const hours12 = hours24 % 12 || 12;
+  const meridiem = hours24 < 12 ? "AM" : "PM";
+  return `${hours12}:${String(minutes).padStart(2, "0")} ${meridiem}`;
 }
 
 function formatFinalPenFillForecastPoint(point) {
