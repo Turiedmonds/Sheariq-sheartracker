@@ -2159,6 +2159,7 @@ const appState = {
   sheep: [],
   daySheep: [],
   penFillEvents: [],
+  qualityRatings: [],
   currentCycle: {
     motorOn: false,
     shearStart: null,
@@ -2311,6 +2312,7 @@ const elements = {
   resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
   officialRejectedCount: document.getElementById("officialRejectedCount"),
+  qualityRatingSummary: document.getElementById("qualityRatingSummary"),
   avgShear: document.getElementById("avgShear"),
   avgCatch: document.getElementById("avgCatch"),
   avgCycle: document.getElementById("avgCycle"),
@@ -3260,6 +3262,57 @@ function formatSeconds(seconds) {
 
 function formatDurationValue(value) {
   return Number.isFinite(value) ? `${value.toFixed(3)}s` : "—";
+}
+
+function sanitizeQualityRatingRecord(record) {
+  if (!record || typeof record !== "object") return null;
+  const rawRating = record.qualityRating;
+  let qualityRating = "";
+  if (typeof rawRating === "string") {
+    qualityRating = rawRating.trim().slice(0, 20);
+  } else if (Number.isFinite(rawRating)) {
+    qualityRating = String(rawRating);
+  }
+  if (!qualityRating) return null;
+
+  const sanitizeFiniteOrNull = (value) => {
+    if (value === null || value === undefined || value === "") return null;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue : null;
+  };
+  const sanitizeNotes = (value) => typeof value === "string" ? value.trim().slice(0, 200) : "";
+  const enteredAt = Number(record.enteredAt);
+
+  return {
+    id: typeof record.id === "string" && record.id.trim() ? record.id.trim().slice(0, 80) : `quality-${enteredAt || Date.now()}`,
+    qualityRating,
+    periodNumber: sanitizeFiniteOrNull(record.periodNumber),
+    blockStartElapsedSeconds: sanitizeFiniteOrNull(record.blockStartElapsedSeconds),
+    blockEndElapsedSeconds: sanitizeFiniteOrNull(record.blockEndElapsedSeconds),
+    officialCountForPeriod: sanitizeFiniteOrNull(record.officialCountForPeriod),
+    physicalCountForPeriod: sanitizeFiniteOrNull(record.physicalCountForPeriod),
+    notes: sanitizeNotes(record.notes),
+    enteredAt: Number.isFinite(enteredAt) ? enteredAt : Date.now()
+  };
+}
+
+function sanitizeQualityRatings(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map(sanitizeQualityRatingRecord).filter(Boolean);
+}
+
+function getLatestQualityRating() {
+  const currentRatings = Array.isArray(appState.qualityRatings) ? appState.qualityRatings : [];
+  const ratings = sanitizeQualityRatings(currentRatings);
+  if (ratings.length !== currentRatings.length || currentRatings !== appState.qualityRatings) {
+    appState.qualityRatings = ratings;
+  }
+  return ratings.length ? ratings[ratings.length - 1] : null;
+}
+
+function formatQualityRatingSummary() {
+  const latestRating = getLatestQualityRating();
+  return latestRating ? latestRating.qualityRating : "—";
 }
 
 function formatCountdown(totalSeconds) {
@@ -7484,6 +7537,7 @@ function updateStatsPanel() {
 
   setText(elements.totalSheep, String(appState.daySheep.length));
   setText(elements.officialRejectedCount, `${getOfficialDaySheepCount()} / ${getRejectedDaySheepCount()}`);
+  setText(elements.qualityRatingSummary, formatQualityRatingSummary());
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
   setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
@@ -8430,6 +8484,7 @@ function getAutosavePayload() {
       sheep: appState.sheep,
       daySheep: appState.daySheep,
       penFillEvents: appState.penFillEvents,
+      qualityRatings: sanitizeQualityRatings(appState.qualityRatings),
       currentCycle: appState.currentCycle,
       currentMotorDisplay: appState.currentMotorDisplay,
       lastMotorState: appState.lastMotorState,
@@ -8910,6 +8965,7 @@ function restoreSessionPayload(raw, options = {}) {
   sanitizeManualMarkersOnSheepEntries(appState.sheep);
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
+  appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings);
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
     appState.runStartTime = shiftTimestampByGap(appState.runStartTime, restoreGapMs);
@@ -9684,6 +9740,10 @@ function closePenFillPlannerHelpModal() {
   }
 }
 
+function showQualityRatingPlaceholder() {
+  window.alert("Quality rating entry and history will be added in the next step.");
+}
+
 function openPerformancePanelHelpModal() {
   if (!elements.performancePanelHelpModalOverlay) return;
   elements.performancePanelHelpModalOverlay.hidden = false;
@@ -10022,6 +10082,7 @@ function bindEvents() {
     });
   }
   if (elements.performancePanelHelpBtn) elements.performancePanelHelpBtn.addEventListener("click", openPerformancePanelHelpModal);
+  if (elements.qualityRatingSummary) elements.qualityRatingSummary.addEventListener("click", showQualityRatingPlaceholder);
   if (elements.performancePanelHelpModalCloseBtn) elements.performancePanelHelpModalCloseBtn.addEventListener("click", closePerformancePanelHelpModal);
   if (elements.performancePanelHelpModalOverlay) {
     elements.performancePanelHelpModalOverlay.addEventListener("click", (event) => {
