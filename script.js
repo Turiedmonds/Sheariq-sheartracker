@@ -2096,6 +2096,11 @@ const elements = {
   runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
   runBadge: document.getElementById("runBadge"),
+  breakStatus: document.getElementById("breakStatus"),
+  breakStartedTime: document.getElementById("breakStartedTime"),
+  breakRemaining: document.getElementById("breakRemaining"),
+  breakNextRun: document.getElementById("breakNextRun"),
+  breakNextRunStarts: document.getElementById("breakNextRunStarts"),
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
   timingAlert: document.getElementById("timingAlert"),
@@ -2177,6 +2182,7 @@ const elements = {
   shortcutStopRun: document.getElementById("shortcutStopRun"),
   shortcutPauseRun: document.getElementById("shortcutPauseRun"),
   shortcutResetRun: document.getElementById("shortcutResetRun"),
+  shortcutFinishRunBreak: document.getElementById("shortcutFinishRunBreak"),
   shortcutMotorOn: document.getElementById("shortcutMotorOn"),
   shortcutMotorOff: document.getElementById("shortcutMotorOff"),
   resetShortcutsBtn: document.getElementById("resetShortcutsBtn"),
@@ -2255,6 +2261,7 @@ const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   stopRun: "X",
   pauseRun: "P",
   resetRun: "R",
+  finishRunBreak: "",
   motorOn: "O",
   motorOff: "F"
 });
@@ -2264,6 +2271,7 @@ const SHORTCUT_ACTIONS = [
   { key: "stopRun", label: "Stop Run", elementKey: "shortcutStopRun", buttonKey: "stopRunBtn", titleSuffix: "" },
   { key: "pauseRun", label: "Pause / Resume", elementKey: "shortcutPauseRun", buttonKey: "pauseRunBtn", titleSuffix: "" },
   { key: "resetRun", label: "Reset Run", elementKey: "shortcutResetRun", buttonKey: "resetRunBtn", titleSuffix: "" },
+  { key: "finishRunBreak", label: "Finish Run / Break", elementKey: "shortcutFinishRunBreak", buttonKey: "finishRunBreakBtn", titleSuffix: "" },
   { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only" },
   { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only" }
 ];
@@ -2306,12 +2314,18 @@ function getFallbackShortcuts() {
 }
 
 function normalizeShortcuts(payload) {
-  if (!payload || typeof payload !== "object") return getFallbackShortcuts();
+  const source = payload && typeof payload === "object" ? payload : {};
   const next = {};
   const used = new Set();
   for (const action of SHORTCUT_ACTIONS) {
-    const raw = sanitizeShortcutKey(payload[action.key]);
-    if (!raw || used.has(raw)) return getFallbackShortcuts();
+    const fallback = DEFAULT_KEYBOARD_SHORTCUTS[action.key] || "";
+    const candidate = Object.prototype.hasOwnProperty.call(source, action.key) ? source[action.key] : fallback;
+    const raw = sanitizeShortcutKey(candidate);
+    if (!raw) {
+      next[action.key] = "";
+      continue;
+    }
+    if (used.has(raw)) return getFallbackShortcuts();
     next[action.key] = raw;
     used.add(raw);
   }
@@ -2344,10 +2358,11 @@ function setShortcutMessage(message) {
 
 function renderShortcutSettings() {
   SHORTCUT_ACTIONS.forEach((action) => {
+    const shortcutLabel = formatShortcutLabel(appState.keyboardShortcuts[action.key]) || "Not set";
     const input = elements[action.elementKey];
-    if (input) input.value = formatShortcutLabel(appState.keyboardShortcuts[action.key]);
+    if (input) input.value = shortcutLabel;
     const button = elements[action.buttonKey];
-    if (button) button.title = `Shortcut: ${formatShortcutLabel(appState.keyboardShortcuts[action.key])}${action.titleSuffix}`;
+    if (button) button.title = `Shortcut: ${shortcutLabel}${action.titleSuffix}`;
   });
 }
 
@@ -3313,7 +3328,87 @@ function getDefaultDayStartTime() {
   return "07:00";
 }
 
+function getBreakInfoForCompletedRun(runIndex = appState.currentRunIndex) {
+  const safeRunIndex = Math.max(Math.floor(Number(runIndex) || 0), 0);
+  const runType = elements.runType ? elements.runType.value : "8";
+
+  if (runType === "9") {
+    const breaks = [
+      { label: "Breakfast", durationSeconds: 3600 },
+      { label: "Morning Smoko", durationSeconds: 1800 },
+      { label: "Lunch", durationSeconds: 3600 },
+      { label: "Afternoon Smoko", durationSeconds: 1800 },
+      { label: "End of Day", durationSeconds: 0 }
+    ];
+    return breaks[Math.min(safeRunIndex, breaks.length - 1)] || null;
+  }
+
+  if (runType === "8") {
+    const breaks = [
+      { label: "Morning Smoko", durationSeconds: 1800 },
+      { label: "Lunch", durationSeconds: 3600 },
+      { label: "Afternoon Smoko", durationSeconds: 1800 },
+      { label: "End of Day", durationSeconds: 0 }
+    ];
+    return breaks[Math.min(safeRunIndex, breaks.length - 1)] || null;
+  }
+
+  return { label: "Official Break", durationSeconds: null };
+}
+
+function getBreakDisplayDetails(now = Date.now()) {
+  if (!isPreparedForNextRunBreak()) {
+    return {
+      status: "—",
+      label: null,
+      started: "—",
+      remaining: "—",
+      nextRun: "—",
+      nextRunStarts: "—"
+    };
+  }
+
+  const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex) || { label: "Official Break", durationSeconds: null };
+  const breakStartedAtMs = Number.isFinite(appState.breakStartedAtMs) ? appState.breakStartedAtMs : null;
+  const isEndOfDay = breakInfo.label === "End of Day";
+  const hasKnownDuration = Number.isFinite(breakInfo.durationSeconds);
+  const breakEndMs = breakStartedAtMs !== null && hasKnownDuration
+    ? breakStartedAtMs + (breakInfo.durationSeconds * 1000)
+    : null;
+  const remainingSeconds = breakEndMs !== null ? Math.max((breakEndMs - now) / 1000, 0) : null;
+
+  return {
+    status: "Official Break",
+    label: breakInfo.label || "Official Break",
+    started: breakStartedAtMs !== null ? formatClock(breakStartedAtMs) : "—",
+    remaining: remainingSeconds !== null && !isEndOfDay ? formatCountdown(remainingSeconds) : "—",
+    nextRun: isEndOfDay ? "End of Day" : `Run ${appState.currentRunIndex + 2}`,
+    nextRunStarts: breakEndMs !== null && !isEndOfDay ? formatClock(breakEndMs) : "—"
+  };
+}
+
+function updateBreakTimingDisplay() {
+  const details = getBreakDisplayDetails();
+  setText(elements.breakStatus, details.status);
+  setText(elements.breakStartedTime, details.started);
+  setText(elements.breakRemaining, details.remaining);
+  setText(elements.breakNextRun, details.nextRun);
+  setText(elements.breakNextRunStarts, details.nextRunStarts);
+}
+
+function updateStartRunButtonUI() {
+  if (!elements.startRunBtn) return;
+  elements.startRunBtn.textContent = isPreparedForNextRunBreak() || appState.breakActive
+    ? "Start Next Run"
+    : "Start Run";
+}
+
 function updateRunBadge() {
+  if (appState.breakActive || appState.preparedForNextRunBreak) {
+    const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex);
+    setText(elements.runBadge, breakInfo?.label || "Official Break");
+    return;
+  }
   const schedule = getScheduleForCurrentType();
   const runNumber = Math.min(appState.currentRunIndex + 1, schedule.length);
   setText(elements.runBadge, `Run ${Math.max(runNumber, 1)}`);
@@ -5941,7 +6036,9 @@ function updateLivePanel() {
   if (preparedForNextRunBreak) setText(elements.quarterClock, "00:00");
   updateTimingAlertDisplay();
   updatePenRefillAlertDisplay();
+  updateBreakTimingDisplay();
   updateRunBadge();
+  updateStartRunButtonUI();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
@@ -7065,6 +7162,8 @@ function loadLastSave() {
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
     updateFinishRunBreakButtonUI();
+    updateStartRunButtonUI();
+    updateBreakTimingDisplay();
     if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
     if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
     if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
@@ -8383,6 +8482,8 @@ function initialize() {
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updatePauseButtonUI();
   updateFinishRunBreakButtonUI();
+  updateStartRunButtonUI();
+  updateBreakTimingDisplay();
   updateLivePanel();
   updateStatsPanel();
   updateRunBadge();

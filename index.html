@@ -429,6 +429,26 @@
               <span class="metric-label panel-metric-label">Day clock:</span>
               <strong id="dayClock" class="panel-metric-value">00:00:00</strong>
             </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Break status:</span>
+              <strong id="breakStatus" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Break started:</span>
+              <strong id="breakStartedTime" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Break remaining:</span>
+              <strong id="breakRemaining" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Next run:</span>
+              <strong id="breakNextRun" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Next run starts:</span>
+              <strong id="breakNextRunStarts" class="panel-metric-value">—</strong>
+            </div>
           </div>
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Quarter tracking</h3>
@@ -944,6 +964,8 @@
           <input id="shortcutPauseRun" class="shortcut-input" type="text" readonly />
           <label for="shortcutResetRun">Reset Run</label>
           <input id="shortcutResetRun" class="shortcut-input" type="text" readonly />
+          <label for="shortcutFinishRunBreak">Finish Run / Break</label>
+          <input id="shortcutFinishRunBreak" class="shortcut-input" type="text" readonly />
           <label for="shortcutMotorOn">Motor ON</label>
           <input id="shortcutMotorOn" class="shortcut-input" type="text" readonly />
           <label for="shortcutMotorOff">Motor OFF</label>
@@ -1002,7 +1024,7 @@
         <p>The Timing Panel shows what is happening right now during the run. It helps you track the current sheep, run time, quarter timing, and upcoming reminders.</p>
 
         <h4 class="connection-help-title">Run badge</h4>
-        <p>Shows the current run number, such as Run 1 or Run 2.</p>
+        <p>Shows the current run number, such as Run 1 or Run 2. During an official break it shows the current break label, such as Morning Smoko or Lunch.</p>
 
         <h4 class="connection-help-title">Live sheep timing</h4>
         <p><strong>Motor state:</strong><br />Shows the live ON/OFF signal from the Shelly/Evo. ON means the motor is running. OFF means the motor is stopped. The app uses this to start and stop sheep timing.</p>
@@ -1015,6 +1037,8 @@
         <p><strong>Run clock:</strong><br />Counts forward from the start of the run.</p>
         <p><strong>Run countdown:</strong><br />Counts backward from the run length to zero.</p>
         <p><strong>Day clock:</strong><br />Shows the simulated working day time based on the Day Start Time setting.</p>
+        <p><strong>Break status / started / remaining:</strong><br />During an official prepared break, shows that the app is on official break, when the break started, and the remaining break countdown when the selected day type has a known break length.</p>
+        <p><strong>Next run / next run starts:</strong><br />During an official prepared break, shows the upcoming run and its scheduled start time when available.</p>
 
         <h4 class="connection-help-title">Quarter tracking</h4>
         <p><strong>Quarter:</strong><br />Shows which 15-minute block of the run you are in.</p>
@@ -1164,7 +1188,7 @@
 
         <h4 class="connection-help-title">Shortcut Settings</h4>
         <p>The gear button in the panel header opens Keyboard Shortcut Settings.</p>
-        <p>You can set your own shortcut keys for Start Run, Stop Run, Pause / Resume, Reset Run, Motor ON, and Motor OFF.</p>
+        <p>You can set your own shortcut keys for Start Run, Stop Run, Pause / Resume, Reset Run, Finish Run / Break, Motor ON, and Motor OFF.</p>
         <p>Shortcuts do not run while typing in fields.</p>
         <p>Motor ON/OFF shortcuts only work when Simulation Mode is ON.</p>
 
