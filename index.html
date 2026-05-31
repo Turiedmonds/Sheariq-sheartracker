@@ -925,6 +925,11 @@
           <li>Marker / Note</li>
         </ul>
 
+        <h4 class="connection-help-title">Official count controls</h4>
+        <p><strong>Reject:</strong> marks a sheep out of the official count.</p>
+        <p><strong>Restore:</strong> puts a rejected sheep back into the official count.</p>
+        <p>Rejecting/restoring does not delete sheep or change its timing. Rejected sheep remain visible because they physically happened.</p>
+
         <h4 class="connection-help-title">Duration columns</h4>
         <p><strong>Shear Duration:</strong><br />How long the motor was running for that sheep.</p>
         <p><strong>Catch Duration:</strong><br />How long it took from the end of one sheep to the start of the next sheep.</p>
@@ -1042,6 +1047,7 @@
       <div class="connection-help-modal-content target-pace-help-content">
         <h4>What this panel is for</h4>
         <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
+        <p>Target progress uses the official accepted sheep count. Physical timing averages still use every sheep timed.</p>
         <h4>Required section</h4>
         <ul>
           <li><strong>Required average total time per sheep:</strong> Required Total Time Per Sheep needed to hit the run target.</li>
@@ -1054,10 +1060,10 @@
         <ul>
           <li><strong>Predicted 15-minute total:</strong> Expected total for the current quarter if pace continues.</li>
           <li><strong>Predicted hour total:</strong> Expected hourly total at current pace.</li>
-          <li><strong>Predicted run total:</strong> Expected run total at current pace.</li>
+          <li><strong>Predicted official run total:</strong> Expected official run total at current pace. It uses accepted sheep already counted plus physical future pace, and assumes no further rejects until entered.</li>
           <li><strong>Predicted time to reach run target:</strong> Estimated time the run target will be reached.</li>
           <li><strong>Predicted final catch of run:</strong> Estimated final catch time before the run ends.</li>
-          <li><strong>Pace difference per sheep:</strong> Shows whether pace is ahead or behind and what that means for projected run total.</li>
+          <li><strong>Pace difference per sheep:</strong> Shows whether pace is ahead or behind and what that means for projected official run total.</li>
         </ul>
         <h4>Run Target Status section</h4>
         <ul>
@@ -1066,6 +1072,7 @@
         </ul>
         <h4>Prediction update behaviour</h4>
         <p>Predicted values may hold steady while motor is ON and refresh after each sheep is completed, so you can read a stable snapshot during shearing.</p>
+        <p>Pen refill planning still follows physical sheep movement, not official accepted count.</p>
       </div>
     </div>
   </div>
@@ -1159,7 +1166,10 @@
         <p>The Performance Panel shows the current run performance. It helps you see sheep counts, average times, sheep per hour, and the fastest, slowest, and latest sheep times.</p>
 
         <h4 class="connection-help-title">Sheep Count</h4>
-        <p><strong>Total Sheep Shorn:</strong><br />Shows how many sheep have been fully completed in the current session/run.</p>
+        <p><strong>Total Sheep Shorn:</strong><br />Shows the physical day count: every sheep fully completed today.</p>
+        <p><strong>Official / Rej:</strong><br />Shows official accepted day count / rejected day count.</p>
+        <p>Rejected sheep stay in the physical log and timing history, but do not count toward the official record total.</p>
+        <p><strong>Quality:</strong><br />Shows the latest judge/referee quality rating. Lower quality rating is better.</p>
         <p><strong>Current Sheep Number:</strong><br />Shows the sheep number currently being worked through. This may be one ahead of completed sheep when a sheep is on the board.</p>
 
         <h4 class="connection-help-title">Averages</h4>
@@ -1205,6 +1215,7 @@
       </div>
       <div class="connection-help-modal-content quality-rating-modal-content">
         <p id="qualityRatingLatestSummary" class="quality-rating-latest-summary">No quality ratings yet.</p>
+        <p class="quality-rating-help-copy">Enter judge/referee ratings by 30-minute period. Official count excludes rejected sheep; physical count includes all sheep timed in that period. Notes can record judge/referee comments. Lower rating is better.</p>
         <div id="qualityRatingValidation" class="quality-rating-validation" role="alert" hidden></div>
 
         <form id="qualityRatingForm" class="quality-rating-form">
@@ -1216,13 +1227,13 @@
             <label for="qualityRatingInput">Quality rating</label>
             <input id="qualityRatingInput" type="text" inputmode="decimal" autocomplete="off" required />
 
-            <label for="qualityRatingOfficialCountInput">Official count for period</label>
+            <label for="qualityRatingOfficialCountInput">Official count for period (excludes rejected)</label>
             <input id="qualityRatingOfficialCountInput" type="number" min="0" step="1" inputmode="numeric" />
 
-            <label for="qualityRatingPhysicalCountInput">Physical count for period</label>
+            <label for="qualityRatingPhysicalCountInput">Physical count for period (all timed)</label>
             <input id="qualityRatingPhysicalCountInput" type="number" min="0" step="1" inputmode="numeric" />
 
-            <label for="qualityRatingNotesInput">Notes</label>
+            <label for="qualityRatingNotesInput">Notes / judge comments</label>
             <textarea id="qualityRatingNotesInput" rows="3" maxlength="200"></textarea>
           </div>
 
