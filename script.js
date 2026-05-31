@@ -2519,6 +2519,7 @@ function sanitizeShortcutKey(value) {
   if (typeof value !== "string") return "";
   if (Object.prototype.hasOwnProperty.call(SPECIAL_SHORTCUT_KEYS, value)) return SPECIAL_SHORTCUT_KEYS[value];
   const trimmed = value.trim().toUpperCase();
+  if (Object.prototype.hasOwnProperty.call(SHORTCUT_KEY_DISPLAY, trimmed)) return trimmed;
   return trimmed.length === 1 ? trimmed : "";
 }
 
@@ -2537,8 +2538,10 @@ function findShortcutConflict(value, actionKey, shortcuts) {
 function shouldApplyDefaultShortcut(actionKey, hasStoredValue, storedValue) {
   if (!hasStoredValue) return true;
   const sanitized = sanitizeShortcutKey(storedValue);
+  if (actionKey === "finishRunBreak") return sanitized === "";
   if (actionKey === "motorOn") return sanitized === "" || sanitized === LEGACY_DEFAULT_KEYBOARD_SHORTCUTS.motorOn;
-  if (actionKey === "motorOff" || actionKey === "toggleSimulationMode" || actionKey === "resetCurrentSheep") return sanitized === "";
+  if (actionKey === "motorOff") return sanitized === "" || sanitized === LEGACY_DEFAULT_KEYBOARD_SHORTCUTS.motorOff;
+  if (actionKey === "toggleSimulationMode" || actionKey === "resetCurrentSheep") return sanitized === "";
   return false;
 }
 
@@ -2714,6 +2717,7 @@ function handleShortcutKeydown(event) {
 
 function openShortcutSettingsModal() {
   if (!elements.shortcutSettingsModalOverlay) return;
+  renderShortcutSettings();
   elements.shortcutSettingsModalOverlay.hidden = false;
   document.body.classList.add("layout-scroll-lock");
 }
@@ -3265,6 +3269,22 @@ function formatClock(ms) {
   const minutes = String(date.getMinutes()).padStart(2, "0");
   const seconds = String(date.getSeconds()).padStart(2, "0");
   return `${hours}:${minutes}:${seconds}`;
+}
+
+function getFiniteClockNumber(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : NaN;
+  if (typeof value === "string" && value.trim() !== "") {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : NaN;
+  }
+  return NaN;
+}
+
+function getDayClockSecondsFromEffectiveElapsed(effectiveElapsedSeconds) {
+  const dayClockStartSeconds = getFiniteClockNumber(appState.dayClockStartSecondsFromMidnight);
+  const elapsedSeconds = getFiniteClockNumber(effectiveElapsedSeconds);
+  if (!Number.isFinite(dayClockStartSeconds) || !Number.isFinite(elapsedSeconds)) return NaN;
+  return dayClockStartSeconds + elapsedSeconds;
 }
 
 function formatTargetPaceCountdownDisplay(totalSeconds) {
@@ -4465,6 +4485,10 @@ function handleMotorOff() {
   const fullCycle = shearDuration + catchDuration;
 
   const effectiveElapsedSeconds = getEffectiveElapsedSeconds();
+  const calculatedEndDayClockSeconds = getDayClockSecondsFromEffectiveElapsed(effectiveElapsedSeconds);
+  const calculatedStartDayClockSeconds = Number.isFinite(calculatedEndDayClockSeconds) ? calculatedEndDayClockSeconds - shearDuration : NaN;
+  const endDayClockSeconds = Number.isFinite(calculatedEndDayClockSeconds) ? calculatedEndDayClockSeconds : null;
+  const startDayClockSeconds = Number.isFinite(calculatedStartDayClockSeconds) ? calculatedStartDayClockSeconds : null;
   const dayNumber = appState.daySheep.length + 1;
   const sheepId = `sheep-${Date.now()}-${dayNumber}`;
   const runEntry = {
@@ -4474,6 +4498,8 @@ function handleMotorOff() {
     dayNumber,
     startTime: appState.currentCycle.shearStart,
     endTime: now,
+    startDayClockSeconds,
+    endDayClockSeconds,
     shearDuration,
     catchDuration,
     fullCycle,
@@ -5336,6 +5362,25 @@ function calculateSheepLogAnomalyAverages() {
   };
 }
 
+function getSheepLogDayClockSeconds(entry, field) {
+  const stableField = field === "start" ? "startDayClockSeconds" : "endDayClockSeconds";
+  const stableSeconds = getFiniteClockNumber(entry?.[stableField]);
+  if (Number.isFinite(stableSeconds)) return stableSeconds;
+
+  const fallbackEndSeconds = getDayClockSecondsFromEffectiveElapsed(entry?.effectiveElapsedSeconds);
+  if (!Number.isFinite(fallbackEndSeconds)) return NaN;
+  if (field === "end") return fallbackEndSeconds;
+
+  const shearDuration = getFiniteClockNumber(entry?.shearDuration);
+  return Number.isFinite(shearDuration) ? fallbackEndSeconds - shearDuration : NaN;
+}
+
+function formatSheepLogClock(entry, field) {
+  const dayClockSeconds = getSheepLogDayClockSeconds(entry, field);
+  if (Number.isFinite(dayClockSeconds)) return formatSecondsFromMidnightClock(dayClockSeconds);
+  return formatClock(field === "start" ? entry?.startTime : entry?.endTime);
+}
+
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
   elements.sheepLogBody.innerHTML = "";
@@ -5354,8 +5399,8 @@ function renderLogTable() {
     const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, anomalyAverages.avgFullCycle);
     row.innerHTML = `
       <td>${entry.number}</td>
-      <td class="sheep-log-time-col">${formatClock(entry.startTime)}</td>
-      <td class="sheep-log-time-col">${formatClock(entry.endTime)}</td>
+      <td class="sheep-log-time-col">${formatSheepLogClock(entry, "start")}</td>
+      <td class="sheep-log-time-col">${formatSheepLogClock(entry, "end")}</td>
       <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
       <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
       <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
