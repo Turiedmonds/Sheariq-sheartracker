@@ -3254,13 +3254,37 @@ function formatClock(ms) {
   return `${hours}:${minutes}:${seconds}`;
 }
 
+function formatTargetPaceCountdownDisplay(totalSeconds) {
+  const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${String(minutes).padStart(2, "0")}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${String(seconds).padStart(2, "0")}s`;
+  }
+  return `${seconds}s`;
+}
+
+function formatTargetPaceDayClock(runSeconds) {
+  if (!Number.isFinite(runSeconds) || runSeconds < 0 || !Number.isFinite(appState.dayClockStartSecondsFromMidnight)) return "—";
+  return formatSecondsFromMidnightClockAmPm(appState.dayClockStartSecondsFromMidnight + runSeconds);
+}
+
+function formatPredictedTargetReachTime(runSeconds) {
+  if (!Number.isFinite(runSeconds) || runSeconds < 0) return "—";
+  const remainingSeconds = Math.max(runSeconds - Math.max(getEffectiveElapsedSeconds(), 0), 0);
+  return formatTargetPaceCountdownDisplay(remainingSeconds);
+}
+
 function formatPredictedCatchTime(runSeconds) {
   if (!Number.isFinite(runSeconds) || runSeconds < 0) return "—";
   if (appState.predictedCatchClockMode === "run") {
-    return `${formatCountdown(runSeconds)} into run`;
+    return `${formatTargetPaceCountdownDisplay(runSeconds)} into run`;
   }
-  const dayClockSeconds = appState.dayClockStartSecondsFromMidnight + runSeconds;
-  return formatSecondsFromMidnightClock(dayClockSeconds);
+  return formatTargetPaceDayClock(runSeconds);
 }
 
 function parseRequiredTotalSheep() {
@@ -4410,8 +4434,8 @@ function calculateTargetMetrics() {
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
-      ? `Run target reached ${formatCountdown(timeDifference)} before end of run`
-      : `Run target will be missed by ${formatCountdown(Math.abs(timeDifference))} at end of run`;
+      ? `Run target reached ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
+      : `Run target will be missed by ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} at end of run`;
     timeSpareIsAhead = timeDifference >= 0;
   }
 
@@ -6796,7 +6820,7 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
     predictedQuarterTotal: quarter.predicted,
     predictedHourTotal,
     projectedTotal: target.projectedTotal,
-    estimatedLastCatchTime: formatPredictedCatchTime(target.targetCatchRunSeconds),
+    estimatedLastCatchTime: formatPredictedTargetReachTime(target.targetCatchRunSeconds),
     maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
     catchPrediction: predictCatch(target, calculateRequiredRunTotalSheep())
   };
