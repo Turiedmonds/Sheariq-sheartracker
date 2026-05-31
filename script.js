@@ -2366,6 +2366,7 @@ const elements = {
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
   resetCurrentSheepBtn: document.getElementById("resetCurrentSheepBtn"),
+  undoLastSheepBtn: document.getElementById("undoLastSheepBtn"),
   shortcutMessage: document.getElementById("shortcutMessage"),
   shortcutStartRun: document.getElementById("shortcutStartRun"),
   shortcutStopRun: document.getElementById("shortcutStopRun"),
@@ -3625,6 +3626,7 @@ function setSimulationRunLengthMode(mode) {
   appState.simulationRunLengthMode = appState.simulationMode ? getValidSimulationRunLengthMode(mode) : "real";
   updateSimulationRunLengthControls();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -3638,6 +3640,7 @@ function setSimulationCustomMinutes(value) {
   appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(value);
   updateSimulationRunLengthControls();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -3991,6 +3994,7 @@ function startRun() {
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
 
   setPaused(false);
   updatePauseButtonUI();
@@ -4032,6 +4036,7 @@ function stopRun() {
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Stopped";
@@ -4086,6 +4091,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
   renderReviewList();
@@ -4108,6 +4114,7 @@ function resetRun() {
   updateSimulationRunLengthControls();
   updateFinishRunBreakButtonUI();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Idle";
@@ -4205,6 +4212,117 @@ function canResetCurrentSheepTiming() {
 function updateResetCurrentSheepButtonUI() {
   if (!elements.resetCurrentSheepBtn) return;
   elements.resetCurrentSheepBtn.disabled = !canResetCurrentSheepTiming();
+}
+
+function canUndoLastSheep() {
+  return Boolean(
+    appState.simulationMode
+    && appState.runActive
+    && !appState.breakActive
+    && !appState.preparedForNextRunBreak
+    && appState.sheep.length > 0
+  );
+}
+
+function updateUndoLastSheepButtonUI() {
+  if (!elements.undoLastSheepBtn) return;
+  elements.undoLastSheepBtn.disabled = !canUndoLastSheep();
+}
+
+function clearPenFillPromptKeyBeyondSheepCount(keyName, newPhysicalSheepCount) {
+  const key = appState[keyName];
+  if (typeof key !== "string") return;
+  const [runIndexText, sheepText] = key.split(":");
+  const keyRunIndex = Number(runIndexText);
+  const keySheep = Number(sheepText);
+  if (
+    Number.isFinite(keyRunIndex)
+    && Number.isFinite(keySheep)
+    && keyRunIndex === Number(appState.currentRunIndex)
+    && keySheep > newPhysicalSheepCount
+  ) {
+    appState[keyName] = null;
+  }
+}
+
+function markFuturePenFillEventsUndone(newPhysicalSheepCount, now = Date.now()) {
+  if (!Array.isArray(appState.penFillEvents)) return;
+  const currentRunIndex = Number(appState.currentRunIndex);
+  appState.penFillEvents.forEach((event) => {
+    if (
+      isActivePenFillEvent(event)
+      && Number(event.runIndex) === currentRunIndex
+      && Number(event.physicalSheepTakenFromPen) > newPhysicalSheepCount
+    ) {
+      event.undone = true;
+      event.undoneAt = now;
+      event.updatedAt = now;
+    }
+  });
+}
+
+function refreshAfterUndoLastSheep() {
+  calculateAverages();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
+  updatePenFillForecastDisplay();
+  updatePenStateDisplay();
+  updatePenFillEarlyReminderDisplay();
+  updatePenFillConfirmationControls();
+  updateFinishRunBreakButtonUI();
+  updateBreakTimingDisplay();
+  updateBreakOverlayDisplay();
+  updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
+}
+
+async function undoLastSheep() {
+  if (!canUndoLastSheep()) return { success: false, error: "Undo Last Sheep is only available during an active Simulation Mode run." };
+
+  const confirmed = await confirmModal({
+    title: "Undo last completed sheep?",
+    message: "Undo the last completed sheep? This removes only the latest logged sheep and pauses the run so you can re-time it.",
+    confirmText: "Undo Last Sheep",
+    cancelText: "Cancel"
+  });
+
+  if (!confirmed) return { success: false, error: "Undo cancelled." };
+  if (!canUndoLastSheep()) return { success: false, error: "Undo Last Sheep is no longer available." };
+
+  const latestRunSheep = appState.sheep[appState.sheep.length - 1];
+  const latestDaySheep = appState.daySheep[appState.daySheep.length - 1];
+  const matchingDayIndex = appState.daySheep.findIndex((entry) => entry?.id === latestRunSheep?.id);
+
+  if (!latestRunSheep?.id || matchingDayIndex === -1 || matchingDayIndex !== appState.daySheep.length - 1 || latestDaySheep?.id !== latestRunSheep.id) {
+    const error = "Latest day sheep did not match latest run sheep; undo skipped.";
+    console.warn(error);
+    return { success: false, error };
+  }
+
+  appState.sheep.pop();
+  appState.daySheep.pop();
+
+  const now = Date.now();
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = now;
+  appState.currentMotorDisplay = "OFF";
+
+  const newPhysicalSheepCount = appState.sheep.length;
+  markFuturePenFillEventsUndone(newPhysicalSheepCount, now);
+  clearPenFillPromptKeyBeyondSheepCount("pendingPenFillPromptKey", newPhysicalSheepCount);
+  clearPenFillPromptKeyBeyondSheepCount("dismissedPenFillPromptKey", newPhysicalSheepCount);
+
+  setPaused(true);
+  refreshAfterUndoLastSheep();
+  autosaveState();
+
+  return { success: true, sheep: latestRunSheep };
 }
 
 function resetCurrentSheepTiming() {
@@ -6708,6 +6826,7 @@ function updateLivePanel() {
   updateRunBadge();
   updateStartRunButtonUI();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   updateDayClockDisplay();
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
@@ -8192,6 +8311,8 @@ function restoreSessionPayload(raw, options = {}) {
   if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
   if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
   updateSimulationRunLengthControls();
+  updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   renderLogTable();
   renderReviewList();
   drawTrendGraph();
@@ -8677,6 +8798,7 @@ function setSimulationMode(enabled) {
   if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
   updateSimulationRunLengthControls();
   updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
   updateLivePanel();
   updateStatsPanel();
 
@@ -9160,6 +9282,7 @@ function bindEvents() {
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.resetCurrentSheepBtn) elements.resetCurrentSheepBtn.addEventListener("click", resetCurrentSheepTiming);
+  if (elements.undoLastSheepBtn) elements.undoLastSheepBtn.addEventListener("click", undoLastSheep);
   if (elements.shortcutSettingsBtn) elements.shortcutSettingsBtn.addEventListener("click", openShortcutSettingsModal);
   if (elements.shortcutSettingsModalCloseBtn) elements.shortcutSettingsModalCloseBtn.addEventListener("click", closeShortcutSettingsModal);
   if (elements.shortcutSettingsModalOverlay) {
