@@ -2070,6 +2070,7 @@ const elements = {
   targetSheepInput: document.getElementById("targetSheepInput"),
   startRunBtn: document.getElementById("startRunBtn"),
   stopRunBtn: document.getElementById("stopRunBtn"),
+  finishRunBreakBtn: document.getElementById("finishRunBreakBtn"),
   pauseRunBtn: document.getElementById("pauseRunBtn"),
   resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
@@ -3398,6 +3399,39 @@ function getTargetRunTotalPredictionLabel(requiredRunTotalSheep) {
   return `Predicted time to reach run target (${requiredRunTotalSheep}):`;
 }
 
+
+function updateFinishRunBreakButtonUI() {
+  if (!elements.finishRunBreakBtn) return;
+
+  const hasRunData = appState.sheep.length > 0;
+  const canFinishBreak =
+    !appState.breakActive &&
+    !appState.preparedForNextRunBreak &&
+    (appState.runActive || hasRunData);
+
+  elements.finishRunBreakBtn.disabled = !canFinishBreak;
+}
+
+function handleFinishRunBreakClick() {
+  if (appState.breakActive || appState.preparedForNextRunBreak) return;
+  if (!appState.runActive && appState.sheep.length === 0) return;
+
+  const now = Date.now();
+  const breakStartedAtMs = Number.isFinite(appState.runEndTimeMs) && now >= appState.runEndTimeMs
+    ? appState.runEndTimeMs
+    : now;
+
+  if (appState.currentCycle.motorOn) {
+    appState.pendingBreakAfterCurrentSheep = true;
+    appState.pendingBreakStartedAtMs = breakStartedAtMs;
+    console.log("Finish break requested; waiting for current sheep to finish");
+    updateFinishRunBreakButtonUI();
+    return;
+  }
+
+  finishRunAndEnterBreak("manual-finish-break", breakStartedAtMs);
+}
+
 function startRun() {
   if (!elements.farmInput || !elements.targetSheepInput || !elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) {
     return;
@@ -3448,6 +3482,7 @@ function startRun() {
   elements.startRunBtn.disabled = true;
   elements.stopRunBtn.disabled = false;
   updateSimulationRunLengthControls();
+  updateFinishRunBreakButtonUI();
 
   setPaused(false);
   updatePauseButtonUI();
@@ -3485,6 +3520,7 @@ function stopRun() {
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
   updateSimulationRunLengthControls();
+  updateFinishRunBreakButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Stopped";
@@ -3535,6 +3571,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
 
   updatePauseButtonUI();
   updateSimulationRunLengthControls();
+  updateFinishRunBreakButtonUI();
   updateLivePanel();
   updateStatsPanel();
   renderReviewList();
@@ -3555,6 +3592,7 @@ function resetRun() {
   elements.startRunBtn.disabled = false;
   elements.stopRunBtn.disabled = true;
   updateSimulationRunLengthControls();
+  updateFinishRunBreakButtonUI();
 
   setPaused(false);
   elements.runStatus.textContent = "Idle";
@@ -3629,6 +3667,7 @@ function refreshAfterSheepEntry() {
   renderReviewList();
   drawTrendGraph();
   updateTrendFlags();
+  updateFinishRunBreakButtonUI();
 }
 
 function handleMotorOff() {
@@ -3715,6 +3754,7 @@ function exitOfficialBreak() {
   appState.currentCycle.catchStart = Date.now();
 
   console.log("Official break ended");
+  updateFinishRunBreakButtonUI();
   updateLivePanel();
   updateStatsPanel();
 }
@@ -7024,6 +7064,7 @@ function loadLastSave() {
     if (elements.runStatus) elements.runStatus.textContent = appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped';
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
+    updateFinishRunBreakButtonUI();
     if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
     if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
     if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
@@ -7766,6 +7807,7 @@ function bindEvents() {
   ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
+  if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
   if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
   if (elements.trendBucketSize) {
@@ -8340,6 +8382,7 @@ function initialize() {
   renderReviewList();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updatePauseButtonUI();
+  updateFinishRunBreakButtonUI();
   updateLivePanel();
   updateStatsPanel();
   updateRunBadge();
