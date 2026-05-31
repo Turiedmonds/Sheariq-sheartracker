@@ -30,6 +30,8 @@ const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
+const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
+const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v4";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
@@ -2535,8 +2537,8 @@ function findShortcutConflict(value, actionKey, shortcuts) {
 function shouldApplyDefaultShortcut(actionKey, hasStoredValue, storedValue) {
   if (!hasStoredValue) return true;
   const sanitized = sanitizeShortcutKey(storedValue);
-  if (actionKey === "motorOff" || actionKey === "resetCurrentSheep") return sanitized === "";
   if (actionKey === "motorOn") return sanitized === "" || sanitized === LEGACY_DEFAULT_KEYBOARD_SHORTCUTS.motorOn;
+  if (actionKey === "motorOff" || actionKey === "toggleSimulationMode" || actionKey === "resetCurrentSheep") return sanitized === "";
   return false;
 }
 
@@ -2605,6 +2607,7 @@ function matchesLegacyDefaultShortcuts(payload) {
 
 function saveKeyboardShortcuts() {
   localStorage.setItem(KEYBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(appState.keyboardShortcuts));
+  localStorage.setItem(KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY, CURRENT_KEYBOARD_SHORTCUTS_VERSION);
 }
 
 function loadKeyboardShortcuts() {
@@ -2612,13 +2615,21 @@ function loadKeyboardShortcuts() {
     const stored = localStorage.getItem(KEYBOARD_SHORTCUTS_STORAGE_KEY);
     if (!stored) {
       appState.keyboardShortcuts = getFallbackShortcuts();
+      saveKeyboardShortcuts();
       return;
     }
+
     const parsed = JSON.parse(stored);
+    const storedVersion = localStorage.getItem(KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY);
     appState.keyboardShortcuts = normalizeShortcuts(parsed);
+    if (storedVersion !== CURRENT_KEYBOARD_SHORTCUTS_VERSION) {
+      console.info("Keyboard shortcuts were migrated to the current shortcut schema.");
+    }
     saveKeyboardShortcuts();
   } catch (error) {
+    console.warn("Keyboard shortcut settings could not be loaded; current defaults were restored.", error);
     appState.keyboardShortcuts = getFallbackShortcuts();
+    saveKeyboardShortcuts();
   }
 }
 
@@ -4286,6 +4297,45 @@ function refreshAfterUndoLastSheep() {
   updateUndoLastSheepButtonUI();
 }
 
+function getUndoLastSheepRewindSeconds(deletedSheep) {
+  const fullCycle = Number(deletedSheep?.fullCycle);
+  if (Number.isFinite(fullCycle) && fullCycle > 0) return fullCycle;
+
+  const catchDuration = Number(deletedSheep?.catchDuration);
+  const shearDuration = Number(deletedSheep?.shearDuration);
+  if (Number.isFinite(catchDuration) && catchDuration >= 0 && Number.isFinite(shearDuration) && shearDuration >= 0) {
+    const totalCycle = catchDuration + shearDuration;
+    return totalCycle > 0 ? totalCycle : 0;
+  }
+
+  return 0;
+}
+
+function rewindSimulationTimingForUndoLastSheep(rewindSeconds) {
+  const safeRewindSeconds = Number(rewindSeconds);
+  if (!Number.isFinite(safeRewindSeconds) || safeRewindSeconds <= 0) return;
+
+  const rewindMs = safeRewindSeconds * 1000;
+  appState.effectiveElapsedBeforePauseMs = Math.max((Number(appState.effectiveElapsedBeforePauseMs) || 0) - rewindMs, 0);
+
+  if (Number.isFinite(appState.runEndTimeMs)) {
+    appState.runEndTimeMs += rewindMs;
+  }
+
+  if (appState.paused && Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
+    const dayClockFloor = Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+      ? appState.dayClockStartSecondsFromMidnight
+      : 0;
+    appState.dayClockPausedSecondsFromMidnight = Math.max(
+      appState.dayClockPausedSecondsFromMidnight - safeRewindSeconds,
+      dayClockFloor
+    );
+  } else if (Number.isFinite(appState.dayClockStartRealMs)) {
+    const elapsedDayClockMs = Math.max(Date.now() - appState.dayClockStartRealMs, 0);
+    appState.dayClockStartRealMs += Math.min(rewindMs, elapsedDayClockMs);
+  }
+}
+
 async function undoLastSheep() {
   if (!canUndoLastSheep()) return { success: false, error: "Undo Last Sheep is only available during an active Simulation Mode run." };
 
@@ -4325,6 +4375,7 @@ async function undoLastSheep() {
   clearPenFillPromptKeyBeyondSheepCount("dismissedPenFillPromptKey", newPhysicalSheepCount);
 
   setPaused(true);
+  rewindSimulationTimingForUndoLastSheep(getUndoLastSheepRewindSeconds(latestRunSheep));
   refreshAfterUndoLastSheep();
   autosaveState();
 
@@ -8244,7 +8295,9 @@ function restoreSessionPayload(raw, options = {}) {
   const restoreTimeMs = Date.now();
   const savedAtMs = Number(raw.savedAt) || restoreTimeMs;
   const restoreGapMs = forcePaused ? Math.max(restoreTimeMs - savedAtMs, 0) : 0;
+  const currentKeyboardShortcuts = appState.keyboardShortcuts;
   Object.assign(appState, raw.state);
+  appState.keyboardShortcuts = currentKeyboardShortcuts;
   if (raw.runType && elements.runType) elements.runType.value = raw.runType;
   if (raw.customHours !== undefined && elements.customHours) elements.customHours.value = raw.customHours;
   if (raw.sessionDate && elements.sessionDate) elements.sessionDate.value = raw.sessionDate;
@@ -8357,6 +8410,7 @@ function restoreSessionPayload(raw, options = {}) {
   }
   updateStatsPanel();
   updatePauseButtonUI();
+  renderShortcutSettings();
 
   if (options.source === "manual") {
     stopPollingLoop();
