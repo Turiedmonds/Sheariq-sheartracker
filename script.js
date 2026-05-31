@@ -99,6 +99,7 @@ const MANUAL_MARKER_TYPES = {
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 let sheepLogMarkerNoteEditorSheepId = "";
+let selectedSheepLogIds = new Set();
 
 function isValidManualMarkerType(type) {
   return Object.prototype.hasOwnProperty.call(MANUAL_MARKER_TYPES, type);
@@ -2333,6 +2334,8 @@ const elements = {
   blockMinutes: document.getElementById("blockMinutes"),
   blockResults: document.getElementById("blockResults"),
   sheepLogBody: document.getElementById("sheepLogBody"),
+  mergeSelectedSheepBtn: document.getElementById("mergeSelectedSheepBtn"),
+  mergeSelectedSheepStatus: document.getElementById("mergeSelectedSheepStatus"),
   sheepLogSortBy: document.getElementById("sheepLogSortBy"),
   sheepLogSortOrder: document.getElementById("sheepLogSortOrder"),
   sheepLogFillDirection: document.getElementById("sheepLogFillDirection"),
@@ -4297,6 +4300,283 @@ function markFuturePenFillEventsUndone(newPhysicalSheepCount, now = Date.now()) 
   });
 }
 
+
+function getRunSheepIndexById(sheepId) {
+  if (!sheepId) return -1;
+  return appState.sheep.findIndex((entry) => entry?.id === sheepId);
+}
+
+function getSelectedSheepLogEntriesInRunOrder() {
+  return Array.from(selectedSheepLogIds)
+    .map((id) => appState.sheep.find((entry) => entry?.id === id))
+    .filter(Boolean)
+    .sort((a, b) => Number(a.number) - Number(b.number));
+}
+
+function getSelectedAdjacentSheepForMerge() {
+  const selected = getSelectedSheepLogEntriesInRunOrder();
+  if (selected.length !== 2) return null;
+
+  const firstIndex = getRunSheepIndexById(selected[0].id);
+  const secondIndex = getRunSheepIndexById(selected[1].id);
+  if (firstIndex === -1 || secondIndex === -1 || secondIndex !== firstIndex + 1) return null;
+  return { first: appState.sheep[firstIndex], second: appState.sheep[secondIndex], firstIndex, secondIndex };
+}
+
+function updateMergeSelectedSheepButtonUI(message = "") {
+  if (!elements.mergeSelectedSheepBtn && !elements.mergeSelectedSheepStatus) return;
+
+  const selectedCount = selectedSheepLogIds.size;
+  const adjacentSelection = getSelectedAdjacentSheepForMerge();
+  const canMerge = Boolean(adjacentSelection);
+  if (elements.mergeSelectedSheepBtn) {
+    elements.mergeSelectedSheepBtn.disabled = !canMerge;
+  }
+  if (elements.mergeSelectedSheepStatus) {
+    elements.mergeSelectedSheepStatus.textContent = message || (canMerge
+      ? `Ready to merge sheep ${adjacentSelection.first.number} and ${adjacentSelection.second.number}.`
+      : (selectedCount === 0
+        ? "Select two adjacent sheep to merge."
+        : `${selectedCount} selected — choose exactly two adjacent sheep.`));
+  }
+}
+
+function syncSelectedSheepLogIds() {
+  const currentIds = new Set(appState.sheep.map((entry) => entry?.id).filter(Boolean));
+  selectedSheepLogIds = new Set(Array.from(selectedSheepLogIds).filter((id) => currentIds.has(id)));
+}
+
+function toggleSheepLogSelection(sheepId, selected) {
+  if (!sheepId) return;
+  if (selected) selectedSheepLogIds.add(sheepId);
+  else selectedSheepLogIds.delete(sheepId);
+  updateMergeSelectedSheepButtonUI();
+}
+
+function getMergedSheepStatus(firstEntry, secondEntry) {
+  const firstStatus = getSheepStatus(firstEntry);
+  const secondStatus = getSheepStatus(secondEntry);
+  if (firstStatus === SHEEP_STATUS.REJECTED || secondStatus === SHEEP_STATUS.REJECTED) return SHEEP_STATUS.REJECTED;
+  if (firstStatus === SHEEP_STATUS.PENDING || secondStatus === SHEEP_STATUS.PENDING) return SHEEP_STATUS.PENDING;
+  return SHEEP_STATUS.ACCEPTED;
+}
+
+function getSheepInterruptionDuration(firstEntry, secondEntry) {
+  const firstEnd = Number(firstEntry?.endTime);
+  const secondStart = Number(secondEntry?.startTime);
+  if (!Number.isFinite(firstEnd) || !Number.isFinite(secondStart)) return 0;
+  return Math.max((secondStart - firstEnd) / 1000, 0);
+}
+
+function combineMergedSheepNotes(firstEntry, secondEntry, markerAuditNote = "") {
+  const parts = [normalizeSheepNote(firstEntry?.note), normalizeSheepNote(secondEntry?.note), markerAuditNote]
+    .filter(Boolean);
+  if (!parts.length) return "";
+  const separator = " | ";
+  let combinedNote = "";
+  for (const part of parts) {
+    if (!combinedNote) {
+      combinedNote = part.slice(0, SHEEP_NOTE_MAX_LENGTH);
+      continue;
+    }
+    const remainingLength = SHEEP_NOTE_MAX_LENGTH - combinedNote.length - separator.length;
+    if (remainingLength <= 0) break;
+    combinedNote += separator + part.slice(0, remainingLength);
+  }
+  return normalizeSheepNote(combinedNote);
+}
+
+function createMergedSheepEntry(firstEntry, secondEntry, overrides = {}) {
+  const interruptionDuration = getSheepInterruptionDuration(firstEntry, secondEntry);
+  const catchDuration = Math.max(Number(firstEntry?.catchDuration) || 0, 0);
+  const shearDuration = Math.max(Number(firstEntry?.shearDuration) || 0, 0)
+    + interruptionDuration
+    + Math.max(Number(secondEntry?.shearDuration) || 0, 0);
+  const firstMarker = sanitizeManualMarker(firstEntry?.manualMarker);
+  const secondMarker = sanitizeManualMarker(secondEntry?.manualMarker);
+  const markerAuditNote = firstMarker && secondMarker && getManualMarkerDisplayLabel(firstMarker) !== getManualMarkerDisplayLabel(secondMarker)
+    ? `Merged sheep also had marker: ${getManualMarkerDisplayLabel(secondMarker)}.`
+    : "";
+  const mergedEntry = {
+    ...firstEntry,
+    ...overrides,
+    id: firstEntry.id,
+    startTime: Number.isFinite(Number(firstEntry.startTime)) ? firstEntry.startTime : secondEntry.startTime,
+    endTime: Number.isFinite(Number(secondEntry.endTime)) ? secondEntry.endTime : firstEntry.endTime,
+    startDayClockSeconds: Number.isFinite(Number(firstEntry.startDayClockSeconds)) ? firstEntry.startDayClockSeconds : secondEntry.startDayClockSeconds,
+    endDayClockSeconds: Number.isFinite(Number(secondEntry.endDayClockSeconds)) ? secondEntry.endDayClockSeconds : firstEntry.endDayClockSeconds,
+    catchDuration,
+    shearDuration,
+    fullCycle: catchDuration + shearDuration,
+    effectiveElapsedSeconds: Number.isFinite(Number(secondEntry.effectiveElapsedSeconds))
+      ? secondEntry.effectiveElapsedSeconds
+      : firstEntry.effectiveElapsedSeconds,
+    status: getMergedSheepStatus(firstEntry, secondEntry),
+    mergedFromIds: [firstEntry.id, secondEntry.id].filter(Boolean),
+    mergedFromNumbers: [firstEntry.number, secondEntry.number].filter((number) => Number.isFinite(Number(number))),
+    mergedAt: Date.now(),
+    interruptionDuration
+  };
+
+  const note = combineMergedSheepNotes(firstEntry, secondEntry, markerAuditNote);
+  if (note) mergedEntry.note = note;
+  else delete mergedEntry.note;
+
+  if (firstMarker) mergedEntry.manualMarker = firstMarker;
+  else if (secondMarker) mergedEntry.manualMarker = secondMarker;
+  else delete mergedEntry.manualMarker;
+
+  return mergedEntry;
+}
+
+function renumberRunSheepFrom(startIndex = 0) {
+  appState.sheep.forEach((entry, index) => {
+    if (!entry || index < startIndex) return;
+    entry.number = index + 1;
+  });
+}
+
+function renumberDaySheep() {
+  appState.daySheep.forEach((entry, index) => {
+    if (!entry) return;
+    entry.dayNumber = index + 1;
+    entry.number = index + 1;
+  });
+}
+
+function validatePenFillEventsForSheepMerge(secondSheepNumber) {
+  const currentRunIndex = Number(appState.currentRunIndex);
+  const affectedEvents = Array.isArray(appState.penFillEvents)
+    ? appState.penFillEvents.filter((event) => (
+      isActivePenFillEvent(event)
+      && Number(event.runIndex) === currentRunIndex
+      && Number(event.physicalSheepTakenFromPen) > Number(secondSheepNumber)
+    ))
+    : [];
+  const unsafeEvent = affectedEvents.find((event) => event.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL);
+  if (unsafeEvent) {
+    return {
+      safe: false,
+      reason: "Merge is not safe after manual, custom, or confirmed pen refill events yet. Undo or review those refill events before merging sheep."
+    };
+  }
+  return { safe: true, affectedEvents };
+}
+
+function markAffectedAssumedPenFillEventsUndone(events, now = Date.now()) {
+  events.forEach((event) => {
+    event.undone = true;
+    event.undoneAt = now;
+    event.updatedAt = now;
+    event.undoReason = "sheep-merge";
+  });
+}
+
+function rebuildGeneratedCorrectionData() {
+  appState.trendBuckets = {};
+  appState.reviewBlocks = [];
+  appState.nextReviewBlockIndex = 1;
+  const effectiveElapsedSeconds = Math.max(...appState.sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0), 0);
+  const blockSeconds = 15 * 60;
+  const completedBlocks = Math.floor(effectiveElapsedSeconds / blockSeconds);
+  const previousElapsedBeforePauseMs = appState.effectiveElapsedBeforePauseMs;
+  const previousResumeRealMs = appState.effectiveResumeRealMs;
+  const previousPaused = appState.paused;
+
+  appState.paused = true;
+  appState.effectiveResumeRealMs = null;
+  for (let blockIndex = 1; blockIndex <= completedBlocks; blockIndex += 1) {
+    appState.effectiveElapsedBeforePauseMs = blockIndex * blockSeconds * 1000;
+    maybeGenerate15MinuteReviews();
+  }
+
+  appState.effectiveElapsedBeforePauseMs = previousElapsedBeforePauseMs;
+  appState.effectiveResumeRealMs = previousResumeRealMs;
+  appState.paused = previousPaused;
+}
+
+function refreshAfterManualSheepMerge(message = "") {
+  rebuildGeneratedCorrectionData();
+  calculateAverages();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
+  updatePenFillForecastDisplay();
+  updatePenStateDisplay();
+  updatePenFillEarlyReminderDisplay();
+  updatePenFillConfirmationControls({ statusOverride: message });
+  updateMergeSelectedSheepButtonUI(message);
+}
+
+function mergeAdjacentSheepEntries(firstEntry, secondEntry) {
+  const firstIndex = getRunSheepIndexById(firstEntry?.id);
+  const secondIndex = getRunSheepIndexById(secondEntry?.id);
+  if (firstIndex === -1 || secondIndex !== firstIndex + 1) {
+    return { success: false, error: "Select exactly two adjacent sheep from the current run." };
+  }
+
+  const penFillValidation = validatePenFillEventsForSheepMerge(secondEntry.number);
+  if (!penFillValidation.safe) return { success: false, error: penFillValidation.reason };
+
+  const firstDayIndex = appState.daySheep.findIndex((entry) => entry?.id === firstEntry.id);
+  const secondDayIndex = appState.daySheep.findIndex((entry) => entry?.id === secondEntry.id);
+  if (firstDayIndex === -1 || secondDayIndex !== firstDayIndex + 1) {
+    return { success: false, error: "Matching adjacent day sheep entries were not found; merge skipped to keep run/day logs aligned." };
+  }
+
+  const now = Date.now();
+  const mergedRunEntry = createMergedSheepEntry(firstEntry, secondEntry, { number: firstEntry.number, dayNumber: firstEntry.dayNumber });
+  const mergedDayEntry = createMergedSheepEntry(appState.daySheep[firstDayIndex], appState.daySheep[secondDayIndex], {
+    number: appState.daySheep[firstDayIndex].number,
+    dayNumber: appState.daySheep[firstDayIndex].dayNumber
+  });
+
+  appState.sheep.splice(firstIndex, 2, mergedRunEntry);
+  appState.daySheep.splice(firstDayIndex, 2, mergedDayEntry);
+  renumberRunSheepFrom(firstIndex);
+  renumberDaySheep();
+  markAffectedAssumedPenFillEventsUndone(penFillValidation.affectedEvents || [], now);
+  clearPenFillPromptKeyBeyondSheepCount("pendingPenFillPromptKey", appState.sheep.length);
+  clearPenFillPromptKeyBeyondSheepCount("dismissedPenFillPromptKey", appState.sheep.length);
+  selectedSheepLogIds = new Set([mergedRunEntry.id]);
+  sheepLogMarkerNoteEditorSheepId = "";
+
+  return { success: true, mergedSheep: mergedRunEntry, affectedPenFillEvents: penFillValidation.affectedEvents || [] };
+}
+
+async function mergeSelectedSheep() {
+  const selection = getSelectedAdjacentSheepForMerge();
+  if (!selection) {
+    updateMergeSelectedSheepButtonUI("Select exactly two adjacent sheep from the current run.");
+    return { success: false, error: "Select exactly two adjacent sheep from the current run." };
+  }
+
+  const confirmed = await confirmModal({
+    title: "Merge selected sheep?",
+    message: `Merge sheep ${selection.first.number} and sheep ${selection.second.number} into one sheep? This is for cases where one real sheep was accidentally recorded as two entries. Later sheep will be renumbered.`,
+    confirmText: "Merge Sheep",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return { success: false, error: "Merge cancelled." };
+
+  const result = mergeAdjacentSheepEntries(selection.first, selection.second);
+  if (!result.success) {
+    updateMergeSelectedSheepButtonUI(result.error);
+    return result;
+  }
+
+  const assumedMessage = result.affectedPenFillEvents.length
+    ? "Merged sheep. Future assumed pen refill events were marked undone so the planner can recreate them."
+    : "Merged selected sheep.";
+  refreshAfterManualSheepMerge(assumedMessage);
+  autosaveState();
+  return result;
+}
+
 function refreshAfterUndoLastSheep() {
   calculateAverages();
   updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
@@ -4331,7 +4611,69 @@ function getUndoLastSheepRewindSeconds(deletedSheep) {
   return 0;
 }
 
-function rewindSimulationTimingForUndoLastSheep(rewindSeconds) {
+function getUndoLastSheepRestorePoint(previousSheep) {
+  if (!previousSheep) {
+    return {
+      effectiveElapsedSeconds: 0,
+      dayClockSecondsFromMidnight: Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+        ? appState.dayClockStartSecondsFromMidnight
+        : null,
+      source: "run-start"
+    };
+  }
+
+  const effectiveElapsedSeconds = Number(previousSheep.effectiveElapsedSeconds);
+  if (!Number.isFinite(effectiveElapsedSeconds) || effectiveElapsedSeconds < 0) return null;
+
+  const endDayClockSeconds = Number(previousSheep.endDayClockSeconds);
+  const fallbackDayClockSeconds = getDayClockSecondsFromEffectiveElapsed(effectiveElapsedSeconds);
+  return {
+    effectiveElapsedSeconds,
+    dayClockSecondsFromMidnight: Number.isFinite(endDayClockSeconds)
+      ? endDayClockSeconds
+      : (Number.isFinite(fallbackDayClockSeconds) ? fallbackDayClockSeconds : null),
+    source: "previous-sheep-end"
+  };
+}
+
+function applyUndoLastSheepRestorePoint(restorePoint) {
+  if (!restorePoint) return false;
+
+  const restoredElapsedSeconds = Number(restorePoint.effectiveElapsedSeconds);
+  if (!Number.isFinite(restoredElapsedSeconds) || restoredElapsedSeconds < 0) return false;
+
+  const currentElapsedSeconds = Number(getEffectiveElapsedSeconds());
+  const rewindSeconds = Number.isFinite(currentElapsedSeconds)
+    ? Math.max(currentElapsedSeconds - restoredElapsedSeconds, 0)
+    : 0;
+
+  appState.effectiveElapsedBeforePauseMs = Math.max(restoredElapsedSeconds * 1000, 0);
+  appState.effectiveResumeRealMs = null;
+
+  if (Number.isFinite(appState.runEndTimeMs)) {
+    const runDurationSeconds = getCurrentRunDurationSeconds();
+    if (Number.isFinite(runDurationSeconds) && runDurationSeconds > 0) {
+      appState.runEndTimeMs = Date.now() + Math.max(runDurationSeconds - restoredElapsedSeconds, 0) * 1000;
+    } else if (rewindSeconds > 0) {
+      appState.runEndTimeMs += rewindSeconds * 1000;
+    }
+  }
+
+  const restoredDayClockSeconds = Number(restorePoint.dayClockSecondsFromMidnight);
+  if (Number.isFinite(restoredDayClockSeconds)) {
+    if (appState.paused) {
+      appState.dayClockPausedSecondsFromMidnight = restoredDayClockSeconds;
+    } else if (Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
+      appState.dayClockStartRealMs = Date.now() - Math.max((restoredDayClockSeconds - appState.dayClockStartSecondsFromMidnight) * 1000, 0);
+    }
+  }
+
+  return true;
+}
+
+function rewindSimulationTimingForUndoLastSheep(rewindSeconds, previousSheep = null) {
+  if (applyUndoLastSheepRestorePoint(getUndoLastSheepRestorePoint(previousSheep))) return;
+
   const safeRewindSeconds = Number(rewindSeconds);
   if (!Number.isFinite(safeRewindSeconds) || safeRewindSeconds <= 0) return;
 
@@ -4381,6 +4723,7 @@ async function undoLastSheep() {
 
   appState.sheep.pop();
   appState.daySheep.pop();
+  const previousRunSheep = appState.sheep[appState.sheep.length - 1] || null;
 
   const now = Date.now();
   appState.currentCycle.motorOn = false;
@@ -4395,7 +4738,7 @@ async function undoLastSheep() {
   clearPenFillPromptKeyBeyondSheepCount("dismissedPenFillPromptKey", newPhysicalSheepCount);
 
   setPaused(true);
-  rewindSimulationTimingForUndoLastSheep(getUndoLastSheepRewindSeconds(latestRunSheep));
+  rewindSimulationTimingForUndoLastSheep(getUndoLastSheepRewindSeconds(latestRunSheep), previousRunSheep);
   refreshAfterUndoLastSheep();
   autosaveState();
 
@@ -5383,6 +5726,7 @@ function formatSheepLogClock(entry, field) {
 
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
+  syncSelectedSheepLogIds();
   elements.sheepLogBody.innerHTML = "";
 
   const { requiredCycle } = calculateTargetMetrics();
@@ -5398,6 +5742,7 @@ function renderLogTable() {
     const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, anomalyAverages.avgCatchDuration);
     const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, anomalyAverages.avgFullCycle);
     row.innerHTML = `
+      <td class="sheep-log-select-col"><input class="sheep-log-select-checkbox" type="checkbox" data-sheep-id="${entry.id || ""}" aria-label="Select sheep #${entry.number} for merge" ${selectedSheepLogIds.has(entry.id) ? "checked" : ""}></td>
       <td>${entry.number}</td>
       <td class="sheep-log-time-col">${formatSheepLogClock(entry, "start")}</td>
       <td class="sheep-log-time-col">${formatSheepLogClock(entry, "end")}</td>
@@ -5408,6 +5753,8 @@ function renderLogTable() {
     row.appendChild(createSheepLogMarkerNoteCell(entry, plannedDelayMarkers));
     elements.sheepLogBody.appendChild(row);
   });
+
+  updateMergeSelectedSheepButtonUI();
 
   const scroller = cacheSheepLogScroller();
 
@@ -9409,6 +9756,7 @@ function bindEvents() {
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
   if (elements.resetCurrentSheepBtn) elements.resetCurrentSheepBtn.addEventListener("click", resetCurrentSheepTiming);
   if (elements.undoLastSheepBtn) elements.undoLastSheepBtn.addEventListener("click", undoLastSheep);
+  if (elements.mergeSelectedSheepBtn) elements.mergeSelectedSheepBtn.addEventListener("click", mergeSelectedSheep);
   if (elements.shortcutSettingsBtn) elements.shortcutSettingsBtn.addEventListener("click", openShortcutSettingsModal);
   if (elements.shortcutSettingsModalCloseBtn) elements.shortcutSettingsModalCloseBtn.addEventListener("click", closeShortcutSettingsModal);
   if (elements.shortcutSettingsModalOverlay) {
@@ -9596,6 +9944,10 @@ function bindEvents() {
     });
     elements.sheepLogBody.addEventListener("change", (event) => {
       const target = event.target;
+      if (target instanceof HTMLInputElement && target.classList.contains("sheep-log-select-checkbox")) {
+        toggleSheepLogSelection(target.dataset.sheepId || "", target.checked);
+        return;
+      }
       if (!(target instanceof HTMLSelectElement) || !target.classList.contains("sheep-log-marker-note-select")) return;
       syncSheepLogCustomMarkerInput(target);
     });
