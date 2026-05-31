@@ -6,6 +6,7 @@ const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
 const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
 const SESSION_DATE_STORAGE_KEY = "sheariq.sessionDate";
 const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
+const AUTOSAVE_INTERVAL_STORAGE_KEY = "sheariq.autosaveIntervalSeconds";
 const MANUAL_SAVE_INDEX_STORAGE_KEY = "sheariq.manualSaves.index";
 const MANUAL_SAVE_STORAGE_PREFIX = "sheariq.manualSaves.";
 const FOLLOW_LATEST_STORAGE_KEY = "sheariq.followLatest";
@@ -23,7 +24,7 @@ const PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.performanceSectionsC
 const PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.performanceSectionsOrder";
 const DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.dayConfigSectionsCollapsed";
 const DEFAULT_PERFORMANCE_SECTION_ORDER = ["sheepCount", "averages", "latestExtremes"];
-const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "status"];
+const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "manualSave", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
@@ -31,6 +32,8 @@ const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v2";
 const SHEEP_NOTE_MAX_LENGTH = 200;
+const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
+const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -2023,6 +2026,7 @@ const appState = {
   selectedTrendBucketKey: null,
   trendDetailsExpanded: false,
   autosaveEnabled: true,
+  autosaveIntervalSeconds: DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
   controlsDockEnabled: false,
   controlsDockPos: { x: 20, y: 90 },
   pointerPanelDrag: null,
@@ -2221,7 +2225,11 @@ const elements = {
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   trendFlags: document.getElementById("trendFlags"),
-  autosaveToggle: document.getElementById("autosaveToggle"),
+  autosaveSettingsBtn: document.getElementById("autosaveSettingsBtn"),
+  autosaveSettingsModalOverlay: document.getElementById("autosaveSettingsModalOverlay"),
+  autosaveSettingsModalCloseBtn: document.getElementById("autosaveSettingsModalCloseBtn"),
+  autosaveEnabledInput: document.getElementById("autosaveEnabledInput"),
+  autosaveIntervalSelect: document.getElementById("autosaveIntervalSelect"),
   followLatestToggle: document.getElementById("followLatestToggle"),
   autosaveStatus: document.getElementById("autosaveStatus"),
   controlsDockToggle: document.getElementById("controlsDockToggle"),
@@ -2567,6 +2575,9 @@ function initializeSimulationSections() {
     if (appliedOrder.includes(sectionId)) return;
     appliedOrder.push(sectionId);
   });
+  if (sectionMap.has("manualSave") && !appliedOrder.includes("manualSave") && appliedOrder.includes("autosave")) {
+    appliedOrder.splice(appliedOrder.indexOf("autosave") + 1, 0, "manualSave");
+  }
   DEFAULT_SIM_SECTION_ORDER.forEach((sectionId) => {
     if (sectionMap.has(sectionId) && !appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
   });
@@ -7169,10 +7180,11 @@ function autosaveState() {
 }
 
 function updateAutosaveUI() {
-  if (elements.autosaveToggle) elements.autosaveToggle.checked = appState.autosaveEnabled;
+  if (elements.autosaveEnabledInput) elements.autosaveEnabledInput.checked = appState.autosaveEnabled;
+  if (elements.autosaveIntervalSelect) elements.autosaveIntervalSelect.value = String(appState.autosaveIntervalSeconds);
   if (elements.autosaveStatus) {
     elements.autosaveStatus.textContent = appState.autosaveEnabled
-      ? "Autosave: ON (every 60s)"
+      ? `Autosave: ON (every ${appState.autosaveIntervalSeconds}s)`
       : "Autosave: OFF";
   }
 }
@@ -7190,7 +7202,7 @@ function startAutosaveLoop() {
     return;
   }
   stopAutosaveLoop();
-  appState.autosaveTimerId = setInterval(autosaveState, 60000);
+  appState.autosaveTimerId = setInterval(autosaveState, appState.autosaveIntervalSeconds * 1000);
 }
 
 function setAutosaveEnabled(enabled) {
@@ -7205,8 +7217,23 @@ function setAutosaveEnabled(enabled) {
   }
 }
 
+function normalizeAutosaveIntervalSeconds(value) {
+  const intervalSeconds = Number(value);
+  return AUTOSAVE_INTERVAL_OPTIONS_SECONDS.includes(intervalSeconds)
+    ? intervalSeconds
+    : DEFAULT_AUTOSAVE_INTERVAL_SECONDS;
+}
+
+function setAutosaveIntervalSeconds(value) {
+  appState.autosaveIntervalSeconds = normalizeAutosaveIntervalSeconds(value);
+  localStorage.setItem(AUTOSAVE_INTERVAL_STORAGE_KEY, String(appState.autosaveIntervalSeconds));
+  updateAutosaveUI();
+  if (appState.autosaveEnabled) startAutosaveLoop();
+}
+
 function loadAutosaveSettings() {
   appState.autosaveEnabled = parseStoredBoolean(localStorage.getItem(AUTOSAVE_ENABLED_STORAGE_KEY), true);
+  appState.autosaveIntervalSeconds = normalizeAutosaveIntervalSeconds(localStorage.getItem(AUTOSAVE_INTERVAL_STORAGE_KEY));
 }
 
 function getManualSaveStorageKey(id) {
@@ -8359,6 +8386,31 @@ function closePerformancePanelHelpModal() {
   }
 }
 
+function openAutosaveSettingsModal() {
+  if (!elements.autosaveSettingsModalOverlay) return;
+  updateAutosaveUI();
+  elements.autosaveSettingsModalOverlay.hidden = false;
+  document.body.classList.add("layout-scroll-lock");
+}
+
+function closeAutosaveSettingsModal() {
+  if (!elements.autosaveSettingsModalOverlay) return;
+  elements.autosaveSettingsModalOverlay.hidden = true;
+  if (
+    elements.connectionHelpModalOverlay?.hidden !== false
+    && elements.dayConfigHelpModalOverlay?.hidden !== false
+    && elements.sheepLogHelpModalOverlay?.hidden !== false
+    && elements.timingPanelHelpModalOverlay?.hidden !== false
+    && elements.penFillPlannerHelpModalOverlay?.hidden !== false
+    && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.simulationControlsHelpModalOverlay?.hidden !== false
+    && elements.shortcutSettingsModalOverlay?.hidden !== false
+    && elements.sheepLogSettingsModalOverlay?.hidden !== false
+  ) {
+    document.body.classList.remove("layout-scroll-lock");
+  }
+}
+
 function openSimulationControlsHelpModal() {
   if (!elements.simulationControlsHelpModalOverlay) return;
   elements.simulationControlsHelpModalOverlay.hidden = false;
@@ -8375,6 +8427,7 @@ function closeSimulationControlsHelpModal() {
     && elements.timingPanelHelpModalOverlay?.hidden !== false
     && elements.penFillPlannerHelpModalOverlay?.hidden !== false
     && elements.performancePanelHelpModalOverlay?.hidden !== false
+    && elements.autosaveSettingsModalOverlay?.hidden !== false
     && elements.shortcutSettingsModalOverlay?.hidden !== false
     && elements.sheepLogSettingsModalOverlay?.hidden !== false
   ) {
@@ -8670,12 +8723,25 @@ function bindEvents() {
       closePenFillPlannerHelpModal();
       closePerformancePanelHelpModal();
       closeSimulationControlsHelpModal();
+      closeAutosaveSettingsModal();
       closeShortcutSettingsModal();
     }
   }, { capture: true });
-  if (elements.autosaveToggle) {
-    elements.autosaveToggle.addEventListener("change", () => {
-      setAutosaveEnabled(elements.autosaveToggle.checked);
+  if (elements.autosaveSettingsBtn) elements.autosaveSettingsBtn.addEventListener("click", openAutosaveSettingsModal);
+  if (elements.autosaveSettingsModalCloseBtn) elements.autosaveSettingsModalCloseBtn.addEventListener("click", closeAutosaveSettingsModal);
+  if (elements.autosaveSettingsModalOverlay) {
+    elements.autosaveSettingsModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.autosaveSettingsModalOverlay) closeAutosaveSettingsModal();
+    });
+  }
+  if (elements.autosaveEnabledInput) {
+    elements.autosaveEnabledInput.addEventListener("change", () => {
+      setAutosaveEnabled(elements.autosaveEnabledInput.checked);
+    });
+  }
+  if (elements.autosaveIntervalSelect) {
+    elements.autosaveIntervalSelect.addEventListener("change", () => {
+      setAutosaveIntervalSeconds(elements.autosaveIntervalSelect.value);
     });
   }
   if (elements.followLatestToggle) {

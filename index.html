@@ -168,7 +168,6 @@
             <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
             <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
             <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
-            <button id="loadLastSaveBtn" type="button">Load Last Autosave</button>
             <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
             </div>
           </div>
@@ -184,15 +183,28 @@
             </div>
           </div>
           <div class="sim-controls-section-content panel-section-content">
-            <div class="form-grid single-row sim-setting-row">
-            <label for="autosaveToggle">Autosave</label>
-            <input id="autosaveToggle" type="checkbox" checked />
+            <div class="button-row">
+              <button id="autosaveSettingsBtn" type="button">Autosave Settings</button>
+              <button id="loadLastSaveBtn" type="button">Load Last Autosave</button>
             </div>
+            <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
+          </div>
+        </section>
+
+        <section class="sim-controls-section panel-section" data-section-id="manualSave" aria-label="Manual Save section">
+          <div class="sim-controls-section-header panel-section-header">
+            <h3 class="sim-controls-section-title panel-section-title">Manual Save</h3>
+            <div class="sim-controls-section-actions panel-section-actions">
+              <button class="sim-controls-section-move-up section-icon-btn" type="button" aria-label="Move Manual Save section up">↑</button>
+              <button class="sim-controls-section-move-down section-icon-btn" type="button" aria-label="Move Manual Save section down">↓</button>
+              <button class="sim-controls-section-toggle section-icon-btn" type="button" aria-expanded="true" aria-label="Collapse Manual Save section">−</button>
+            </div>
+          </div>
+          <div class="sim-controls-section-content panel-section-content">
             <div class="button-row manual-session-actions">
               <button id="saveSessionBtn" type="button">Save Session</button>
               <button id="loadSessionBtn" type="button">Load Session</button>
             </div>
-            <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
           </div>
         </section>
 
@@ -1165,6 +1177,29 @@
     </div>
   </div>
 
+  <div id="autosaveSettingsModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal autosave-settings-modal" role="dialog" aria-modal="true" aria-labelledby="autosaveSettingsModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="autosaveSettingsModalTitle">Autosave Settings</h3>
+        <button id="autosaveSettingsModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Autosave Settings">✕</button>
+      </div>
+      <div class="connection-help-modal-content">
+        <div class="autosave-settings-grid">
+          <span class="autosave-settings-label">Autosave Enabled</span>
+          <label class="autosave-settings-check"><input id="autosaveEnabledInput" type="checkbox" checked /> Enabled</label>
+          <label for="autosaveIntervalSelect" class="autosave-settings-label">Autosave Interval</label>
+          <select id="autosaveIntervalSelect">
+            <option value="15">15 seconds</option>
+            <option value="30">30 seconds</option>
+            <option value="60" selected>60 seconds</option>
+            <option value="120">120 seconds</option>
+            <option value="300">300 seconds</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="simulationControlsHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="simulationControlsHelpModalTitle">
       <div class="connection-help-modal-header">
@@ -1173,7 +1208,7 @@
       </div>
       <div class="connection-help-modal-content simulation-controls-help-content">
         <h4 class="connection-help-title">What this panel is for</h4>
-        <p>The Simulation Controls panel is used to start, stop, pause, and test a run. It also shows simulation controls, autosave status, shortcut settings, Shelly connection status, and run status.</p>
+        <p>The Simulation Controls panel is used to start, stop, pause, and test a run. It also shows simulation controls, autosave controls, manual save controls, shortcut settings, Shelly connection status, and run status.</p>
 
         <h4 class="connection-help-title">Simulation Mode</h4>
         <p>Use Simulation Mode when testing the app without the real Evo/Shelly signal.</p>
@@ -1199,14 +1234,35 @@
         <p><strong>Stop Run:</strong> Stops the current run.</p>
         <p><strong>Pause:</strong> Pauses or resumes the run timer.</p>
         <p><strong>Reset Run:</strong> Clears the current run back to its starting state.</p>
-        <p><strong>Load Last Autosave:</strong> Loads the most recent autosaved session.</p>
 
         <h4 class="connection-help-title">Disabled buttons</h4>
         <p>Some buttons become unavailable depending on the run state. For example, Stop Run is unavailable before a run starts. A disabled button means the app is preventing that action at that moment.</p>
 
-        <h4 class="connection-help-title">Autosave</h4>
-        <p>Autosave saves the current session regularly so the latest work can be restored if needed.</p>
-        <p>Autosave status shows whether autosave is currently on.</p>
+        <h4 class="connection-help-title">AUTOSAVE</h4>
+        <p>Autosave runs automatically in the background.</p>
+        <p>It saves your current session at a time interval chosen by you.</p>
+        <p>Autosave is designed as a safety feature in case:</p>
+        <ul class="connection-help-list">
+          <li>browser crash</li>
+          <li>accidental refresh</li>
+          <li>accidental tab closure</li>
+          <li>unexpected interruption</li>
+        </ul>
+        <p>Use <strong>Load Last Autosave</strong> to restore the most recent automatic save.</p>
+        <p>Only the latest autosave is kept.</p>
+        <p>Each autosave overwrites the previous autosave for that session date.</p>
+
+        <h4 class="connection-help-title">MANUAL SAVE</h4>
+        <p>Manual saves are user-created checkpoints.</p>
+        <p>Use <strong>Save Session</strong> to create a named checkpoint at any time.</p>
+        <p>Manual saves are useful when:</p>
+        <ul class="connection-help-list">
+          <li>testing against recorded livestreams</li>
+          <li>pausing work and returning later</li>
+          <li>creating multiple restore points</li>
+        </ul>
+        <p>Use <strong>Load Session</strong> to choose and restore a specific manual save.</p>
+        <p>Manual saves do not replace autosaves.</p>
 
         <h4 class="connection-help-title">Status</h4>
         <p><strong>Shelly status:</strong> Shows whether the app can talk to the Shelly helper/proxy and how long the response took.</p>
