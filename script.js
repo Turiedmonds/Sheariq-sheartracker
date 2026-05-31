@@ -3620,6 +3620,17 @@ function handleMotorOn() {
   updateLivePanel();
 }
 
+function refreshAfterSheepEntry() {
+  calculateAverages();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
+}
+
 function handleMotorOff() {
   if (!appState.runActive || isCountingPaused()) return;
 
@@ -3664,18 +3675,12 @@ function handleMotorOff() {
 
   if (appState.pendingBreakAfterCurrentSheep) {
     const scheduledBreakStartedAtMs = appState.pendingBreakStartedAtMs || appState.runEndTimeMs || Date.now();
+    refreshAfterSheepEntry();
     finishRunAndEnterBreak("record-day-break", scheduledBreakStartedAtMs);
     return;
   }
 
-  calculateAverages();
-  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
-  updateStatsPanel();
-  updateLivePanel();
-  renderLogTable();
-  renderReviewList();
-  drawTrendGraph();
-  updateTrendFlags();
+  refreshAfterSheepEntry();
 }
 
 
