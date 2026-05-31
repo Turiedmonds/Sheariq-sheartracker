@@ -328,16 +328,20 @@
                 <strong id="totalSheep" class="perf-metric-value panel-metric-value">0</strong>
               </div>
               <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Official / Rej</span>
-                <strong id="officialRejectedCount" class="perf-metric-value panel-metric-value">0 / 0</strong>
+                <span class="perf-metric-label panel-metric-label">Current Sheep Number</span>
+                <strong id="currentSheepNumber" class="perf-metric-value panel-metric-value">0</strong>
+              </div>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Official Count</span>
+                <strong id="officialSheepCount" class="perf-metric-value panel-metric-value">0</strong>
+              </div>
+              <div class="perf-metric-row panel-metric-row">
+                <span class="perf-metric-label panel-metric-label">Rejects</span>
+                <button id="rejectedSheepCount" class="perf-metric-value panel-metric-value perf-metric-button" type="button" title="Adjust official rejects">0</button>
               </div>
               <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Quality</span>
                 <button id="qualityRatingSummary" class="perf-metric-value panel-metric-value perf-metric-button" type="button" title="Open quality ratings">—</button>
-              </div>
-              <div class="perf-metric-row panel-metric-row">
-                <span class="perf-metric-label panel-metric-label">Current Sheep Number</span>
-                <strong id="currentSheepNumber" class="perf-metric-value panel-metric-value">0</strong>
               </div>
             </div>
           </section>
@@ -925,10 +929,9 @@
           <li>Marker / Note</li>
         </ul>
 
-        <h4 class="connection-help-title">Official count controls</h4>
-        <p><strong>Reject:</strong> marks a sheep out of the official count.</p>
-        <p><strong>Restore:</strong> puts a rejected sheep back into the official count.</p>
-        <p>Rejecting/restoring does not delete sheep or change its timing. Rejected sheep remain visible because they physically happened.</p>
+        <h4 class="connection-help-title">Official count adjustments</h4>
+        <p>Rejects are entered from the Performance Panel as an official count adjustment, not tied to a numbered sheep row.</p>
+        <p>Judges/referees usually report how many sheep were rejected from a judged group or period, while physical sheep remain in this log because they still happened.</p>
 
         <h4 class="connection-help-title">Duration columns</h4>
         <p><strong>Shear Duration:</strong><br />How long the motor was running for that sheep.</p>
@@ -1047,7 +1050,7 @@
       <div class="connection-help-modal-content target-pace-help-content">
         <h4>What this panel is for</h4>
         <p>This panel compares required pace against current run pace and predicts where the run is heading.</p>
-        <p>Target progress uses the official accepted sheep count. Physical timing averages still use every sheep timed.</p>
+        <p>Target progress uses the official accepted sheep count: physical sheep minus official reject adjustments. Physical timing averages still use every sheep timed.</p>
         <h4>Required section</h4>
         <ul>
           <li><strong>Required average total time per sheep:</strong> Required Total Time Per Sheep needed to hit the run target.</li>
@@ -1167,10 +1170,11 @@
 
         <h4 class="connection-help-title">Sheep Count</h4>
         <p><strong>Total Sheep Shorn:</strong><br />Shows the physical day count: every sheep fully completed today.</p>
-        <p><strong>Official / Rej:</strong><br />Shows official accepted day count / rejected day count.</p>
-        <p>Rejected sheep stay in the physical log and timing history, but do not count toward the official record total.</p>
-        <p><strong>Quality:</strong><br />Shows the latest judge/referee quality rating. Lower quality rating is better.</p>
         <p><strong>Current Sheep Number:</strong><br />Shows the sheep number currently being worked through. This may be one ahead of completed sheep when a sheep is on the board.</p>
+        <p><strong>Official Count:</strong><br />Shows the official accepted day count. Official Count = physical Total Sheep Shorn minus official rejects.</p>
+        <p><strong>Rejects:</strong><br />Shows the official rejected adjustment count. Judges/referees usually report the number rejected from a judged group or period; rejects are not tied to numbered Sheep Log rows.</p>
+        <p>Physical sheep stay in the Sheep Log and timing history because they still happened. The Pen Refill Planner still uses physical sheep movement.</p>
+        <p><strong>Quality:</strong><br />Shows the latest quality rating entered from the judges/referees or liaison, usually by period. Lower quality rating is better.</p>
 
         <h4 class="connection-help-title">Averages</h4>
         <p><strong>Average shear time:</strong><br />The average time spent shearing each completed sheep.</p>
@@ -1206,6 +1210,35 @@
     </div>
   </div>
 
+  <div id="officialRejectModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal official-reject-modal" role="dialog" aria-modal="true" aria-labelledby="officialRejectModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="officialRejectModalTitle">Official Rejects</h3>
+        <button id="officialRejectModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Official Rejects">✕</button>
+      </div>
+      <div class="connection-help-modal-content official-reject-modal-content">
+        <p class="quality-rating-help-copy">Enter the official rejected sheep count reported by the judges/referees. This is a count adjustment, not a numbered Sheep Log row status.</p>
+        <div class="official-reject-summary">
+          <div><span>Physical day count</span><strong id="officialRejectPhysicalCount">0</strong></div>
+          <div><span>Official count</span><strong id="officialRejectOfficialCount">0</strong></div>
+          <div><span>Current rejects</span><strong id="officialRejectCurrentCount">0</strong></div>
+        </div>
+        <div id="officialRejectValidation" class="quality-rating-validation" role="alert" hidden></div>
+        <form id="officialRejectForm" class="quality-rating-form">
+          <div class="quality-rating-form-grid">
+            <label for="officialRejectCountInput">Rejected sheep count</label>
+            <input id="officialRejectCountInput" type="number" min="0" step="1" inputmode="numeric" />
+          </div>
+          <div class="quality-rating-actions">
+            <button id="officialRejectSaveBtn" type="submit">Save</button>
+            <button id="officialRejectIncrementBtn" type="button">+1 Reject</button>
+            <button id="officialRejectDecrementBtn" type="button">-1 Reject</button>
+            <button id="officialRejectCloseBtn" type="button">Close</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
   <div id="qualityRatingModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal quality-rating-modal" role="dialog" aria-modal="true" aria-labelledby="qualityRatingModalTitle">
@@ -1215,7 +1248,7 @@
       </div>
       <div class="connection-help-modal-content quality-rating-modal-content">
         <p id="qualityRatingLatestSummary" class="quality-rating-latest-summary">No quality ratings yet.</p>
-        <p class="quality-rating-help-copy">Enter judge/referee ratings by 30-minute period. Official count excludes rejected sheep; physical count includes all sheep timed in that period. Notes can record judge/referee comments. Lower rating is better.</p>
+        <p class="quality-rating-help-copy">Enter the quality rating from the judges/referees or liaison, usually by 30-minute period. Notes can record judge/referee comments. Lower rating is better.</p>
         <div id="qualityRatingValidation" class="quality-rating-validation" role="alert" hidden></div>
 
         <form id="qualityRatingForm" class="quality-rating-form">
@@ -1227,11 +1260,6 @@
             <label for="qualityRatingInput">Quality rating</label>
             <input id="qualityRatingInput" type="text" inputmode="decimal" autocomplete="off" required />
 
-            <label for="qualityRatingOfficialCountInput">Official count for period (excludes rejected)</label>
-            <input id="qualityRatingOfficialCountInput" type="number" min="0" step="1" inputmode="numeric" />
-
-            <label for="qualityRatingPhysicalCountInput">Physical count for period (all timed)</label>
-            <input id="qualityRatingPhysicalCountInput" type="number" min="0" step="1" inputmode="numeric" />
 
             <label for="qualityRatingNotesInput">Notes / judge comments</label>
             <textarea id="qualityRatingNotesInput" rows="3" maxlength="200"></textarea>

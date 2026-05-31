@@ -223,30 +223,70 @@ function isRejectedSheep(entry) {
   return getSheepStatus(entry) === SHEEP_STATUS.REJECTED;
 }
 
-// Official counts exclude rejected sheep for future record target progress.
-function getOfficialRunSheepCount() {
-  return appState.sheep.filter(isOfficialCounted).length;
+function getLegacyRejectedDaySheepCount() {
+  return Array.isArray(appState.daySheep) ? appState.daySheep.filter(isRejectedSheep).length : 0;
+}
+
+function sanitizeOfficialRejectedAdjustment(value, physicalCount = getPhysicalDaySheepCount()) {
+  const safePhysicalCount = Math.max(Math.floor(Number(physicalCount)) || 0, 0);
+  const safeValue = Math.max(Math.floor(Number(value)) || 0, 0);
+  return Math.min(safeValue, safePhysicalCount);
+}
+
+function getOfficialRejectedAdjustmentCount() {
+  return sanitizeOfficialRejectedAdjustment(appState.officialRejectedAdjustment);
+}
+
+// Official counts use a day-level rejected adjustment. Legacy per-row rejected statuses are a fallback until restored sessions migrate them.
+function getRejectedDaySheepCount() {
+  return sanitizeOfficialRejectedAdjustment(getOfficialRejectedAdjustmentCount() + getLegacyRejectedDaySheepCount());
 }
 
 function getOfficialDaySheepCount() {
-  return appState.daySheep.filter(isOfficialCounted).length;
+  return Math.max(getPhysicalDaySheepCount() - getRejectedDaySheepCount(), 0);
 }
 
 function getRejectedRunSheepCount() {
-  return appState.sheep.filter(isRejectedSheep).length;
+  return Math.min(getRejectedDaySheepCount(), getPhysicalRunSheepCount());
 }
 
-function getRejectedDaySheepCount() {
-  return appState.daySheep.filter(isRejectedSheep).length;
+function getOfficialRunSheepCount() {
+  return Math.max(getPhysicalRunSheepCount() - getRejectedRunSheepCount(), 0);
+}
+
+function setOfficialRejectedAdjustmentCount(value) {
+  appState.officialRejectedAdjustment = sanitizeOfficialRejectedAdjustment(value);
+  return appState.officialRejectedAdjustment;
+}
+
+function migrateLegacyRejectedSheepStatusesToAdjustment() {
+  const legacyRejectedCount = getLegacyRejectedDaySheepCount();
+  if (!legacyRejectedCount) {
+    setOfficialRejectedAdjustmentCount(appState.officialRejectedAdjustment);
+    return 0;
+  }
+
+  const migratedAt = Date.now();
+  setOfficialRejectedAdjustmentCount(getOfficialRejectedAdjustmentCount() + legacyRejectedCount);
+  [appState.daySheep, appState.sheep].forEach((entries) => {
+    if (!Array.isArray(entries)) return;
+    entries.forEach((entry) => {
+      if (!isRejectedSheep(entry)) return;
+      entry.legacyRejectedStatus = true;
+      entry.legacyRejectedMigratedAt = migratedAt;
+      entry.status = SHEEP_STATUS.ACCEPTED;
+    });
+  });
+  return legacyRejectedCount;
 }
 
 // Physical counts are used for timing, pen movement, and refill planning.
 function getPhysicalRunSheepCount() {
-  return appState.sheep.length;
+  return Array.isArray(appState.sheep) ? appState.sheep.length : 0;
 }
 
 function getPhysicalDaySheepCount() {
-  return appState.daySheep.length;
+  return Array.isArray(appState.daySheep) ? appState.daySheep.length : 0;
 }
 
 function getPhysicalSheepTakenFromPen() {
@@ -2162,6 +2202,7 @@ const appState = {
   penFillEvents: [],
   qualityRatings: [],
   qualityRatingEditId: "",
+  officialRejectedAdjustment: 0,
   currentCycle: {
     motorOn: false,
     shearStart: null,
@@ -2313,7 +2354,19 @@ const elements = {
   pauseRunBtn: document.getElementById("pauseRunBtn"),
   resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
-  officialRejectedCount: document.getElementById("officialRejectedCount"),
+  officialSheepCount: document.getElementById("officialSheepCount"),
+  rejectedSheepCount: document.getElementById("rejectedSheepCount"),
+  officialRejectModalOverlay: document.getElementById("officialRejectModalOverlay"),
+  officialRejectModalCloseBtn: document.getElementById("officialRejectModalCloseBtn"),
+  officialRejectCloseBtn: document.getElementById("officialRejectCloseBtn"),
+  officialRejectForm: document.getElementById("officialRejectForm"),
+  officialRejectCountInput: document.getElementById("officialRejectCountInput"),
+  officialRejectPhysicalCount: document.getElementById("officialRejectPhysicalCount"),
+  officialRejectOfficialCount: document.getElementById("officialRejectOfficialCount"),
+  officialRejectCurrentCount: document.getElementById("officialRejectCurrentCount"),
+  officialRejectValidation: document.getElementById("officialRejectValidation"),
+  officialRejectIncrementBtn: document.getElementById("officialRejectIncrementBtn"),
+  officialRejectDecrementBtn: document.getElementById("officialRejectDecrementBtn"),
   qualityRatingSummary: document.getElementById("qualityRatingSummary"),
   qualityRatingModalOverlay: document.getElementById("qualityRatingModalOverlay"),
   qualityRatingModalCloseBtn: document.getElementById("qualityRatingModalCloseBtn"),
@@ -3369,9 +3422,10 @@ function getQualityPeriodDefaultCounts(periodNumber) {
     const elapsedSeconds = Number(entry?.effectiveElapsedSeconds);
     return Number.isFinite(elapsedSeconds) && elapsedSeconds >= bounds.start && elapsedSeconds < bounds.end;
   }) : [];
+  const physicalCountForPeriod = entries.length;
   return {
-    officialCountForPeriod: entries.filter(isOfficialCounted).length,
-    physicalCountForPeriod: entries.length
+    officialCountForPeriod: Math.max(physicalCountForPeriod - Math.min(getRejectedDaySheepCount(), physicalCountForPeriod), 0),
+    physicalCountForPeriod
   };
 }
 
@@ -3390,23 +3444,12 @@ function setQualityRatingCountDefaults(periodNumber) {
 function createQualityRatingRecordFromForm() {
   const periodNumber = Math.max(Math.floor(Number(elements.qualityRatingPeriodInput?.value)) || 0, 0);
   const qualityRating = (elements.qualityRatingInput?.value || "").trim();
-  const officialCountRaw = elements.qualityRatingOfficialCountInput?.value ?? "";
-  const physicalCountRaw = elements.qualityRatingPhysicalCountInput?.value ?? "";
   const notes = elements.qualityRatingNotesInput?.value || "";
 
   if (!qualityRating) return { error: "Enter a quality rating before saving." };
   if (periodNumber <= 0) return { error: "Enter a positive period number." };
 
-  const officialCountForPeriod = officialCountRaw === "" ? null : Number(officialCountRaw);
-  if (officialCountRaw !== "" && (!Number.isFinite(officialCountForPeriod) || officialCountForPeriod < 0)) {
-    return { error: "Official count must be a non-negative number." };
-  }
-
-  const physicalCountForPeriod = physicalCountRaw === "" ? null : Number(physicalCountRaw);
-  if (physicalCountRaw !== "" && (!Number.isFinite(physicalCountForPeriod) || physicalCountForPeriod < 0)) {
-    return { error: "Physical count must be a non-negative number." };
-  }
-
+  const { officialCountForPeriod, physicalCountForPeriod } = getQualityPeriodDefaultCounts(periodNumber);
   const bounds = getQualityPeriodBounds(periodNumber);
   const editId = elements.qualityRatingEditId?.value || appState.qualityRatingEditId || "";
   return {
@@ -3591,7 +3634,8 @@ function isAnyConnectionStyleModalOpen(excludedOverlay = null) {
     elements.simulationControlsHelpModalOverlay,
     elements.autosaveSettingsModalOverlay,
     elements.shortcutSettingsModalOverlay,
-    elements.qualityRatingModalOverlay
+    elements.qualityRatingModalOverlay,
+    elements.officialRejectModalOverlay
   ].some((overlay) => overlay && overlay !== excludedOverlay && overlay.hidden === false);
 }
 
@@ -3602,6 +3646,81 @@ function closeQualityRatingModal() {
   if (isAnyConnectionStyleModalOpen(elements.qualityRatingModalOverlay)) {
     document.body.classList.add("layout-scroll-lock");
   }
+}
+
+
+function setOfficialRejectValidation(message = "") {
+  if (!elements.officialRejectValidation) return;
+  elements.officialRejectValidation.textContent = message;
+  elements.officialRejectValidation.hidden = !message;
+}
+
+function refreshOfficialRejectModal() {
+  const physicalCount = getPhysicalDaySheepCount();
+  const rejectedCount = getRejectedDaySheepCount();
+  setText(elements.officialRejectPhysicalCount, String(physicalCount));
+  setText(elements.officialRejectOfficialCount, String(getOfficialDaySheepCount()));
+  setText(elements.officialRejectCurrentCount, String(rejectedCount));
+  if (elements.officialRejectCountInput) {
+    elements.officialRejectCountInput.max = String(physicalCount);
+    elements.officialRejectCountInput.value = String(rejectedCount);
+  }
+}
+
+function openOfficialRejectModal() {
+  if (!elements.officialRejectModalOverlay) return;
+  migrateLegacyRejectedSheepStatusesToAdjustment();
+  refreshOfficialRejectModal();
+  setOfficialRejectValidation("");
+  elements.officialRejectModalOverlay.hidden = false;
+  setLayoutScrollLock(true);
+  elements.officialRejectCountInput?.focus();
+  elements.officialRejectCountInput?.select?.();
+}
+
+function closeOfficialRejectModal() {
+  if (!elements.officialRejectModalOverlay) return;
+  elements.officialRejectModalOverlay.hidden = true;
+  setLayoutScrollLock(false);
+  if (isAnyConnectionStyleModalOpen(elements.officialRejectModalOverlay)) {
+    document.body.classList.add("layout-scroll-lock");
+  }
+}
+
+function saveOfficialRejectAdjustmentFromInput(event) {
+  if (event) event.preventDefault();
+  const physicalCount = getPhysicalDaySheepCount();
+  const rawValue = elements.officialRejectCountInput?.value ?? "0";
+  const rejectedCount = Number(rawValue);
+  if (!Number.isFinite(rejectedCount) || Math.floor(rejectedCount) !== rejectedCount) {
+    setOfficialRejectValidation("Rejected sheep count must be a whole number.");
+    return false;
+  }
+  if (rejectedCount < 0) {
+    setOfficialRejectValidation("Rejected sheep count cannot be negative.");
+    return false;
+  }
+  if (rejectedCount > physicalCount) {
+    setOfficialRejectValidation("Rejected sheep count cannot be greater than Total Sheep Shorn.");
+    return false;
+  }
+
+  setOfficialRejectedAdjustmentCount(rejectedCount);
+  setOfficialRejectValidation("");
+  refreshOfficialRejectModal();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
+  updateStatsPanel();
+  updateLivePanel();
+  renderQualityRatingModal();
+  autosaveState();
+  return true;
+}
+
+function adjustOfficialRejectCount(delta) {
+  const currentValue = Number(elements.officialRejectCountInput?.value);
+  const nextValue = Math.max(Math.min((Number.isFinite(currentValue) ? currentValue : getRejectedDaySheepCount()) + delta, getPhysicalDaySheepCount()), 0);
+  if (elements.officialRejectCountInput) elements.officialRejectCountInput.value = String(nextValue);
+  saveOfficialRejectAdjustmentFromInput();
 }
 
 function formatCountdown(totalSeconds) {
@@ -6154,7 +6273,6 @@ function renderLogTable() {
   const sortedSheep = getSortedSheepLogEntries();
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
-    if (isRejectedSheep(entry)) row.classList.add("sheep-log-row-rejected");
     const fullCycleClass = requiredCycle > 0
       ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
       : "pace-neutral";
@@ -6206,9 +6324,6 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
 
   const content = document.createElement("div");
   content.className = "sheep-log-marker-note-content";
-
-  const statusControls = createSheepLogStatusControls(entry);
-  if (statusControls) content.appendChild(statusControls);
 
   if (autoMarkers.length) {
     const tags = document.createElement("div");
@@ -7825,7 +7940,8 @@ function updateStatsPanel() {
   const { fastest, slowest, last } = calculateLivePerformanceExtremes();
 
   setText(elements.totalSheep, String(appState.daySheep.length));
-  setText(elements.officialRejectedCount, `${getOfficialDaySheepCount()} / ${getRejectedDaySheepCount()}`);
+  setText(elements.officialSheepCount, String(getOfficialDaySheepCount()));
+  setText(elements.rejectedSheepCount, String(getRejectedDaySheepCount()));
   setText(elements.qualityRatingSummary, formatQualityRatingSummary());
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
@@ -8774,6 +8890,7 @@ function getAutosavePayload() {
       daySheep: appState.daySheep,
       penFillEvents: appState.penFillEvents,
       qualityRatings: sanitizeQualityRatings(appState.qualityRatings),
+      officialRejectedAdjustment: getOfficialRejectedAdjustmentCount(),
       currentCycle: appState.currentCycle,
       currentMotorDisplay: appState.currentMotorDisplay,
       lastMotorState: appState.lastMotorState,
@@ -9255,6 +9372,7 @@ function restoreSessionPayload(raw, options = {}) {
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings);
+  migrateLegacyRejectedSheepStatusesToAdjustment();
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
     appState.runStartTime = shiftTimestampByGap(appState.runStartTime, restoreGapMs);
@@ -10367,6 +10485,17 @@ function bindEvents() {
     });
   }
   if (elements.performancePanelHelpBtn) elements.performancePanelHelpBtn.addEventListener("click", openPerformancePanelHelpModal);
+  if (elements.rejectedSheepCount) elements.rejectedSheepCount.addEventListener("click", openOfficialRejectModal);
+  if (elements.officialRejectForm) elements.officialRejectForm.addEventListener("submit", saveOfficialRejectAdjustmentFromInput);
+  if (elements.officialRejectCloseBtn) elements.officialRejectCloseBtn.addEventListener("click", closeOfficialRejectModal);
+  if (elements.officialRejectModalCloseBtn) elements.officialRejectModalCloseBtn.addEventListener("click", closeOfficialRejectModal);
+  if (elements.officialRejectIncrementBtn) elements.officialRejectIncrementBtn.addEventListener("click", () => adjustOfficialRejectCount(1));
+  if (elements.officialRejectDecrementBtn) elements.officialRejectDecrementBtn.addEventListener("click", () => adjustOfficialRejectCount(-1));
+  if (elements.officialRejectModalOverlay) {
+    elements.officialRejectModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.officialRejectModalOverlay) closeOfficialRejectModal();
+    });
+  }
   if (elements.qualityRatingSummary) elements.qualityRatingSummary.addEventListener("click", openQualityRatingModal);
   if (elements.qualityRatingForm) elements.qualityRatingForm.addEventListener("submit", saveQualityRatingFromForm);
   if (elements.qualityRatingClearBtn) elements.qualityRatingClearBtn.addEventListener("click", resetQualityRatingForm);
@@ -10415,6 +10544,7 @@ function bindEvents() {
       closePenFillPlannerHelpModal();
       closePerformancePanelHelpModal();
       closeQualityRatingModal();
+      closeOfficialRejectModal();
       closeSimulationControlsHelpModal();
       closeAutosaveSettingsModal();
       closeShortcutSettingsModal();
@@ -10489,10 +10619,6 @@ function bindEvents() {
       const action = actionTarget.dataset.action;
       if (action === "edit-marker-note") {
         openSheepLogMarkerNoteEditor(actionTarget.dataset.sheepId || "");
-      } else if (action === "reject-sheep") {
-        promptRejectSheepById(actionTarget.dataset.sheepId || "");
-      } else if (action === "restore-sheep") {
-        promptRestoreSheepById(actionTarget.dataset.sheepId || "");
       } else if (action === "cancel-marker-note") {
         closeSheepLogMarkerNoteEditor();
       } else if (action === "save-marker-note") {
