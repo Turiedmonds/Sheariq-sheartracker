@@ -1968,6 +1968,7 @@ const appState = {
   breakActive: false,
   breakStartedAtMs: null,
   breakSource: null,
+  preparedForNextRunBreak: false,
   runEndTimeMs: null,
   currentRunIndex: 0,
   dayClockStartRealMs: null,
@@ -3351,6 +3352,7 @@ function resetRunState() {
   appState.breakActive = false;
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
+  appState.preparedForNextRunBreak = false;
   appState.runEndTimeMs = null;
   appState.currentRunIndex = 0;
   appState.dayClockStartRealMs = null;
@@ -3425,6 +3427,7 @@ function startRun() {
   appState.breakActive = false;
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
+  appState.preparedForNextRunBreak = false;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = appState.runStartTime;
   appState.trendBuckets = {};
@@ -3468,6 +3471,7 @@ function stopRun() {
   appState.breakActive = false;
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
+  appState.preparedForNextRunBreak = false;
   appState.runEndTimeMs = null;
 
   elements.startRunBtn.disabled = false;
@@ -3483,6 +3487,54 @@ function stopRun() {
   drawTrendGraph();
   updateTrendFlags();
   updateStatsPanel();
+}
+
+function finishRunAndEnterBreak(source = "record-day-break") {
+  if (!appState.runActive && appState.sheep.length === 0) {
+    return;
+  }
+
+  if (appState.effectiveResumeRealMs !== null) {
+    appState.effectiveElapsedBeforePauseMs += Math.max(Date.now() - appState.effectiveResumeRealMs, 0);
+    appState.effectiveResumeRealMs = null;
+  }
+
+  generateRunReview();
+
+  appState.runActive = false;
+  appState.paused = false;
+  appState.pauseStartedAtMs = null;
+
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = null;
+  appState.currentMotorDisplay = "OFF";
+
+  appState.runEndTimeMs = null;
+  appState.effectiveElapsedBeforePauseMs = 0;
+  appState.effectiveResumeRealMs = null;
+
+  appState.preparedForNextRunBreak = true;
+
+  enterOfficialBreak(source);
+
+  if (elements.startRunBtn) elements.startRunBtn.disabled = false;
+  if (elements.stopRunBtn) elements.stopRunBtn.disabled = true;
+  if (elements.runStatus) elements.runStatus.textContent = "Official Break";
+
+  updatePauseButtonUI();
+  updateSimulationRunLengthControls();
+  updateLivePanel();
+  updateStatsPanel();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
+
+  if (typeof autosaveState === "function") {
+    autosaveState();
+  }
+
+  console.log("Run finished and official break prepared");
 }
 
 function resetRun() {
@@ -3508,6 +3560,10 @@ function resetRun() {
 
 function isCountingPausedForBreak() {
   return appState.breakActive === true;
+}
+
+function isPreparedForNextRunBreak() {
+  return appState.breakActive === true && appState.preparedForNextRunBreak === true;
 }
 
 function isCountingPaused() {
@@ -3602,6 +3658,7 @@ function exitOfficialBreak() {
   appState.breakActive = false;
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
+  appState.preparedForNextRunBreak = false;
 
   // Reset the current cycle so counting only restarts from a clean
   // post-break motor ON event.
@@ -5744,6 +5801,12 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
 
   elements.currentTotalSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
 
+  if (isPreparedForNextRunBreak()) {
+    setText(elements.currentTotalSheepTime, formatSeconds(0));
+    elements.currentTotalSheepTime.classList.add("on-pace-neutral");
+    return;
+  }
+
   const liveSheepRuntime = appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? getCurrentSheepRuntimeSeconds()
     : null;
@@ -5764,22 +5827,29 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
 }
 
 function updateLivePanel() {
-  const shearCurrent = appState.currentCycle.motorOn && appState.currentCycle.shearStart
+  const preparedForNextRunBreak = isPreparedForNextRunBreak();
+  const shearCurrent = !preparedForNextRunBreak && appState.currentCycle.motorOn && appState.currentCycle.shearStart
     ? (Date.now() - appState.currentCycle.shearStart) / 1000
     : 0;
 
-  const catchCurrent = appState.runActive && !appState.currentCycle.motorOn && appState.currentCycle.catchStart
+  const catchCurrent = !preparedForNextRunBreak && appState.runActive && !appState.currentCycle.motorOn && appState.currentCycle.catchStart
     ? (Date.now() - appState.currentCycle.catchStart) / 1000
     : 0;
-  const countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - Date.now()) / 1000, 0) : 0;
+  let countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - Date.now()) / 1000, 0) : 0;
+  if (preparedForNextRunBreak) {
+    const schedule = getScheduleForCurrentType();
+    const nextRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
+    countdownSeconds = schedule[nextRunIndex] || getCurrentRunDurationSeconds();
+  }
 
   setText(elements.motorState, appState.currentMotorDisplay);
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
   updateTotalSheepTimeDisplay(calculateTargetMetrics().requiredCycle);
-  setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
+  setText(elements.runClock, formatCountdown(preparedForNextRunBreak ? 0 : getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateQuarterDisplay();
+  if (preparedForNextRunBreak) setText(elements.quarterClock, "00:00");
   updateTimingAlertDisplay();
   updatePenRefillAlertDisplay();
   updateRunBadge();
@@ -6715,6 +6785,7 @@ function getAutosavePayload() {
       breakActive: appState.breakActive,
       breakStartedAtMs: appState.breakStartedAtMs,
       breakSource: appState.breakSource,
+      preparedForNextRunBreak: appState.preparedForNextRunBreak,
       runEndTimeMs: appState.runEndTimeMs,
       currentRunIndex: appState.currentRunIndex,
       dayClockStartRealMs: appState.dayClockStartRealMs,
@@ -6867,6 +6938,7 @@ function loadLastSave() {
     } else {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
+    appState.preparedForNextRunBreak = Boolean(appState.preparedForNextRunBreak);
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
     sanitizeManualMarkersOnSheepEntries(appState.sheep);
     sanitizeManualMarkersOnSheepEntries(appState.daySheep);
