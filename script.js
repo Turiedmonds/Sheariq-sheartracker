@@ -2062,8 +2062,9 @@ const appState = {
     stopRun: "X",
     pauseRun: "P",
     resetRun: "R",
+    finishRunBreak: "+",
     motorOn: "O",
-    motorOff: "F"
+    motorOff: "ENTER"
   }
 };
 
@@ -2286,6 +2287,16 @@ const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   stopRun: "X",
   pauseRun: "P",
   resetRun: "R",
+  finishRunBreak: "+",
+  motorOn: "O",
+  motorOff: "ENTER"
+});
+
+const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
+  startRun: "S",
+  stopRun: "X",
+  pauseRun: "P",
+  resetRun: "R",
   finishRunBreak: "",
   motorOn: "O",
   motorOff: "F"
@@ -2357,14 +2368,32 @@ function normalizeShortcuts(payload) {
   return next;
 }
 
+function matchesLegacyDefaultShortcuts(payload) {
+  if (!payload || typeof payload !== "object") return false;
+  return SHORTCUT_ACTIONS.every((action) => {
+    const fallback = LEGACY_DEFAULT_KEYBOARD_SHORTCUTS[action.key] || "";
+    const candidate = Object.prototype.hasOwnProperty.call(payload, action.key) ? payload[action.key] : fallback;
+    return sanitizeShortcutKey(candidate) === sanitizeShortcutKey(fallback);
+  });
+}
+
 function saveKeyboardShortcuts() {
   localStorage.setItem(KEYBOARD_SHORTCUTS_STORAGE_KEY, JSON.stringify(appState.keyboardShortcuts));
 }
 
 function loadKeyboardShortcuts() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(KEYBOARD_SHORTCUTS_STORAGE_KEY) || "null");
-    appState.keyboardShortcuts = normalizeShortcuts(parsed);
+    const stored = localStorage.getItem(KEYBOARD_SHORTCUTS_STORAGE_KEY);
+    if (!stored) {
+      appState.keyboardShortcuts = getFallbackShortcuts();
+      return;
+    }
+    const parsed = JSON.parse(stored);
+    const useUpdatedDefaults = matchesLegacyDefaultShortcuts(parsed);
+    appState.keyboardShortcuts = useUpdatedDefaults
+      ? getFallbackShortcuts()
+      : normalizeShortcuts(parsed);
+    if (useUpdatedDefaults) saveKeyboardShortcuts();
   } catch (error) {
     appState.keyboardShortcuts = getFallbackShortcuts();
   }
