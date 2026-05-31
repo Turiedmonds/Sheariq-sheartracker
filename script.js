@@ -6614,6 +6614,10 @@ function setPaused(paused) {
     appState.effectiveResumeRealMs = Date.now();
   }
 
+  if (appState.dayClockStartRealMs === null && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
+    appState.dayClockStartRealMs = Date.now();
+  }
+
   if (isDashboardPage()) {
     startPollingLoop();
     startLiveLoop();
@@ -7555,10 +7559,25 @@ function restoreSessionPayload(raw, options = {}) {
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
+    const restoredAtMs = Date.now();
+    const savedAtMs = Number(raw.savedAt) || restoredAtMs;
+    const restoreWallClockGapMs = Math.max(restoredAtMs - savedAtMs, 0);
+    if (appState.runStartTime) {
+      appState.runStartTime += restoreWallClockGapMs;
+    }
+    if (appState.currentCycle?.shearStart) {
+      appState.currentCycle.shearStart += restoreWallClockGapMs;
+    }
+    if (appState.currentCycle?.catchStart) {
+      appState.currentCycle.catchStart += restoreWallClockGapMs;
+    }
+    if (appState.runEndTimeMs) {
+      appState.runEndTimeMs += restoreWallClockGapMs;
+    }
     appState.paused = true;
-    appState.pauseStartedAtMs = Date.now();
+    appState.pauseStartedAtMs = restoredAtMs;
     if (appState.effectiveResumeRealMs !== null) {
-      appState.effectiveElapsedBeforePauseMs += Math.max((Number(raw.savedAt) || Date.now()) - appState.effectiveResumeRealMs, 0);
+      appState.effectiveElapsedBeforePauseMs += Math.max(savedAtMs - appState.effectiveResumeRealMs, 0);
       appState.effectiveResumeRealMs = null;
     }
     if (Number.isFinite(appState.dayClockSnapshotSeconds)) {
