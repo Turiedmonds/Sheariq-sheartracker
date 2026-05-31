@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sheariq-shear-tracker-v3';
+const CACHE_NAME = 'sheariq-shear-tracker-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -35,6 +35,14 @@ self.addEventListener('activate', (event) => {
   })());
 });
 
+function shouldRefreshFromNetwork(requestUrl, request) {
+  if (request.mode === 'navigate') return true;
+  return requestUrl.pathname.endsWith('/')
+    || requestUrl.pathname.endsWith('/index.html')
+    || requestUrl.pathname.endsWith('/connection.html')
+    || requestUrl.pathname.endsWith('/script.js');
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -45,6 +53,23 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE_NAME);
+
+    if (shouldRefreshFromNetwork(requestUrl, event.request)) {
+      try {
+        const networkResponse = await fetch(event.request, { cache: 'no-store' });
+        if (networkResponse.ok) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (error) {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        const fallback = await cache.match('./index.html');
+        if (fallback) return fallback;
+        throw error;
+      }
+    }
+
     const cached = await cache.match(event.request);
     if (cached) {
       return cached;
