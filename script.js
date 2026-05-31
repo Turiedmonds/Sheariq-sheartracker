@@ -6,6 +6,8 @@ const PANEL_SIZES_STORAGE_KEY = "sheariq.panelSizes";
 const AUTOSAVE_STORAGE_KEY = "sheariq.autosave";
 const SESSION_DATE_STORAGE_KEY = "sheariq.sessionDate";
 const AUTOSAVE_ENABLED_STORAGE_KEY = "sheariq.autosaveEnabled";
+const MANUAL_SAVE_INDEX_STORAGE_KEY = "sheariq.manualSaves.index";
+const MANUAL_SAVE_STORAGE_PREFIX = "sheariq.manualSaves.";
 const FOLLOW_LATEST_STORAGE_KEY = "sheariq.followLatest";
 const CONTROLS_DOCK_ENABLED_STORAGE_KEY = "sheariq.controlsDockEnabled";
 const CONTROLS_DOCK_POS_STORAGE_KEY = "sheariq.controlsDockPos";
@@ -2207,6 +2209,8 @@ const elements = {
   farmDropdownMenu: document.getElementById("farmDropdownMenu"),
   dashboardPanels: document.getElementById("dashboardPanels"),
   loadLastSaveBtn: document.getElementById("loadLastSaveBtn"),
+  saveSessionBtn: document.getElementById("saveSessionBtn"),
+  loadSessionBtn: document.getElementById("loadSessionBtn"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
@@ -3497,7 +3501,9 @@ function updateRunBadge() {
 
 function getCurrentDayClockSeconds() {
   if (appState.dayClockStartRealMs === null) {
-    return null;
+    return appState.paused && Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+      ? appState.dayClockStartSecondsFromMidnight
+      : null;
   }
   const elapsedSeconds = (Date.now() - appState.dayClockStartRealMs) / 1000;
   return appState.dayClockStartSecondsFromMidnight + elapsedSeconds;
@@ -7102,7 +7108,10 @@ function getAutosavePayload() {
       daySheep: appState.daySheep,
       penFillEvents: appState.penFillEvents,
       currentCycle: appState.currentCycle,
+      currentMotorDisplay: appState.currentMotorDisplay,
+      lastMotorState: appState.lastMotorState,
       target: appState.target,
+      targetPacePredictionSnapshot: appState.targetPacePredictionSnapshot,
       farm: appState.farm,
       recordType: appState.recordType,
       paused: appState.paused,
@@ -7115,6 +7124,8 @@ function getAutosavePayload() {
       breakBannerDismissedForCurrentBreak: appState.breakBannerDismissedForCurrentBreak,
       pendingBreakAfterCurrentSheep: appState.pendingBreakAfterCurrentSheep,
       pendingBreakStartedAtMs: appState.pendingBreakStartedAtMs,
+      pendingPenFillPromptKey: appState.pendingPenFillPromptKey,
+      dismissedPenFillPromptKey: appState.dismissedPenFillPromptKey,
       runEndTimeMs: appState.runEndTimeMs,
       currentRunIndex: appState.currentRunIndex,
       dayClockStartRealMs: appState.dayClockStartRealMs,
@@ -7130,8 +7141,14 @@ function getAutosavePayload() {
       effectiveResumeRealMs: appState.effectiveResumeRealMs,
       simulationMode: appState.simulationMode,
       simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
-      simulationCustomMinutes: sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes)
+      simulationCustomMinutes: sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes),
+      dayClockSnapshotSeconds: getCurrentDayClockSeconds()
     },
+    runType: elements.runType ? elements.runType.value : "8",
+    customHours: elements.customHours ? elements.customHours.value : "8",
+    sessionDate: elements.sessionDate ? elements.sessionDate.value : "",
+    dayStartTime: elements.dayStartTimeInput ? elements.dayStartTimeInput.value : "",
+    targetSheep: elements.targetSheepInput ? elements.targetSheepInput.value : "0",
     panelOrder: getPanelElements().map((panel) => panel.id),
     panelSizes: appState.panelSizes,
     panelLayout: appState.panelLayout,
@@ -7184,6 +7201,256 @@ function setAutosaveEnabled(enabled) {
 
 function loadAutosaveSettings() {
   appState.autosaveEnabled = parseStoredBoolean(localStorage.getItem(AUTOSAVE_ENABLED_STORAGE_KEY), true);
+}
+
+function getManualSaveStorageKey(id) {
+  return `${MANUAL_SAVE_STORAGE_PREFIX}${id}`;
+}
+
+function loadManualSaveIndex() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MANUAL_SAVE_INDEX_STORAGE_KEY) || "[]");
+    return Array.isArray(raw) ? raw.filter((entry) => entry && typeof entry.id === "string") : [];
+  } catch (error) {
+    console.debug("Failed to load manual save index", error);
+    return [];
+  }
+}
+
+function saveManualSaveIndex(index) {
+  localStorage.setItem(MANUAL_SAVE_INDEX_STORAGE_KEY, JSON.stringify(Array.isArray(index) ? index : []));
+}
+
+function getRecordTypeLabel(recordType) {
+  if (!recordType || recordType === "none") return "Normal day";
+  return getPenRule(recordType)?.label || recordType;
+}
+
+function getTimeSystemLabel(runType) {
+  if (runType === "9") return "9 Hour";
+  if (runType === "8") return "8 Hour";
+  if (runType === "custom") return "Custom";
+  return "";
+}
+
+function getSessionIdentity(payload = getAutosavePayload()) {
+  const state = payload.state || {};
+  return [
+    payload.sessionDate || "",
+    (state.farm || "").trim().toLowerCase(),
+    state.recordType || "none",
+    payload.runType || "",
+    String(Number(state.currentRunIndex) || 0)
+  ].join("|");
+}
+
+function createManualSaveSummary(payload, name) {
+  const state = payload?.state || {};
+  const savedAt = Number(payload?.savedAt) || Date.now();
+  const runNumber = Math.max((Number(state.currentRunIndex) || 0) + 1, 1);
+  const dayClockSeconds = Number.isFinite(state.dayClockSnapshotSeconds)
+    ? state.dayClockSnapshotSeconds
+    : getCurrentDayClockSeconds();
+  let status = "Stopped";
+  if (state.dayComplete) status = "End of Day";
+  else if (state.breakActive || state.preparedForNextRunBreak) status = "Break";
+  else if (state.runActive) status = state.paused ? "Paused" : "Running";
+  return {
+    name: (name || "").trim() || generateSuggestedManualSaveName(payload),
+    savedAt,
+    farm: state.farm || "Session",
+    recordType: getRecordTypeLabel(state.recordType),
+    runNumber,
+    sheepTotal: Array.isArray(state.daySheep) ? state.daySheep.length : (Array.isArray(state.sheep) ? state.sheep.length : 0),
+    status,
+    sessionIdentity: getSessionIdentity(payload),
+    runType: getTimeSystemLabel(payload?.runType),
+    dayClock: Number.isFinite(dayClockSeconds) ? formatSecondsFromMidnightClock(dayClockSeconds) : "00:00:00"
+  };
+}
+
+function generateSuggestedManualSaveName(payload = getAutosavePayload()) {
+  const summary = createManualSaveSummary(payload, "Session");
+  const parts = [];
+  if (summary.farm && summary.farm !== "Session") parts.push(summary.farm);
+  if (summary.recordType && summary.recordType !== "Normal day") parts.push(summary.recordType);
+  if (summary.runType) parts.push(summary.runType);
+  parts.push(`Run ${summary.runNumber || 1}`);
+  parts.push(`Day ${summary.dayClock || "00:00:00"}`);
+  return parts.join(" — ") || "Session — Run 1 — Day 00:00:00";
+}
+
+function updateManualSessionStatus(message) {
+  updateAutosaveUI();
+  if (!elements.autosaveStatus || !message) return;
+  elements.autosaveStatus.textContent = `${elements.autosaveStatus.textContent} — ${message}`;
+}
+
+async function saveManualSession() {
+  const payload = getAutosavePayload();
+  payload.type = "manual";
+  payload.savedAt = Date.now();
+  const suggestedName = generateSuggestedManualSaveName(payload);
+  const enteredName = window.prompt("Save testing session as:", suggestedName);
+  const name = (enteredName || "").trim();
+  if (!name) {
+    updateManualSessionStatus("Manual save cancelled");
+    return;
+  }
+
+  const summary = createManualSaveSummary(payload, name);
+  const index = loadManualSaveIndex();
+  const existing = index.find((entry) => entry.name === name && entry.sessionIdentity === summary.sessionIdentity);
+  let id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  if (existing) {
+    const choice = window.prompt(
+      `A manual save named "${name}" already exists for this session.\nType O to overwrite, N to save as a new copy, or C to cancel.`,
+      "O"
+    );
+    const normalizedChoice = (choice || "").trim().toLowerCase();
+    if (normalizedChoice === "o" || normalizedChoice === "overwrite") {
+      id = existing.id;
+    } else if (normalizedChoice === "n" || normalizedChoice === "new") {
+      id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    } else {
+      updateManualSessionStatus("Manual save cancelled");
+      return;
+    }
+  }
+
+  const entry = { id, ...summary };
+  localStorage.setItem(getManualSaveStorageKey(id), JSON.stringify({ ...payload, manualSave: entry }));
+  const nextIndex = [entry, ...index.filter((item) => item.id !== id)];
+  saveManualSaveIndex(nextIndex);
+  updateManualSessionStatus(`Saved manual session: ${entry.name}`);
+}
+
+function readManualSave(id) {
+  try {
+    return JSON.parse(localStorage.getItem(getManualSaveStorageKey(id)) || "null");
+  } catch (error) {
+    console.debug("Failed to read manual save", error);
+    return null;
+  }
+}
+
+async function loadManualSession(id) {
+  const payload = readManualSave(id);
+  if (!payload || !payload.state) {
+    updateManualSessionStatus("Manual save not found");
+    return;
+  }
+  const name = payload.manualSave?.name || createManualSaveSummary(payload).name;
+  const confirmed = await confirmModal({
+    title: "Load manual session?",
+    message: `Load "${name}"? This replaces the current in-memory session and restores it paused.`,
+    confirmText: "Load Session",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
+  restoreSessionPayload(payload, { source: "manual", forcePaused: true });
+  updateManualSessionStatus(`Loaded manual session: ${name}`);
+}
+
+async function deleteManualSession(id) {
+  const index = loadManualSaveIndex();
+  const entry = index.find((item) => item.id === id);
+  const confirmed = await confirmModal({
+    title: "Delete manual session?",
+    message: `Delete "${entry?.name || "this manual save"}"? This cannot be undone.`,
+    confirmText: "Delete",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
+  localStorage.removeItem(getManualSaveStorageKey(id));
+  saveManualSaveIndex(index.filter((item) => item.id !== id));
+  updateManualSessionStatus("Deleted manual session");
+  openManualSessionLoadModal();
+}
+
+function openManualSessionLoadModal() {
+  const oldOverlay = document.getElementById("manualSessionLoadModalOverlay");
+  if (oldOverlay) oldOverlay.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "manualSessionLoadModalOverlay";
+  overlay.className = "modal-overlay";
+
+  const dialog = document.createElement("div");
+  dialog.className = "modal-dialog manual-session-modal";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "manualSessionLoadModalTitle");
+  dialog.tabIndex = -1;
+
+  const title = document.createElement("h3");
+  title.id = "manualSessionLoadModalTitle";
+  title.textContent = "Load Manual Session";
+  const list = document.createElement("div");
+  list.className = "manual-session-list";
+
+  const index = loadManualSaveIndex();
+  if (!index.length) {
+    const empty = document.createElement("p");
+    empty.textContent = "No manual sessions saved yet.";
+    list.appendChild(empty);
+  } else {
+    index.forEach((entry) => {
+      const row = document.createElement("div");
+      row.className = "manual-session-row";
+      const details = document.createElement("div");
+      details.className = "manual-session-details";
+      const savedDate = entry.savedAt ? new Date(entry.savedAt).toLocaleString() : "Unknown date";
+      details.innerHTML = `<strong></strong><span></span><span></span>`;
+      details.querySelector("strong").textContent = entry.name || "Manual session";
+      const spans = details.querySelectorAll("span");
+      spans[0].textContent = `${savedDate} • ${entry.status || "Unknown"}`;
+      spans[1].textContent = `${entry.farm || "Session"} • ${entry.recordType || "Record type n/a"} • Run ${entry.runNumber || 1} • Sheep ${entry.sheepTotal || 0}`;
+      const actions = document.createElement("div");
+      actions.className = "manual-session-row-actions";
+      const loadBtn = document.createElement("button");
+      loadBtn.type = "button";
+      loadBtn.textContent = "Load";
+      loadBtn.addEventListener("click", () => {
+        overlay.remove();
+        setLayoutScrollLock(false);
+        loadManualSession(entry.id);
+      });
+      const deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", () => {
+        overlay.remove();
+        setLayoutScrollLock(false);
+        deleteManualSession(entry.id);
+      });
+      actions.append(loadBtn, deleteBtn);
+      row.append(details, actions);
+      list.appendChild(row);
+    });
+  }
+
+  const closeBtn = document.createElement("button");
+  closeBtn.type = "button";
+  closeBtn.textContent = "Close";
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+  actions.appendChild(closeBtn);
+  dialog.append(title, list, actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+  setLayoutScrollLock(true);
+  const close = () => {
+    overlay.remove();
+    setLayoutScrollLock(false);
+  };
+  closeBtn.addEventListener("click", close);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) close();
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") close();
+  });
+  dialog.focus();
 }
 
 function updateFollowLatestUI() {
@@ -7254,92 +7521,132 @@ function loadControlsDockSettings() {
   }
 }
 
+function restoreSessionPayload(raw, options = {}) {
+  if (!raw || !raw.state) return false;
+  const forcePaused = Boolean(options.forcePaused);
+  Object.assign(appState, raw.state);
+  if (raw.runType && elements.runType) elements.runType.value = raw.runType;
+  if (raw.customHours !== undefined && elements.customHours) elements.customHours.value = raw.customHours;
+  if (raw.sessionDate && elements.sessionDate) elements.sessionDate.value = raw.sessionDate;
+  if (raw.dayStartTime && elements.dayStartTimeInput) elements.dayStartTimeInput.value = raw.dayStartTime;
+  if (raw.targetSheep !== undefined && elements.targetSheepInput) elements.targetSheepInput.value = raw.targetSheep;
+  if (elements.farmInput) elements.farmInput.value = appState.farm || "";
+  if (elements.customHours && elements.runType) {
+    elements.customHours.disabled = elements.runType.value !== "custom";
+  }
+  appState.simulationMode = Boolean(appState.simulationMode);
+  appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
+  if (!appState.simulationMode) {
+    appState.simulationRunLengthMode = "real";
+  } else {
+    appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
+  }
+  appState.breakActive = Boolean(appState.breakActive);
+  appState.breakStartedAtMs = Number.isFinite(appState.breakStartedAtMs) ? appState.breakStartedAtMs : null;
+  appState.breakSource = typeof appState.breakSource === "string" ? appState.breakSource : null;
+  appState.preparedForNextRunBreak = appState.breakActive && Boolean(appState.preparedForNextRunBreak);
+  appState.dayComplete = Boolean(appState.dayComplete);
+  appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
+  appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
+  appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
+  appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
+  sanitizeManualMarkersOnSheepEntries(appState.sheep);
+  sanitizeManualMarkersOnSheepEntries(appState.daySheep);
+  appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
+  appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
+  if (forcePaused && appState.runActive) {
+    appState.paused = true;
+    appState.pauseStartedAtMs = Date.now();
+    if (appState.effectiveResumeRealMs !== null) {
+      appState.effectiveElapsedBeforePauseMs += Math.max((Number(raw.savedAt) || Date.now()) - appState.effectiveResumeRealMs, 0);
+      appState.effectiveResumeRealMs = null;
+    }
+    if (Number.isFinite(appState.dayClockSnapshotSeconds)) {
+      appState.dayClockStartSecondsFromMidnight = appState.dayClockSnapshotSeconds;
+      appState.dayClockStartRealMs = null;
+    }
+  }
+  if (elements.recordType) elements.recordType.value = appState.recordType;
+  if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
+    const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
+    raw.panelOrder.forEach((id) => {
+      const panel = byId.get(id);
+      if (panel) elements.dashboardPanels.appendChild(panel);
+    });
+  }
+  appState.panelSizes = raw.panelSizes || appState.panelSizes;
+  if (raw.panelLayout && typeof raw.panelLayout === "object") {
+    appState.panelLayout = {
+      mode: raw.panelLayout.mode === "absolute" ? "absolute" : "absolute",
+      panels: raw.panelLayout.panels && typeof raw.panelLayout.panels === "object" ? raw.panelLayout.panels : appState.panelLayout.panels,
+      nextZ: Number.isFinite(raw.panelLayout.nextZ) ? raw.panelLayout.nextZ : appState.panelLayout.nextZ
+    };
+  }
+  if (raw.layoutEditMode === true || raw.layoutEditMode === false) {
+    appState.layoutEditMode = raw.layoutEditMode;
+  }
+  if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
+  applyPanelState();
+  applyPanelSizes();
+  if (appState.layoutEditMode) ensureInitialPanelLayout();
+  applyPanelLayout();
+  if (elements.runStatus) {
+    elements.runStatus.textContent = appState.dayComplete
+      ? "End of Day"
+      : (isPreparedForNextRunBreak() ? "Official Break" : (appState.runActive ? (appState.paused ? "Paused" : "Running") : "Stopped"));
+  }
+  if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
+  if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
+  updateFinishRunBreakButtonUI();
+  updateStartRunButtonUI();
+  updateBreakTimingDisplay();
+  updateBreakOverlayDisplay();
+  if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
+  if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
+  if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
+  updateSimulationRunLengthControls();
+  renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+  updateTrendFlags();
+  updateTrendDetailsVisibility();
+  if (options.source === "manual") {
+    setText(elements.motorState, appState.currentMotorDisplay);
+    setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
+    setText(elements.totalSheep, String(appState.daySheep.length));
+    updateRunBadge();
+    updateDayClockDisplay();
+  } else {
+    updateLivePanel();
+  }
+  updateStatsPanel();
+  updatePauseButtonUI();
+
+  if (options.source === "manual") {
+    stopPollingLoop();
+    stopLiveAndStatsLoops();
+  } else if (appState.runActive) {
+    if (appState.paused) {
+      stopPollingLoop();
+      stopLiveAndStatsLoops();
+    } else {
+      startRealtimeLoops();
+    }
+  } else if (isPreparedForNextRunBreak()) {
+    startRealtimeLoops();
+  }
+  return true;
+}
+
 function loadLastSave() {
   try {
     const autosaveKey = getAutosaveStorageKey();
-    const raw = JSON.parse(localStorage.getItem(autosaveKey) || localStorage.getItem(AUTOSAVE_STORAGE_KEY) || 'null');
-    if (!raw || !raw.state) return;
-    Object.assign(appState, raw.state);
-    appState.simulationMode = Boolean(appState.simulationMode);
-    appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
-    if (!appState.simulationMode) {
-      appState.simulationRunLengthMode = "real";
-    } else {
-      appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
-    }
-    appState.breakActive = Boolean(appState.breakActive);
-    appState.breakStartedAtMs = Number.isFinite(appState.breakStartedAtMs) ? appState.breakStartedAtMs : null;
-    appState.breakSource = typeof appState.breakSource === "string" ? appState.breakSource : null;
-    appState.preparedForNextRunBreak = appState.breakActive && Boolean(appState.preparedForNextRunBreak);
-    appState.dayComplete = Boolean(appState.dayComplete);
-    appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
-    appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
-    appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
-    appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
-    sanitizeManualMarkersOnSheepEntries(appState.sheep);
-    sanitizeManualMarkersOnSheepEntries(appState.daySheep);
-    appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
-    appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
-    if (elements.recordType) elements.recordType.value = appState.recordType;
-    if (Array.isArray(raw.panelOrder) && elements.dashboardPanels) {
-      const byId = new Map(getPanelElements().map((panel) => [panel.id, panel]));
-      raw.panelOrder.forEach((id) => {
-        const panel = byId.get(id);
-        if (panel) elements.dashboardPanels.appendChild(panel);
-      });
-    }
-    appState.panelSizes = raw.panelSizes || appState.panelSizes;
-    if (raw.panelLayout && typeof raw.panelLayout === "object") {
-      appState.panelLayout = {
-        mode: raw.panelLayout.mode === "absolute" ? "absolute" : "absolute",
-        panels: raw.panelLayout.panels && typeof raw.panelLayout.panels === "object" ? raw.panelLayout.panels : appState.panelLayout.panels,
-        nextZ: Number.isFinite(raw.panelLayout.nextZ) ? raw.panelLayout.nextZ : appState.panelLayout.nextZ
-      };
-    }
-    if (raw.layoutEditMode === true || raw.layoutEditMode === false) {
-      appState.layoutEditMode = raw.layoutEditMode;
-    }
-    if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
-    applyPanelState();
-    applyPanelSizes();
-    if (appState.layoutEditMode) ensureInitialPanelLayout();
-    applyPanelLayout();
-    if (elements.runStatus) {
-      elements.runStatus.textContent = appState.dayComplete
-        ? 'End of Day'
-        : (isPreparedForNextRunBreak() ? 'Official Break' : (appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped'));
-    }
-    if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
-    if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
-    updateFinishRunBreakButtonUI();
-    updateStartRunButtonUI();
-    updateBreakTimingDisplay();
-    updateBreakOverlayDisplay();
-    if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
-    if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
-    if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
-    updateSimulationRunLengthControls();
-    renderLogTable();
-    renderReviewList();
-    drawTrendGraph();
-    if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
-    updateTrendFlags();
-    updateTrendDetailsVisibility();
-    updateLivePanel();
-    updateStatsPanel();
-    updatePauseButtonUI();
-    if (appState.runActive) {
-      if (appState.paused) {
-        stopPollingLoop();
-        stopLiveAndStatsLoops();
-      } else {
-        startRealtimeLoops();
-      }
-    } else if (isPreparedForNextRunBreak()) {
-      startRealtimeLoops();
-    }
+    const raw = JSON.parse(localStorage.getItem(autosaveKey) || localStorage.getItem(AUTOSAVE_STORAGE_KEY) || "null");
+    if (!restoreSessionPayload(raw, { source: "autosave" })) return;
+    updateManualSessionStatus("Loaded last autosave");
   } catch (error) {
-    console.debug('Failed to load autosave', error);
+    console.debug("Failed to load autosave", error);
   }
 }
 
@@ -8064,6 +8371,8 @@ function bindEvents() {
   if (elements.breakOverlayShowBtn) elements.breakOverlayShowBtn.addEventListener("click", showBreakBannerForCurrentBreak);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
   if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
+  if (elements.saveSessionBtn) elements.saveSessionBtn.addEventListener("click", saveManualSession);
+  if (elements.loadSessionBtn) elements.loadSessionBtn.addEventListener("click", openManualSessionLoadModal);
   if (elements.trendBucketSize) {
     elements.trendBucketSize.addEventListener("change", () => {
       appState.trendBucketMinutes = Number(elements.trendBucketSize.value) || 15;

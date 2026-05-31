@@ -2318,3 +2318,60 @@ td.pace-neutral {
   display: grid;
   gap: 0.28rem;
 }
+
+.manual-session-actions {
+  margin-top: 0.5rem;
+}
+
+.manual-session-modal {
+  max-width: 760px;
+}
+
+.manual-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  margin: 1rem 0;
+}
+
+.manual-session-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.manual-session-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.manual-session-details strong,
+.manual-session-details span {
+  overflow-wrap: anywhere;
+}
+
+.manual-session-row-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .manual-session-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .manual-session-row-actions {
+    justify-content: flex-end;
+  }
+}
