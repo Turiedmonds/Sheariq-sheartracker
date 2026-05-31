@@ -1965,6 +1965,9 @@ const appState = {
   statsTimerId: null,
   paused: false,
   pauseStartedAtMs: null,
+  breakActive: false,
+  breakStartedAtMs: null,
+  breakSource: null,
   runEndTimeMs: null,
   currentRunIndex: 0,
   dayClockStartRealMs: null,
@@ -3345,6 +3348,9 @@ function resetRunState() {
   appState.currentMotorDisplay = "OFF";
   appState.paused = false;
   appState.pauseStartedAtMs = null;
+  appState.breakActive = false;
+  appState.breakStartedAtMs = null;
+  appState.breakSource = null;
   appState.runEndTimeMs = null;
   appState.currentRunIndex = 0;
   appState.dayClockStartRealMs = null;
@@ -3416,6 +3422,9 @@ function startRun() {
   appState.dayClockStartRealMs = appState.runStartTime;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
+  appState.breakActive = false;
+  appState.breakStartedAtMs = null;
+  appState.breakSource = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = appState.runStartTime;
   appState.trendBuckets = {};
@@ -3455,6 +3464,9 @@ function stopRun() {
   appState.currentCycle.catchStart = null;
   appState.currentMotorDisplay = "OFF";
   appState.pauseStartedAtMs = null;
+  appState.breakActive = false;
+  appState.breakStartedAtMs = null;
+  appState.breakSource = null;
   appState.runEndTimeMs = null;
 
   elements.startRunBtn.disabled = false;
@@ -3493,8 +3505,16 @@ function resetRun() {
   updateStatsPanel();
 }
 
+function isCountingPausedForBreak() {
+  return appState.breakActive === true;
+}
+
+function isCountingPaused() {
+  return appState.paused || isCountingPausedForBreak();
+}
+
 function handleMotorOn() {
-  if (!appState.runActive || appState.paused || appState.currentCycle.motorOn) return;
+  if (!appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
   appState.currentCycle.motorOn = true;
@@ -3509,7 +3529,7 @@ function handleMotorOn() {
 }
 
 function handleMotorOff() {
-  if (!appState.runActive || appState.paused) return;
+  if (!appState.runActive || isCountingPaused()) return;
 
   if (!appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
     appState.currentCycle.motorOn = false;
@@ -3558,6 +3578,39 @@ function handleMotorOff() {
   renderReviewList();
   drawTrendGraph();
   updateTrendFlags();
+}
+
+
+function enterOfficialBreak(source = "official") {
+  appState.breakActive = true;
+  appState.breakStartedAtMs = Date.now();
+  appState.breakSource = source;
+
+  // Neutralise any in-progress sheep cycle so a motor test during break
+  // cannot later create an inflated or false sheep entry.
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = null;
+
+  console.log("Official break started");
+  updateLivePanel();
+  updateStatsPanel();
+}
+
+function exitOfficialBreak() {
+  appState.breakActive = false;
+  appState.breakStartedAtMs = null;
+  appState.breakSource = null;
+
+  // Reset the current cycle so counting only restarts from a clean
+  // post-break motor ON event.
+  appState.currentCycle.motorOn = false;
+  appState.currentCycle.shearStart = null;
+  appState.currentCycle.catchStart = Date.now();
+
+  console.log("Official break ended");
+  updateLivePanel();
+  updateStatsPanel();
 }
 
 function calculateAverages() {
@@ -6658,6 +6711,9 @@ function getAutosavePayload() {
       recordType: appState.recordType,
       paused: appState.paused,
       pauseStartedAtMs: appState.pauseStartedAtMs,
+      breakActive: appState.breakActive,
+      breakStartedAtMs: appState.breakStartedAtMs,
+      breakSource: appState.breakSource,
       runEndTimeMs: appState.runEndTimeMs,
       currentRunIndex: appState.currentRunIndex,
       dayClockStartRealMs: appState.dayClockStartRealMs,
