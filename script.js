@@ -164,6 +164,56 @@ function getSheepStatus(entry) {
   return entry && entry.status ? entry.status : SHEEP_STATUS.ACCEPTED;
 }
 
+
+function normalizeSheepStatusReason(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, 160);
+}
+
+function findSheepEntryIndexById(entries, sheepId) {
+  if (!Array.isArray(entries) || !sheepId) return -1;
+  return entries.findIndex((entry) => entry?.id === sheepId);
+}
+
+function updateSheepStatusById(sheepId, status, metadata = {}) {
+  if (!sheepId) return { success: false, error: "Missing sheep ID." };
+  if (![SHEEP_STATUS.ACCEPTED, SHEEP_STATUS.REJECTED, SHEEP_STATUS.PENDING].includes(status)) {
+    return { success: false, error: "Invalid sheep status." };
+  }
+
+  const runIndex = findSheepEntryIndexById(appState.sheep, sheepId);
+  const dayIndex = findSheepEntryIndexById(appState.daySheep, sheepId);
+  if (runIndex === -1 || dayIndex === -1) {
+    return { success: false, error: "Matching run/day sheep entries were not found; status was not changed." };
+  }
+
+  const statusUpdate = { ...metadata, status };
+  Object.keys(statusUpdate).forEach((key) => {
+    if (statusUpdate[key] === undefined) delete statusUpdate[key];
+  });
+
+  Object.assign(appState.sheep[runIndex], statusUpdate);
+  Object.assign(appState.daySheep[dayIndex], statusUpdate);
+
+  return { success: true, sheep: appState.sheep[runIndex], daySheep: appState.daySheep[dayIndex] };
+}
+
+function rejectSheepById(sheepId, options = {}) {
+  const rejectedReason = normalizeSheepStatusReason(options.reason || options.rejectedReason);
+  return updateSheepStatusById(sheepId, SHEEP_STATUS.REJECTED, {
+    rejectedAt: Date.now(),
+    rejectedReason: rejectedReason || undefined
+  });
+}
+
+function restoreSheepById(sheepId, options = {}) {
+  const restoreReason = normalizeSheepStatusReason(options.reason || options.restoreReason);
+  return updateSheepStatusById(sheepId, SHEEP_STATUS.ACCEPTED, {
+    restoredAt: Date.now(),
+    restoreReason: restoreReason || undefined
+  });
+}
+
 function isOfficialCounted(entry) {
   return getSheepStatus(entry) !== SHEEP_STATUS.REJECTED;
 }
@@ -4366,6 +4416,21 @@ function getMergedSheepStatus(firstEntry, secondEntry) {
   return SHEEP_STATUS.ACCEPTED;
 }
 
+function applyMergedSheepStatusMetadata(mergedEntry, firstEntry, secondEntry) {
+  const rejectedSource = isRejectedSheep(firstEntry) ? firstEntry : (isRejectedSheep(secondEntry) ? secondEntry : null);
+  if (rejectedSource) {
+    if (rejectedSource.rejectedAt !== undefined) mergedEntry.rejectedAt = rejectedSource.rejectedAt;
+    if (rejectedSource.rejectedReason !== undefined) mergedEntry.rejectedReason = rejectedSource.rejectedReason;
+  }
+
+  const restoredSource = firstEntry?.restoredAt !== undefined || firstEntry?.restoreReason !== undefined ? firstEntry
+    : (secondEntry?.restoredAt !== undefined || secondEntry?.restoreReason !== undefined ? secondEntry : null);
+  if (restoredSource) {
+    if (restoredSource.restoredAt !== undefined) mergedEntry.restoredAt = restoredSource.restoredAt;
+    if (restoredSource.restoreReason !== undefined) mergedEntry.restoreReason = restoredSource.restoreReason;
+  }
+}
+
 function getSheepInterruptionDuration(firstEntry, secondEntry) {
   const firstEnd = Number(firstEntry?.endTime);
   const secondStart = Number(secondEntry?.startTime);
@@ -4430,6 +4495,8 @@ function createMergedSheepEntry(firstEntry, secondEntry, overrides = {}) {
   if (firstMarker) mergedEntry.manualMarker = firstMarker;
   else if (secondMarker) mergedEntry.manualMarker = secondMarker;
   else delete mergedEntry.manualMarker;
+
+  applyMergedSheepStatusMetadata(mergedEntry, firstEntry, secondEntry);
 
   return mergedEntry;
 }
@@ -5740,6 +5807,7 @@ function renderLogTable() {
   const sortedSheep = getSortedSheepLogEntries();
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
+    if (isRejectedSheep(entry)) row.classList.add("sheep-log-row-rejected");
     const fullCycleClass = requiredCycle > 0
       ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
       : "pace-neutral";
@@ -5792,6 +5860,9 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
   const content = document.createElement("div");
   content.className = "sheep-log-marker-note-content";
 
+  const statusControls = createSheepLogStatusControls(entry);
+  if (statusControls) content.appendChild(statusControls);
+
   if (autoMarkers.length) {
     const tags = document.createElement("div");
     tags.className = "sheep-log-marker-tags sheep-log-auto-marker-tags";
@@ -5835,6 +5906,44 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
 
   markerNoteCell.appendChild(content);
   return markerNoteCell;
+}
+
+function createSheepLogStatusControls(entry) {
+  const controls = document.createElement("div");
+  controls.className = "sheep-log-status-controls";
+
+  if (isRejectedSheep(entry)) {
+    const badge = document.createElement("span");
+    badge.className = "sheep-log-rejected-badge";
+    badge.textContent = "Rejected";
+    const reason = normalizeSheepStatusReason(entry.rejectedReason);
+    if (reason) badge.title = `Reason: ${reason}`;
+    controls.appendChild(badge);
+    if (reason) {
+      const reasonText = document.createElement("span");
+      reasonText.className = "sheep-log-rejected-reason";
+      reasonText.textContent = reason;
+      reasonText.title = reason;
+      controls.appendChild(reasonText);
+    }
+    controls.appendChild(createSheepLogStatusActionButton(entry, "restore"));
+  } else {
+    controls.appendChild(createSheepLogStatusActionButton(entry, "reject"));
+  }
+
+  return controls;
+}
+
+function createSheepLogStatusActionButton(entry, mode) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `sheep-log-status-action sheep-log-status-action-${mode}`;
+  button.dataset.action = mode === "restore" ? "restore-sheep" : "reject-sheep";
+  button.dataset.sheepId = entry.id || "";
+  button.textContent = mode === "restore" ? "Restore" : "Reject";
+  button.setAttribute("aria-label", mode === "restore" ? `Restore sheep #${entry.number} to the official count` : `Reject sheep #${entry.number} from the official count`);
+  button.title = mode === "restore" ? `Restore sheep #${entry.number} to official count` : `Reject sheep #${entry.number} from official count`;
+  return button;
 }
 
 function createSheepLogMarkerNoteActionButton(entry, mode) {
@@ -6317,6 +6426,71 @@ function syncSheepLogCustomMarkerInput(select) {
   const isCustom = select.value === MANUAL_MARKER_CUSTOM_TYPE;
   customInput.hidden = !isCustom;
   if (isCustom) customInput.focus();
+}
+
+
+function getSheepLogEntryById(sheepId) {
+  if (!sheepId || !Array.isArray(appState.sheep)) return null;
+  return appState.sheep.find((entry) => entry?.id === sheepId) || null;
+}
+
+function refreshAfterSheepStatusChange(message = "") {
+  calculateAverages();
+  updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
+  updateStatsPanel();
+  updateLivePanel();
+  renderLogTable();
+  renderReviewList();
+  drawTrendGraph();
+  updateTrendFlags();
+  updatePenFillForecastDisplay();
+  updatePenStateDisplay();
+  updatePenFillEarlyReminderDisplay();
+  updatePenFillConfirmationControls({ statusOverride: message });
+  autosaveState();
+}
+
+function promptRejectSheepById(sheepId) {
+  const entry = getSheepLogEntryById(sheepId);
+  if (!entry) {
+    window.alert("Could not find this sheep row. Refresh and try again.");
+    return { success: false, error: "Sheep entry not found." };
+  }
+
+  const reason = window.prompt(
+    `Reject sheep ${entry.number} from the official count? It will stay in the physical log and timing history, but will not count toward the official total.\n\nOptional reason:`,
+    ""
+  );
+  if (reason === null) return { success: false, error: "Reject cancelled." };
+
+  const result = rejectSheepById(sheepId, { reason });
+  if (!result.success) {
+    window.alert(result.error || "Could not reject this sheep.");
+    return result;
+  }
+
+  refreshAfterSheepStatusChange(`Rejected sheep ${entry.number}.`);
+  return result;
+}
+
+function promptRestoreSheepById(sheepId) {
+  const entry = getSheepLogEntryById(sheepId);
+  if (!entry) {
+    window.alert("Could not find this sheep row. Refresh and try again.");
+    return { success: false, error: "Sheep entry not found." };
+  }
+
+  const reason = window.prompt(`Restore sheep ${entry.number} to the official count?\n\nOptional restore reason:`, "");
+  if (reason === null) return { success: false, error: "Restore cancelled." };
+
+  const result = restoreSheepById(sheepId, { reason });
+  if (!result.success) {
+    window.alert(result.error || "Could not restore this sheep.");
+    return result;
+  }
+
+  refreshAfterSheepStatusChange(`Restored sheep ${entry.number}.`);
+  return result;
 }
 
 function saveSheepLogMarkerNoteFromEditor(editor) {
@@ -9940,6 +10114,10 @@ function bindEvents() {
       const action = actionTarget.dataset.action;
       if (action === "edit-marker-note") {
         openSheepLogMarkerNoteEditor(actionTarget.dataset.sheepId || "");
+      } else if (action === "reject-sheep") {
+        promptRejectSheepById(actionTarget.dataset.sheepId || "");
+      } else if (action === "restore-sheep") {
+        promptRestoreSheepById(actionTarget.dataset.sheepId || "");
       } else if (action === "cancel-marker-note") {
         closeSheepLogMarkerNoteEditor();
       } else if (action === "save-marker-note") {
