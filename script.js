@@ -6451,6 +6451,8 @@ async function pollShelly() {
   appState.pollInFlight = true;
   try {
     const result = await fetchShellyState();
+    if (appState.paused) return;
+
     appState.lastResponseTimeMs = result.responseTimeMs;
     appState.connectionDebug = result.debugText;
     updatePollLatency(result.responseTimeMs);
@@ -6608,6 +6610,10 @@ function setPaused(paused) {
       appState.runEndTimeMs += pauseDurationMs;
     }
     appState.pauseStartedAtMs = null;
+  }
+
+  if (appState.dayClockStartRealMs === null && Number.isFinite(appState.dayClockStartSecondsFromMidnight)) {
+    appState.dayClockStartRealMs = Date.now();
   }
 
   if (appState.runActive && appState.effectiveResumeRealMs === null) {
@@ -7555,10 +7561,11 @@ function restoreSessionPayload(raw, options = {}) {
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
+    const savedAtMs = Number(raw.savedAt) || Date.now();
     appState.paused = true;
-    appState.pauseStartedAtMs = Date.now();
-    if (appState.effectiveResumeRealMs !== null) {
-      appState.effectiveElapsedBeforePauseMs += Math.max((Number(raw.savedAt) || Date.now()) - appState.effectiveResumeRealMs, 0);
+    appState.pauseStartedAtMs = savedAtMs;
+    if (Number.isFinite(appState.effectiveResumeRealMs)) {
+      appState.effectiveElapsedBeforePauseMs += savedAtMs - appState.effectiveResumeRealMs;
       appState.effectiveResumeRealMs = null;
     }
     if (Number.isFinite(appState.dayClockSnapshotSeconds)) {
