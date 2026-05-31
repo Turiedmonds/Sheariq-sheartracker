@@ -1782,6 +1782,21 @@ td {
   white-space: nowrap;
 }
 
+#panel-performance .perf-metric-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+#panel-performance .perf-metric-button:hover,
+#panel-performance .perf-metric-button:focus-visible {
+  color: #0f766e;
+  text-decoration: underline;
+}
+
 .panel-metric-value {
   justify-self: end;
   text-align: right;
