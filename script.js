@@ -3441,6 +3441,7 @@ function startRun() {
   updateSimulationRunLengthControls();
 
   setPaused(false);
+  updatePauseButtonUI();
   elements.runStatus.textContent = "Running";
 
   calculateAverages();
