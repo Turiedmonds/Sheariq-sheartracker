@@ -2310,6 +2310,7 @@ const elements = {
   pauseRunBtn: document.getElementById("pauseRunBtn"),
   resetRunBtn: document.getElementById("resetRunBtn"),
   totalSheep: document.getElementById("totalSheep"),
+  officialRejectedCount: document.getElementById("officialRejectedCount"),
   avgShear: document.getElementById("avgShear"),
   avgCatch: document.getElementById("avgCatch"),
   avgCycle: document.getElementById("avgCycle"),
@@ -7478,6 +7479,7 @@ function updateStatsPanel() {
   const { fastest, slowest, last } = calculateLivePerformanceExtremes();
 
   setText(elements.totalSheep, String(appState.daySheep.length));
+  setText(elements.officialRejectedCount, `${getOfficialDaySheepCount()} / ${getRejectedDaySheepCount()}`);
   setText(elements.avgShear, formatSeconds(appState.currentStats.avgShear));
   setText(elements.avgCatch, formatSeconds(appState.currentStats.avgCatch));
   setText(elements.avgCycle, formatSeconds(appState.currentStats.avgCycle));
