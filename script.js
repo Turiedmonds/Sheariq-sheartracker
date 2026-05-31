@@ -3324,7 +3324,12 @@ function getLatestQualityRating() {
   if (ratings.length !== currentRatings.length || currentRatings !== appState.qualityRatings) {
     appState.qualityRatings = ratings;
   }
-  return ratings.length ? ratings[ratings.length - 1] : null;
+  if (!ratings.length) return null;
+  return [...ratings].sort((a, b) => {
+    const periodDelta = (Number(a.periodNumber) || 0) - (Number(b.periodNumber) || 0);
+    if (periodDelta) return periodDelta;
+    return (Number(a.enteredAt) || 0) - (Number(b.enteredAt) || 0);
+  })[ratings.length - 1];
 }
 
 function formatQualityRatingSummary() {
@@ -3573,10 +3578,30 @@ function openQualityRatingModal() {
   elements.qualityRatingInput?.focus();
 }
 
+function isAnyConnectionStyleModalOpen(excludedOverlay = null) {
+  return [
+    elements.connectionHelpModalOverlay,
+    elements.dayConfigHelpModalOverlay,
+    elements.sheepLogHelpModalOverlay,
+    elements.sheepLogSettingsModalOverlay,
+    elements.targetPaceHelpModalOverlay,
+    elements.timingPanelHelpModalOverlay,
+    elements.penFillPlannerHelpModalOverlay,
+    elements.performancePanelHelpModalOverlay,
+    elements.simulationControlsHelpModalOverlay,
+    elements.autosaveSettingsModalOverlay,
+    elements.shortcutSettingsModalOverlay,
+    elements.qualityRatingModalOverlay
+  ].some((overlay) => overlay && overlay !== excludedOverlay && overlay.hidden === false);
+}
+
 function closeQualityRatingModal() {
   if (!elements.qualityRatingModalOverlay) return;
   elements.qualityRatingModalOverlay.hidden = true;
   setLayoutScrollLock(false);
+  if (isAnyConnectionStyleModalOpen(elements.qualityRatingModalOverlay)) {
+    document.body.classList.add("layout-scroll-lock");
+  }
 }
 
 function formatCountdown(totalSeconds) {
