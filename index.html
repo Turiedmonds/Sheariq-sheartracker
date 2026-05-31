@@ -168,7 +168,7 @@
             <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
             <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
             <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
-            <button id="loadLastSaveBtn" type="button">Load Last Save</button>
+            <button id="loadLastSaveBtn" type="button">Load Last Autosave</button>
             <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
             </div>
           </div>
@@ -187,6 +187,10 @@
             <div class="form-grid single-row sim-setting-row">
             <label for="autosaveToggle">Autosave</label>
             <input id="autosaveToggle" type="checkbox" checked />
+            </div>
+            <div class="button-row manual-session-actions">
+              <button id="saveSessionBtn" type="button">Save Session</button>
+              <button id="loadSessionBtn" type="button">Load Session</button>
             </div>
             <div id="autosaveStatus" class="status-box minimal-status">Autosave: ON (every 60s)</div>
           </div>
