@@ -333,7 +333,7 @@
               </div>
               <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Quality</span>
-                <button id="qualityRatingSummary" class="perf-metric-value panel-metric-value perf-metric-button" type="button" title="Quality rating input will be added next">—</button>
+                <button id="qualityRatingSummary" class="perf-metric-value panel-metric-value perf-metric-button" type="button" title="Open quality ratings">—</button>
               </div>
               <div class="perf-metric-row panel-metric-row">
                 <span class="perf-metric-label panel-metric-label">Current Sheep Number</span>
@@ -1192,6 +1192,51 @@
         <p>Each section can be collapsed with the +/− button.</p>
         <p>Use the ↑ and ↓ buttons to move sections into the order you prefer.</p>
         <p>The app remembers your section order and collapsed sections after reload.</p>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="qualityRatingModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal quality-rating-modal" role="dialog" aria-modal="true" aria-labelledby="qualityRatingModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="qualityRatingModalTitle">Quality Ratings</h3>
+        <button id="qualityRatingModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Quality Ratings">✕</button>
+      </div>
+      <div class="connection-help-modal-content quality-rating-modal-content">
+        <p id="qualityRatingLatestSummary" class="quality-rating-latest-summary">No quality ratings yet.</p>
+        <div id="qualityRatingValidation" class="quality-rating-validation" role="alert" hidden></div>
+
+        <form id="qualityRatingForm" class="quality-rating-form">
+          <input id="qualityRatingEditId" type="hidden" />
+          <div class="quality-rating-form-grid">
+            <label for="qualityRatingPeriodInput">Period</label>
+            <input id="qualityRatingPeriodInput" type="number" min="1" step="1" inputmode="numeric" />
+
+            <label for="qualityRatingInput">Quality rating</label>
+            <input id="qualityRatingInput" type="text" inputmode="decimal" autocomplete="off" required />
+
+            <label for="qualityRatingOfficialCountInput">Official count for period</label>
+            <input id="qualityRatingOfficialCountInput" type="number" min="0" step="1" inputmode="numeric" />
+
+            <label for="qualityRatingPhysicalCountInput">Physical count for period</label>
+            <input id="qualityRatingPhysicalCountInput" type="number" min="0" step="1" inputmode="numeric" />
+
+            <label for="qualityRatingNotesInput">Notes</label>
+            <textarea id="qualityRatingNotesInput" rows="3" maxlength="200"></textarea>
+          </div>
+
+          <div class="quality-rating-actions">
+            <button id="qualityRatingSaveBtn" type="submit">Save Rating</button>
+            <button id="qualityRatingClearBtn" type="button">Cancel Edit / Clear</button>
+            <button id="qualityRatingCloseBtn" type="button">Close</button>
+          </div>
+        </form>
+
+        <div class="quality-rating-history-wrap">
+          <h4 class="connection-help-title">History</h4>
+          <div id="qualityRatingHistory" class="quality-rating-history">No quality ratings yet.</div>
+        </div>
       </div>
     </div>
   </div>
