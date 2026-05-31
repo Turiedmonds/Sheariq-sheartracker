@@ -205,6 +205,50 @@ function getPenCycleSnapshot(recordType = appState.recordType) {
   };
 }
 
+
+function getPenFillRunEndForecastCap(options = {}) {
+  const rule = options.rule || getPenRule(options.recordType || appState.recordType);
+  const defaultRefillAmount = Number(rule?.defaultRefillAmount);
+  const refillTriggerLeft = Number(rule?.refillTriggerLeft);
+  const avgCycleSeconds = Object.prototype.hasOwnProperty.call(options, "avgCycleSeconds")
+    ? Number(options.avgCycleSeconds)
+    : Number(appState.currentStats.avgCycle);
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const runDurationSeconds = Object.prototype.hasOwnProperty.call(options, "runDurationSeconds")
+    ? Number(options.runDurationSeconds)
+    : Number(getCurrentRunDurationSeconds());
+
+  if (
+    !Number.isFinite(defaultRefillAmount)
+    || defaultRefillAmount <= 0
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
+    || !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(runDurationSeconds)
+    || runDurationSeconds <= 0
+  ) {
+    return 0;
+  }
+
+  const remainingRunSeconds = Math.max(runDurationSeconds - effectiveElapsedSeconds, 0);
+  const projectedRemainingSheep = Math.ceil(remainingRunSeconds / avgCycleSeconds);
+  const smallestExpectedRefillInterval = Number.isFinite(refillTriggerLeft) && refillTriggerLeft > 0
+    ? Math.max(1, Math.min(defaultRefillAmount, refillTriggerLeft))
+    : defaultRefillAmount;
+  const projectedRefillCount = Math.ceil(projectedRemainingSheep / smallestExpectedRefillInterval) + 2;
+  const minimumForecastCap = Number.isFinite(options.minimumForecastCap)
+    ? Math.max(Math.floor(options.minimumForecastCap), 1)
+    : 10;
+  const hardForecastCap = Number.isFinite(options.hardForecastCap)
+    ? Math.max(Math.floor(options.hardForecastCap), minimumForecastCap)
+    : 1000;
+
+  return Math.min(Math.max(projectedRefillCount, minimumForecastCap), hardForecastCap);
+}
+
 function forecastFullFillRefillPoints(options = {}) {
   const maxForecastPoints = Number.isFinite(options.maxForecastPoints)
     ? Math.max(Math.floor(options.maxForecastPoints), 0)
@@ -495,6 +539,24 @@ function getPenFillForecastPoints(options = {}) {
     fillNotConfirmed,
     penState
   };
+}
+
+function getPenFillForecastPointsToRunEnd(options = {}) {
+  const maxForecastPoints = getPenFillRunEndForecastCap(options);
+  if (maxForecastPoints <= 0) {
+    return {
+      points: [],
+      assumption: getPenFillForecastAssumption(options),
+      hasConfirmedEvents: false,
+      fillNotConfirmed: false,
+      penState: null
+    };
+  }
+
+  return getPenFillForecastPoints({
+    ...options,
+    maxForecastPoints
+  });
 }
 
 function getPenFillForecastAssumption(options = {}) {
@@ -1147,7 +1209,7 @@ function getPenFillInstructionModel(options = {}) {
     tooEarly: "Final refill too early",
     tooLate: "Final refill too late",
     noGoodPlan: "Keep full refills",
-    noFutureFill: "No final refill projected",
+    noFutureFill: "No final refill projected before end",
     notPlanningYet: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
     waiting: "Waiting for pace data"
   };
@@ -1853,6 +1915,14 @@ function planFinalFillStrategy(options = {}) {
     });
   }
 
+  const runEndForecastCap = Number.isFinite(options.maxForecastPoints)
+    ? Math.max(Math.floor(options.maxForecastPoints), 0)
+    : getPenFillRunEndForecastCap({
+      rule,
+      avgCycleSeconds,
+      effectiveElapsedSeconds,
+      runDurationSeconds
+    });
   const forecastPoints = Array.isArray(options.forecastPoints)
     ? options.forecastPoints
     : simulatePenFillPlan({
@@ -1862,7 +1932,7 @@ function planFinalFillStrategy(options = {}) {
       effectiveElapsedSeconds,
       runDurationSeconds,
       reductions: [],
-      maxForecastPoints: options.maxForecastPoints
+      maxForecastPoints: runEndForecastCap
     });
   const finalRefillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
   const currentFinalFill = finalRefillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
@@ -1875,7 +1945,7 @@ function planFinalFillStrategy(options = {}) {
   if (forecastPoints.length === 0 || !currentFinalFill) {
     return buildFinalFillPlannerResult({
       status: "noFutureFill",
-      message: "No final refill projected",
+      message: "No final refill projected before end",
       fullFillAmount,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
@@ -1952,7 +2022,7 @@ function planFinalFillStrategy(options = {}) {
     avgCycleSeconds,
     effectiveElapsedSeconds,
     runDurationSeconds,
-    maxForecastPoints: options.maxForecastPoints
+    maxForecastPoints: runEndForecastCap
   });
   const viableCandidates = candidates
     .filter((candidate) => !candidate.rejectionReason && candidate.changedFillCount > 0 && Number.isFinite(candidate.score))
@@ -5941,7 +6011,7 @@ function formatPenFillClockAmPm(secondsFromMidnight) {
 
 function formatFinalPenFillForecastPoint(point) {
   const secondsBeforeRunEnd = Number(point?.secondsBeforeRunEnd);
-  if (!Number.isFinite(secondsBeforeRunEnd)) return "No final refill projected";
+  if (!Number.isFinite(secondsBeforeRunEnd)) return "No final refill projected before end";
   if (secondsBeforeRunEnd <= 0) return `${point.label} — at end`;
   return `${point.label} — ${formatCountdown(secondsBeforeRunEnd)} before end`;
 }
@@ -5970,7 +6040,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (!Array.isArray(forecastPoints) || forecastPoints.length === 0) {
     return {
       status: "none",
-      message: "No final refill projected",
+      message: "No final refill projected before end",
       secondsBeforeRunEnd: null,
       finalFill: null
     };
@@ -6330,18 +6400,27 @@ function updatePenFillForecastDisplay() {
     runDurationSeconds
   });
   const displayForecastPoints = routedForecast.points;
+  const finalRoutedForecast = getPenFillForecastPointsToRunEnd({
+    recordType: appState.recordType,
+    rule: getPenRule(appState.recordType),
+    physicalSheepTakenFromPen: getPhysicalSheepTakenFromPen(),
+    avgCycleSeconds,
+    effectiveElapsedSeconds: elapsedSeconds,
+    runDurationSeconds
+  });
+  const finalForecastPoints = finalRoutedForecast.points;
   const assumptionText = routedForecast.assumption;
   const eventSignature = buildPenFillCountdownEventSignature(getCurrentRunPenFillEvents());
-  const finalRefillAnalysis = analyzeFinalFillWindow(displayForecastPoints, { remainingRunSeconds });
-  const planner = buildPlanner(displayForecastPoints, remainingRunSeconds);
+  const finalRefillAnalysis = analyzeFinalFillWindow(finalForecastPoints, { remainingRunSeconds });
+  const planner = buildPlanner(finalForecastPoints, remainingRunSeconds);
 
   if (displayForecastPoints.length === 0) {
-    setForecastDisplay("No more projected refills", "—", assumptionText, finalRefillAnalysis, planner);
+    setForecastDisplay("No more projected refills", "No final refill projected before end", assumptionText, finalRefillAnalysis, planner);
     return;
   }
 
   const nextRefill = displayForecastPoints[0];
-  const finalRefill = displayForecastPoints[displayForecastPoints.length - 1];
+  const finalRefill = finalForecastPoints[finalForecastPoints.length - 1] || null;
   const countdownTarget = getPenFillForecastCountdownTarget(nextRefill, {
     assumption: assumptionText,
     hasConfirmedEvents: routedForecast.hasConfirmedEvents,
