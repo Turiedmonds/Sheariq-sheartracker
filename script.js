@@ -7527,9 +7527,16 @@ function loadControlsDockSettings() {
   }
 }
 
+function shiftTimestampByGap(value, gapMs) {
+  return Number.isFinite(value) ? value + gapMs : value;
+}
+
 function restoreSessionPayload(raw, options = {}) {
   if (!raw || !raw.state) return false;
   const forcePaused = Boolean(options.forcePaused);
+  const restoreTimeMs = Date.now();
+  const savedAtMs = Number(raw.savedAt) || restoreTimeMs;
+  const restoreGapMs = forcePaused ? Math.max(restoreTimeMs - savedAtMs, 0) : 0;
   Object.assign(appState, raw.state);
   if (raw.runType && elements.runType) elements.runType.value = raw.runType;
   if (raw.customHours !== undefined && elements.customHours) elements.customHours.value = raw.customHours;
@@ -7561,11 +7568,17 @@ function restoreSessionPayload(raw, options = {}) {
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
-    const savedAtMs = Number(raw.savedAt) || Date.now();
+    appState.runStartTime = shiftTimestampByGap(appState.runStartTime, restoreGapMs);
+    if (appState.currentCycle && typeof appState.currentCycle === "object") {
+      appState.currentCycle.shearStart = shiftTimestampByGap(appState.currentCycle.shearStart, restoreGapMs);
+      appState.currentCycle.catchStart = shiftTimestampByGap(appState.currentCycle.catchStart, restoreGapMs);
+    }
+    appState.runEndTimeMs = shiftTimestampByGap(appState.runEndTimeMs, restoreGapMs);
+
     appState.paused = true;
-    appState.pauseStartedAtMs = savedAtMs;
+    appState.pauseStartedAtMs = restoreTimeMs;
     if (Number.isFinite(appState.effectiveResumeRealMs)) {
-      appState.effectiveElapsedBeforePauseMs += savedAtMs - appState.effectiveResumeRealMs;
+      appState.effectiveElapsedBeforePauseMs += Math.max(savedAtMs - appState.effectiveResumeRealMs, 0);
       appState.effectiveResumeRealMs = null;
     }
     if (Number.isFinite(appState.dayClockSnapshotSeconds)) {
