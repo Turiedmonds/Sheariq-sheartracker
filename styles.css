@@ -1353,66 +1353,6 @@ button:disabled {
 }
 
 
-#panel-log .sheep-log-row-rejected {
-  background: rgba(254, 226, 226, 0.45);
-}
-
-#panel-log .sheep-log-row-rejected > td {
-  border-top-color: #fecaca;
-  border-bottom-color: #fecaca;
-}
-
-#panel-log .sheep-log-status-controls {
-  display: inline-flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.28rem;
-}
-
-#panel-log .sheep-log-rejected-badge {
-  display: inline-block;
-  border-radius: 999px;
-  border: 1px solid #fca5a5;
-  background: #fee2e2;
-  color: #991b1b;
-  font-size: 0.72rem;
-  font-weight: 700;
-  line-height: 1.2;
-  padding: 0.14rem 0.45rem;
-  white-space: nowrap;
-}
-
-#panel-log .sheep-log-rejected-reason {
-  max-width: 9rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: #7f1d1d;
-  font-size: 0.75rem;
-  line-height: 1.2;
-}
-
-#panel-log .sheep-log-status-action {
-  width: auto;
-  min-height: 1.35rem;
-  padding: 0.12rem 0.42rem;
-  font-size: 0.74rem;
-  line-height: 1.1;
-  white-space: nowrap;
-}
-
-#panel-log .sheep-log-status-action-reject {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
-}
-
-#panel-log .sheep-log-status-action-restore {
-  background: #ecfdf5;
-  border-color: #86efac;
-  color: #166534;
-}
-
 #panel-log .sheep-log-marker-note-editor {
   display: grid;
   gap: 0.35rem;
@@ -2598,4 +2538,36 @@ td.pace-neutral {
 .sheep-log-select-checkbox {
   width: 1rem;
   height: 1rem;
+}
+
+.official-reject-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0.7rem 0;
+}
+
+.official-reject-summary > div {
+  border: 1px solid var(--border-subtle, #d1d5db);
+  border-radius: 0.6rem;
+  padding: 0.55rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.official-reject-summary span {
+  display: block;
+  color: var(--text-muted, #64748b);
+  font-size: 0.78rem;
+}
+
+.official-reject-summary strong {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 1.15rem;
+}
+
+@media (max-width: 640px) {
+  .official-reject-summary {
+    grid-template-columns: 1fr;
+  }
 }
