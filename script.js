@@ -6820,7 +6820,7 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
     predictedQuarterTotal: quarter.predicted,
     predictedHourTotal,
     projectedTotal: target.projectedTotal,
-    estimatedLastCatchTime: formatPredictedTargetReachTime(target.targetCatchRunSeconds),
+    estimatedLastCatchTime: formatTargetPaceDayClock(target.targetCatchRunSeconds),
     maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
     catchPrediction: predictCatch(target, calculateRequiredRunTotalSheep())
   };
