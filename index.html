@@ -24,6 +24,23 @@
     </div>
   </header>
 
+  <section id="breakOverlay" class="break-overlay" aria-live="polite" hidden>
+    <div class="break-overlay-card">
+      <div class="break-overlay-header">
+        <span id="breakOverlayStatus" class="break-overlay-status">Official Break</span>
+        <button id="breakOverlayDismissBtn" class="break-overlay-dismiss" type="button">Hide break banner</button>
+      </div>
+      <div id="breakOverlayLabel" class="break-overlay-label">Official Break</div>
+      <div id="breakOverlayRemaining" class="break-overlay-countdown">—</div>
+      <div id="breakOverlayWarning" class="break-overlay-warning" hidden></div>
+      <div class="break-overlay-details">
+        <span>Next run: <strong id="breakOverlayNextRun">—</strong></span>
+        <span>Starts: <strong id="breakOverlayNextRunStarts">—</strong></span>
+        <span>Break started: <strong id="breakOverlayStarted">—</strong></span>
+      </div>
+    </div>
+  </section>
+
   <section id="settingsPanel" class="settings-panel" role="tabpanel" aria-labelledby="settingsTab" hidden>
     <details class="top-card-group" open>
       <summary>Connection Settings</summary>
@@ -429,25 +446,27 @@
               <span class="metric-label panel-metric-label">Day clock:</span>
               <strong id="dayClock" class="panel-metric-value">00:00:00</strong>
             </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Break status:</span>
-              <strong id="breakStatus" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Break started:</span>
-              <strong id="breakStartedTime" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Break remaining:</span>
-              <strong id="breakRemaining" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Next run:</span>
-              <strong id="breakNextRun" class="panel-metric-value">—</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Next run starts:</span>
-              <strong id="breakNextRunStarts" class="panel-metric-value">—</strong>
+            <div id="breakTimingRows" class="break-timing-rows" hidden>
+              <div class="metric-row panel-metric-row break-timing-row">
+                <span class="metric-label panel-metric-label">Break status:</span>
+                <strong id="breakStatus" class="panel-metric-value">—</strong>
+              </div>
+              <div class="metric-row panel-metric-row break-timing-row">
+                <span class="metric-label panel-metric-label">Break started:</span>
+                <strong id="breakStartedTime" class="panel-metric-value">—</strong>
+              </div>
+              <div class="metric-row panel-metric-row break-timing-row">
+                <span class="metric-label panel-metric-label">Break remaining:</span>
+                <strong id="breakRemaining" class="panel-metric-value">—</strong>
+              </div>
+              <div class="metric-row panel-metric-row break-timing-row">
+                <span class="metric-label panel-metric-label">Next run:</span>
+                <strong id="breakNextRun" class="panel-metric-value">—</strong>
+              </div>
+              <div class="metric-row panel-metric-row break-timing-row">
+                <span class="metric-label panel-metric-label">Next run starts:</span>
+                <strong id="breakNextRunStarts" class="panel-metric-value">—</strong>
+              </div>
             </div>
           </div>
           <div class="timing-group panel-section">

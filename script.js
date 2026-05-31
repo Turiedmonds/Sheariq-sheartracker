@@ -1969,6 +1969,7 @@ const appState = {
   breakStartedAtMs: null,
   breakSource: null,
   preparedForNextRunBreak: false,
+  breakBannerDismissedForCurrentBreak: false,
   pendingBreakAfterCurrentSheep: false,
   pendingBreakStartedAtMs: null,
   runEndTimeMs: null,
@@ -2096,11 +2097,21 @@ const elements = {
   runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
   runBadge: document.getElementById("runBadge"),
+  breakTimingRows: document.getElementById("breakTimingRows"),
   breakStatus: document.getElementById("breakStatus"),
   breakStartedTime: document.getElementById("breakStartedTime"),
   breakRemaining: document.getElementById("breakRemaining"),
   breakNextRun: document.getElementById("breakNextRun"),
   breakNextRunStarts: document.getElementById("breakNextRunStarts"),
+  breakOverlay: document.getElementById("breakOverlay"),
+  breakOverlayStatus: document.getElementById("breakOverlayStatus"),
+  breakOverlayLabel: document.getElementById("breakOverlayLabel"),
+  breakOverlayRemaining: document.getElementById("breakOverlayRemaining"),
+  breakOverlayWarning: document.getElementById("breakOverlayWarning"),
+  breakOverlayNextRun: document.getElementById("breakOverlayNextRun"),
+  breakOverlayNextRunStarts: document.getElementById("breakOverlayNextRunStarts"),
+  breakOverlayStarted: document.getElementById("breakOverlayStarted"),
+  breakOverlayDismissBtn: document.getElementById("breakOverlayDismissBtn"),
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
   timingAlert: document.getElementById("timingAlert"),
@@ -3363,8 +3374,11 @@ function getBreakDisplayDetails(now = Date.now()) {
       label: null,
       started: "—",
       remaining: "—",
+      remainingText: "Break remaining: —",
       nextRun: "—",
-      nextRunStarts: "—"
+      nextRunStarts: "—",
+      remainingSeconds: null,
+      warningText: ""
     };
   }
 
@@ -3376,24 +3390,67 @@ function getBreakDisplayDetails(now = Date.now()) {
     ? breakStartedAtMs + (breakInfo.durationSeconds * 1000)
     : null;
   const remainingSeconds = breakEndMs !== null ? Math.max((breakEndMs - now) / 1000, 0) : null;
+  const remaining = remainingSeconds !== null && !isEndOfDay ? formatCountdown(remainingSeconds) : "—";
+  let warningText = "";
+  if (remainingSeconds !== null && !isEndOfDay) {
+    if (remainingSeconds <= 10) {
+      warningText = "Get ready";
+    } else if (remainingSeconds <= 60) {
+      warningText = "1 minute left";
+    }
+  }
 
   return {
     status: "Official Break",
     label: breakInfo.label || "Official Break",
     started: breakStartedAtMs !== null ? formatClock(breakStartedAtMs) : "—",
-    remaining: remainingSeconds !== null && !isEndOfDay ? formatCountdown(remainingSeconds) : "—",
+    remaining,
+    remainingText: isEndOfDay ? "Break remaining: —" : `${remaining} remaining`,
     nextRun: isEndOfDay ? "End of Day" : `Run ${appState.currentRunIndex + 2}`,
-    nextRunStarts: breakEndMs !== null && !isEndOfDay ? formatClock(breakEndMs) : "—"
+    nextRunStarts: breakEndMs !== null && !isEndOfDay ? formatClock(breakEndMs) : "—",
+    remainingSeconds,
+    warningText
   };
 }
 
 function updateBreakTimingDisplay() {
+  const preparedForNextRunBreak = isPreparedForNextRunBreak();
   const details = getBreakDisplayDetails();
+  if (elements.breakTimingRows) elements.breakTimingRows.hidden = !preparedForNextRunBreak;
   setText(elements.breakStatus, details.status);
   setText(elements.breakStartedTime, details.started);
   setText(elements.breakRemaining, details.remaining);
   setText(elements.breakNextRun, details.nextRun);
   setText(elements.breakNextRunStarts, details.nextRunStarts);
+}
+
+function updateBreakOverlayDisplay() {
+  const showOverlay = isPreparedForNextRunBreak() && !appState.breakBannerDismissedForCurrentBreak;
+  if (!elements.breakOverlay) return;
+
+  elements.breakOverlay.hidden = !showOverlay;
+  if (!showOverlay) return;
+
+  const details = getBreakDisplayDetails();
+  setText(elements.breakOverlayStatus, details.status);
+  setText(elements.breakOverlayLabel, details.label || "Official Break");
+  setText(elements.breakOverlayRemaining, details.remainingText);
+  setText(elements.breakOverlayNextRun, details.nextRun);
+  setText(elements.breakOverlayNextRunStarts, details.nextRunStarts);
+  setText(elements.breakOverlayStarted, details.started);
+
+  if (elements.breakOverlayWarning) {
+    elements.breakOverlayWarning.hidden = !details.warningText;
+    setText(elements.breakOverlayWarning, details.warningText);
+  }
+}
+
+function hideBreakBannerForCurrentBreak() {
+  appState.breakBannerDismissedForCurrentBreak = true;
+  updateBreakOverlayDisplay();
+  if (typeof autosaveState === "function") {
+    autosaveState();
+  }
 }
 
 function updateStartRunButtonUI() {
@@ -3451,6 +3508,7 @@ function resetRunState() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.runEndTimeMs = null;
@@ -3561,6 +3619,7 @@ function startRun() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.effectiveElapsedBeforePauseMs = 0;
@@ -3608,6 +3667,7 @@ function stopRun() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.runEndTimeMs = null;
@@ -3654,6 +3714,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   appState.effectiveResumeRealMs = null;
 
   appState.preparedForNextRunBreak = true;
+  appState.breakBannerDismissedForCurrentBreak = false;
 
   enterOfficialBreak(source, breakStartedAtMs);
 
@@ -3839,6 +3900,7 @@ function exitOfficialBreak() {
   appState.breakStartedAtMs = null;
   appState.breakSource = null;
   appState.preparedForNextRunBreak = false;
+  appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
 
@@ -6037,6 +6099,7 @@ function updateLivePanel() {
   updateTimingAlertDisplay();
   updatePenRefillAlertDisplay();
   updateBreakTimingDisplay();
+  updateBreakOverlayDisplay();
   updateRunBadge();
   updateStartRunButtonUI();
   updateDayClockDisplay();
@@ -6972,6 +7035,7 @@ function getAutosavePayload() {
       breakStartedAtMs: appState.breakStartedAtMs,
       breakSource: appState.breakSource,
       preparedForNextRunBreak: appState.preparedForNextRunBreak,
+      breakBannerDismissedForCurrentBreak: appState.breakBannerDismissedForCurrentBreak,
       pendingBreakAfterCurrentSheep: appState.pendingBreakAfterCurrentSheep,
       pendingBreakStartedAtMs: appState.pendingBreakStartedAtMs,
       runEndTimeMs: appState.runEndTimeMs,
@@ -7127,6 +7191,7 @@ function loadLastSave() {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
     appState.preparedForNextRunBreak = Boolean(appState.preparedForNextRunBreak);
+    appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
     appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
     appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
     appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
@@ -7164,6 +7229,7 @@ function loadLastSave() {
     updateFinishRunBreakButtonUI();
     updateStartRunButtonUI();
     updateBreakTimingDisplay();
+    updateBreakOverlayDisplay();
     if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
     if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
     if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
@@ -7907,6 +7973,7 @@ function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
+  if (elements.breakOverlayDismissBtn) elements.breakOverlayDismissBtn.addEventListener("click", hideBreakBannerForCurrentBreak);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
   if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
   if (elements.trendBucketSize) {
@@ -8484,6 +8551,7 @@ function initialize() {
   updateFinishRunBreakButtonUI();
   updateStartRunButtonUI();
   updateBreakTimingDisplay();
+  updateBreakOverlayDisplay();
   updateLivePanel();
   updateStatsPanel();
   updateRunBadge();
