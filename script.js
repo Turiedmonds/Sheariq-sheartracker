@@ -7267,7 +7267,10 @@ function loadLastSave() {
     } else {
       appState.simulationRunLengthMode = getValidSimulationRunLengthMode(appState.simulationRunLengthMode);
     }
-    appState.preparedForNextRunBreak = Boolean(appState.preparedForNextRunBreak);
+    appState.breakActive = Boolean(appState.breakActive);
+    appState.breakStartedAtMs = Number.isFinite(appState.breakStartedAtMs) ? appState.breakStartedAtMs : null;
+    appState.breakSource = typeof appState.breakSource === "string" ? appState.breakSource : null;
+    appState.preparedForNextRunBreak = appState.breakActive && Boolean(appState.preparedForNextRunBreak);
     appState.dayComplete = Boolean(appState.dayComplete);
     appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
     appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
@@ -7301,7 +7304,11 @@ function loadLastSave() {
     applyPanelSizes();
     if (appState.layoutEditMode) ensureInitialPanelLayout();
     applyPanelLayout();
-    if (elements.runStatus) elements.runStatus.textContent = appState.dayComplete ? 'End of Day' : (appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped');
+    if (elements.runStatus) {
+      elements.runStatus.textContent = appState.dayComplete
+        ? 'End of Day'
+        : (isPreparedForNextRunBreak() ? 'Official Break' : (appState.runActive ? (appState.paused ? 'Paused' : 'Running') : 'Stopped'));
+    }
     if (elements.startRunBtn) elements.startRunBtn.disabled = appState.runActive;
     if (elements.stopRunBtn) elements.stopRunBtn.disabled = !appState.runActive;
     updateFinishRunBreakButtonUI();
@@ -7328,6 +7335,8 @@ function loadLastSave() {
       } else {
         startRealtimeLoops();
       }
+    } else if (isPreparedForNextRunBreak()) {
+      startRealtimeLoops();
     }
   } catch (error) {
     console.debug('Failed to load autosave', error);
