@@ -554,9 +554,12 @@
               <span class="metric-label panel-metric-label">Pen count:</span>
               <strong id="penStateCurrentCount" class="panel-metric-value">—</strong>
             </div>
-            <div class="metric-row panel-metric-row">
+            <div class="metric-row panel-metric-row pen-last-refill-row">
               <span class="metric-label panel-metric-label">Last refill amount:</span>
-              <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
+              <div class="pen-last-refill-value">
+                <strong id="penStateLastConfirmedFill" class="panel-metric-value">—</strong>
+                <button id="penFillAdjustBtn" class="pen-fill-adjust-btn" type="button" disabled title="No active refill to adjust">Adjust refill</button>
+              </div>
             </div>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Average refill interval:</span>
@@ -1452,6 +1455,33 @@
       <li><strong>Sheep is not logged:</strong> The app logs a sheep only after Motor ON then Motor OFF, and the run must be started first.</li>
     </ul>
   </template>
+
+
+  <div id="penFillAdjustModalOverlay" class="modal-overlay pen-fill-adjust-modal-overlay" hidden>
+    <form id="penFillAdjustForm" class="modal-dialog pen-fill-adjust-modal" role="dialog" aria-modal="true" aria-labelledby="penFillAdjustModalTitle" aria-describedby="penFillAdjustModalDescription">
+      <h3 id="penFillAdjustModalTitle">Adjust last refill</h3>
+      <p id="penFillAdjustModalDescription">Correct the latest refill without moving it to the current sheep count.</p>
+      <div class="pen-fill-adjust-details">
+        <div><span>Recorded at:</span><strong id="penFillAdjustSheepNumber">—</strong></div>
+        <div><span>Current recorded amount:</span><strong id="penFillAdjustCurrentAmount">—</strong></div>
+        <div><span>Assumed/default amount:</span><strong id="penFillAdjustAssumedAmount">—</strong></div>
+      </div>
+      <label class="pen-fill-adjust-field" for="penFillAdjustAmountInput">
+        Corrected actual refill amount
+        <input id="penFillAdjustAmountInput" type="number" inputmode="numeric" min="1" step="1" required />
+      </label>
+      <div class="pen-fill-adjust-quick-actions" aria-label="Quick refill adjustment controls">
+        <button id="penFillAdjustMinusOneBtn" type="button">−1</button>
+        <button id="penFillAdjustPlusOneBtn" type="button">+1</button>
+        <button id="penFillAdjustResetBtn" type="button">Reset to assumed/default</button>
+      </div>
+      <p id="penFillAdjustValidation" class="pen-fill-adjust-validation" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="penFillAdjustCancelBtn" type="button">Cancel</button>
+        <button id="penFillAdjustSaveBtn" type="submit">Save adjustment</button>
+      </div>
+    </form>
+  </div>
 
   <script src="script.js"></script>
   <script>

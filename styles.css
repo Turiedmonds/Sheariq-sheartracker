@@ -2680,3 +2680,119 @@ td.pace-neutral {
     grid-template-columns: 1fr;
   }
 }
+
+
+#panel-pen-fill-planner .pen-last-refill-row {
+  grid-template-columns: minmax(120px, 1fr) minmax(0, auto);
+}
+
+#panel-pen-fill-planner .pen-last-refill-value {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+#panel-pen-fill-planner .pen-last-refill-value strong {
+  justify-self: auto;
+}
+
+.pen-fill-adjust-btn {
+  border: 1px solid #f9a8d4;
+  background: #fdf2f8;
+  color: #9d174d;
+  border-radius: 999px;
+  padding: 0.18rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.pen-fill-adjust-btn:disabled {
+  border-color: #e5e7eb;
+  background: #f9fafb;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.pen-fill-adjust-modal {
+  max-width: 460px;
+}
+
+.pen-fill-adjust-details {
+  display: grid;
+  gap: 0.35rem;
+  margin: 0 0 0.85rem;
+  padding: 0.65rem;
+  border: 1px solid #fbcfe8;
+  border-radius: 8px;
+  background: #fdf2f8;
+}
+
+.pen-fill-adjust-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.pen-fill-adjust-details strong {
+  color: #111827;
+  text-align: right;
+}
+
+.pen-fill-adjust-field {
+  display: grid;
+  gap: 0.3rem;
+  margin-bottom: 0.65rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.pen-fill-adjust-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+.pen-fill-adjust-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.65rem;
+}
+
+.pen-fill-adjust-quick-actions button {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  padding: 0.25rem 0.6rem;
+  font-weight: 700;
+}
+
+.pen-fill-adjust-validation {
+  min-height: 1.2em;
+  margin: 0 0 0.75rem;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+@media (max-width: 700px) {
+  #panel-pen-fill-planner .pen-last-refill-row {
+    grid-template-columns: 1fr;
+    row-gap: 0.2rem;
+  }
+
+  #panel-pen-fill-planner .pen-last-refill-value {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
