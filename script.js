@@ -7546,6 +7546,7 @@ function updateTimingAlertDisplay() {
   const combAlert = getCadenceAlertState(COMB_INTERVAL_SECONDS);
   const cutterAlert = getCadenceAlertState(CUTTER_INTERVAL_SECONDS);
   const drinkAlert = getCadenceAlertState(DRINK_INTERVAL_SECONDS);
+  const drinkRefillClashAdvisory = getNextDrinkRefillClashAdvisory({ effectiveElapsedSeconds });
 
   if (combAlert) {
     const alertText = combAlert.mode === "now"
@@ -7562,6 +7563,8 @@ function updateTimingAlertDisplay() {
       ? "Drink now"
       : `Drink in ${drinkAlert.seconds}s`;
     setTimingAlertDisplay("drink", alertText);
+  } else if (drinkRefillClashAdvisory) {
+    setTimingAlertDisplay("drink", drinkRefillClashAdvisory.message);
   } else if (inLastQuarter) {
     setTimingAlertDisplay("last-quarter", "Last quarter");
   } else {
