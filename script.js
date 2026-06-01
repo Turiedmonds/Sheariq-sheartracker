@@ -195,6 +195,14 @@ function sanitizeManualMarkerArray(manualMarkers) {
   return dedupeManualMarkers(Array.isArray(manualMarkers) ? manualMarkers : []);
 }
 
+function unionManualMarkers(...manualMarkerGroups) {
+  return dedupeManualMarkers(manualMarkerGroups.flatMap((manualMarkers) => {
+    if (!manualMarkers) return [];
+    if (Array.isArray(manualMarkers)) return manualMarkers;
+    return [manualMarkers];
+  }));
+}
+
 function getConfirmedManualMarkersForEntry(entry) {
   if (!entry || typeof entry !== "object") return [];
   const manualMarkers = sanitizeManualMarkerArray(entry.manualMarkers);
@@ -5041,10 +5049,21 @@ function createMergedSheepEntry(firstEntry, secondEntry, overrides = {}) {
   const shearDuration = Math.max(Number(firstEntry?.shearDuration) || 0, 0)
     + interruptionDuration
     + Math.max(Number(secondEntry?.shearDuration) || 0, 0);
-  const firstMarker = sanitizeManualMarker(firstEntry?.manualMarker);
-  const secondMarker = sanitizeManualMarker(secondEntry?.manualMarker);
-  const markerAuditNote = firstMarker && secondMarker && getManualMarkerDisplayLabel(firstMarker) !== getManualMarkerDisplayLabel(secondMarker)
-    ? `Merged sheep also had marker: ${getManualMarkerDisplayLabel(secondMarker)}.`
+  const firstMarkers = getConfirmedManualMarkersForEntry(firstEntry);
+  const secondMarkers = getConfirmedManualMarkersForEntry(secondEntry);
+  const mergedManualMarkers = unionManualMarkers(firstMarkers, secondMarkers);
+  const firstMarkerKeys = new Set(firstMarkers.map(getManualMarkerDedupKey).filter(Boolean));
+  const additionalSecondMarkerLabels = secondMarkers
+    .filter((marker) => {
+      const dedupKey = getManualMarkerDedupKey(marker);
+      return dedupKey && !firstMarkerKeys.has(dedupKey);
+    })
+    .map((marker) => marker.type === MANUAL_MARKER_CUSTOM_TYPE
+      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
+      : getManualMarkerDisplayLabel(marker))
+    .filter(Boolean);
+  const markerAuditNote = additionalSecondMarkerLabels.length
+    ? `Merged sheep also had marker${additionalSecondMarkerLabels.length > 1 ? "s" : ""}: ${additionalSecondMarkerLabels.join(" + ")}.`
     : "";
   const mergedEntry = {
     ...firstEntry,
@@ -5071,9 +5090,13 @@ function createMergedSheepEntry(firstEntry, secondEntry, overrides = {}) {
   if (note) mergedEntry.note = note;
   else delete mergedEntry.note;
 
-  if (firstMarker) mergedEntry.manualMarker = firstMarker;
-  else if (secondMarker) mergedEntry.manualMarker = secondMarker;
-  else delete mergedEntry.manualMarker;
+  if (mergedManualMarkers.length) {
+    mergedEntry.manualMarkers = mergedManualMarkers;
+    syncLegacyManualMarkerToFirstManualMarker(mergedEntry, mergedManualMarkers);
+  } else {
+    delete mergedEntry.manualMarkers;
+    delete mergedEntry.manualMarker;
+  }
 
   applyMergedSheepStatusMetadata(mergedEntry, firstEntry, secondEntry);
 
@@ -6428,15 +6451,13 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
   markerNoteCell.dataset.sheepId = entry.id || "";
 
   const manualMarkers = getConfirmedManualMarkersForEntry(entry);
-  const manualMarker = manualMarkers[0] || null;
   const noteText = normalizeSheepNote(entry.note);
   const allAutoMarkers = plannedDelayMarkers.get(entry.number) || [];
   const autoMarkers = !manualMarkers.length && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
 
   if (sheepLogMarkerNoteEditorSheepId && entry.id === sheepLogMarkerNoteEditorSheepId) {
-    const suggestedMarker = !manualMarkers.length && allAutoMarkers.length ? allAutoMarkers[0] : null;
     markerNoteCell.classList.add("is-editing");
-    markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarker, noteText, suggestedMarker));
+    markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText));
     return markerNoteCell;
   }
 
@@ -6539,44 +6560,52 @@ function createSheepLogMarkerNoteActionButton(entry, mode) {
   return button;
 }
 
-function createSheepLogMarkerNoteEditor(entry, manualMarker, noteText, suggestedMarker = null) {
+function createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText) {
   const editor = document.createElement("div");
   editor.className = "sheep-log-marker-note-editor";
   editor.dataset.sheepId = entry.id || "";
 
-  const select = document.createElement("select");
-  select.className = "sheep-log-marker-note-select";
-  select.dataset.role = "marker-select";
-  select.setAttribute("aria-label", `Manual marker for sheep #${entry.number}`);
+  const selectedMarkers = sanitizeManualMarkerArray(manualMarkers);
+  const selectedBuiltInTypes = new Set(selectedMarkers
+    .filter((marker) => isValidManualMarkerType(marker.type))
+    .map((marker) => marker.type));
+  const customMarker = selectedMarkers.find((marker) => marker.type === MANUAL_MARKER_CUSTOM_TYPE);
 
-  const blankOption = document.createElement("option");
-  blankOption.value = "";
-  blankOption.textContent = "No confirmed marker";
-  select.appendChild(blankOption);
+  const markerGroup = document.createElement("fieldset");
+  markerGroup.className = "sheep-log-marker-checkboxes";
+
+  const markerLegend = document.createElement("legend");
+  markerLegend.textContent = "Confirmed markers";
+  markerGroup.appendChild(markerLegend);
 
   Object.entries(MANUAL_MARKER_TYPES).forEach(([type, label]) => {
-    const option = document.createElement("option");
-    option.value = type;
-    option.textContent = label;
-    select.appendChild(option);
+    const checkboxId = `sheep-marker-${entry.id || entry.number}-${type}`;
+    const checkboxLabel = document.createElement("label");
+    checkboxLabel.className = "sheep-log-marker-checkbox-label";
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = checkboxId;
+    checkbox.value = type;
+    checkbox.dataset.role = "marker-checkbox";
+    checkbox.checked = selectedBuiltInTypes.has(type);
+
+    const labelText = document.createElement("span");
+    labelText.textContent = type === "comb" ? "Comb/handpiece" : label;
+
+    checkboxLabel.append(checkbox, labelText);
+    markerGroup.appendChild(checkboxLabel);
   });
 
-  const customOption = document.createElement("option");
-  customOption.value = MANUAL_MARKER_CUSTOM_TYPE;
-  customOption.textContent = "Custom...";
-  select.appendChild(customOption);
-  const suggestedType = suggestedMarker?.type && isValidManualMarkerType(suggestedMarker.type) ? suggestedMarker.type : "";
-  select.value = manualMarker?.type || suggestedType || "";
-  editor.appendChild(select);
+  editor.appendChild(markerGroup);
 
   const customInput = document.createElement("input");
   customInput.type = "text";
   customInput.className = "sheep-log-marker-custom-input";
   customInput.dataset.role = "custom-label";
   customInput.maxLength = 60;
-  customInput.placeholder = "Custom marker label";
-  customInput.value = manualMarker?.type === MANUAL_MARKER_CUSTOM_TYPE ? manualMarker.customLabel : "";
-  customInput.hidden = select.value !== MANUAL_MARKER_CUSTOM_TYPE;
+  customInput.placeholder = "Custom marker label (optional)";
+  customInput.value = customMarker?.customLabel || "";
   editor.appendChild(customInput);
 
   const noteInput = document.createElement("textarea");
@@ -6679,15 +6708,12 @@ function addMarkerStatCatchDuration(bucket, catchDuration) {
   }
 }
 
-function getResolvedMarkerForEntry(entry, automaticMarkersBySheep) {
-  const manualMarker = sanitizeManualMarker(entry?.manualMarker);
-  if (manualMarker) return { type: manualMarker.type, label: manualMarker.label, source: "manual" };
-  const automaticMarkers = Number.isFinite(entry?.number) ? automaticMarkersBySheep?.get(entry.number) : null;
-  const automaticMarker = Array.isArray(automaticMarkers) ? automaticMarkers[0] : null;
-  if (automaticMarker?.type && isValidManualMarkerType(automaticMarker.type)) {
-    return { type: automaticMarker.type, label: MANUAL_MARKER_TYPES[automaticMarker.type], source: "suggested" };
-  }
-  return null;
+function getConfirmedMarkersForStats(entry) {
+  return getConfirmedManualMarkersForEntry(entry).map((marker) => ({
+    type: marker.type,
+    label: marker.label,
+    source: "manual"
+  }));
 }
 
 function buildResolvedMarkerStats(entries, markerSettings) {
@@ -6701,12 +6727,11 @@ function buildResolvedMarkerStats(entries, markerSettings) {
   };
   if (!Array.isArray(entries)) return stats;
 
-  const automaticMarkersBySheep = buildPlannedDelayMarkerMap(entries, markerSettings);
   entries.forEach((entry) => {
-    const marker = getResolvedMarkerForEntry(entry, automaticMarkersBySheep);
-    if (!marker) return;
-    const bucket = stats.buckets[marker.type];
-    if (bucket) addMarkerStatCatchDuration(bucket, entry?.catchDuration);
+    getConfirmedMarkersForStats(entry).forEach((marker) => {
+      const bucket = stats.buckets[marker.type];
+      if (bucket) addMarkerStatCatchDuration(bucket, entry?.catchDuration);
+    });
   });
 
   return stats;
@@ -6944,19 +6969,18 @@ function normalizeSheepNote(value) {
   return value.trim().slice(0, SHEEP_NOTE_MAX_LENGTH);
 }
 
-function updateSheepEntryMarkerNoteById(sheepId, manualMarker, noteText) {
+function updateSheepEntryMarkerNoteById(sheepId, manualMarkers, noteText) {
   if (!sheepId) return false;
   let updated = false;
+  const sanitizedManualMarkers = sanitizeManualMarkerArray(manualMarkers);
 
   [appState.sheep, appState.daySheep].forEach((entries) => {
     if (!Array.isArray(entries)) return;
     entries.forEach((entry) => {
       if (entry?.id !== sheepId) return;
-      if (manualMarker) {
-        const sanitizedMarker = sanitizeManualMarker(manualMarker);
-        const manualMarkers = sanitizedMarker ? [sanitizedMarker] : [];
-        entry.manualMarkers = manualMarkers;
-        syncLegacyManualMarkerToFirstManualMarker(entry, manualMarkers);
+      if (sanitizedManualMarkers.length) {
+        entry.manualMarkers = sanitizedManualMarkers.map((marker) => ({ ...marker }));
+        syncLegacyManualMarkerToFirstManualMarker(entry, entry.manualMarkers);
       } else {
         delete entry.manualMarkers;
         delete entry.manualMarker;
@@ -7004,17 +7028,6 @@ function closeSheepLogMarkerNoteEditor() {
   sheepLogMarkerNoteEditorSheepId = "";
   renderLogTable();
 }
-
-function syncSheepLogCustomMarkerInput(select) {
-  const editor = select.closest(".sheep-log-marker-note-editor");
-  if (!editor) return;
-  const customInput = editor.querySelector('[data-role="custom-label"]');
-  if (!(customInput instanceof HTMLInputElement)) return;
-  const isCustom = select.value === MANUAL_MARKER_CUSTOM_TYPE;
-  customInput.hidden = !isCustom;
-  if (isCustom) customInput.focus();
-}
-
 
 function getSheepLogEntryById(sheepId) {
   if (!sheepId || !Array.isArray(appState.sheep)) return null;
@@ -7082,34 +7095,29 @@ function promptRestoreSheepById(sheepId) {
 
 function saveSheepLogMarkerNoteFromEditor(editor) {
   const sheepId = editor.dataset.sheepId || "";
-  const markerSelect = editor.querySelector('[data-role="marker-select"]');
+  const markerCheckboxes = [...editor.querySelectorAll('[data-role="marker-checkbox"]')];
   const customInput = editor.querySelector('[data-role="custom-label"]');
   const noteInput = editor.querySelector('[data-role="note"]');
   const validation = editor.querySelector('[data-role="validation"]');
-  if (!(markerSelect instanceof HTMLSelectElement) || !(noteInput instanceof HTMLTextAreaElement)) return;
+  if (!(noteInput instanceof HTMLTextAreaElement)) return;
 
-  const markerType = markerSelect.value;
   const noteText = normalizeSheepNote(noteInput.value);
-  let manualMarker = null;
-
-  if (markerType === MANUAL_MARKER_CUSTOM_TYPE) {
-    const customLabel = customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
-    manualMarker = buildManualMarker(MANUAL_MARKER_CUSTOM_TYPE, customLabel);
-    if (!manualMarker) {
-      if (validation) validation.textContent = "Enter a custom marker label before saving.";
+  const manualMarkers = markerCheckboxes
+    .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked)
+    .map((checkbox) => buildManualMarker(checkbox.value))
+    .filter(Boolean);
+  const customLabel = customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
+  if (customLabel) {
+    const customMarker = buildManualMarker(MANUAL_MARKER_CUSTOM_TYPE, customLabel);
+    if (!customMarker) {
+      if (validation) validation.textContent = "Enter a valid custom marker label before saving.";
       if (customInput instanceof HTMLInputElement) customInput.focus();
       return;
     }
-  } else if (markerType) {
-    manualMarker = buildManualMarker(markerType);
-    if (!manualMarker) {
-      if (validation) validation.textContent = "Choose a valid marker.";
-      markerSelect.focus();
-      return;
-    }
+    manualMarkers.push(customMarker);
   }
 
-  const updated = updateSheepEntryMarkerNoteById(sheepId, manualMarker, noteText);
+  const updated = updateSheepEntryMarkerNoteById(sheepId, manualMarkers, noteText);
   if (!updated) {
     if (validation) validation.textContent = "Could not find this sheep row. Refresh and try again.";
     return;
@@ -10865,8 +10873,6 @@ function bindEvents() {
         toggleSheepLogSelection(target.dataset.sheepId || "", target.checked);
         return;
       }
-      if (!(target instanceof HTMLSelectElement) || !target.classList.contains("sheep-log-marker-note-select")) return;
-      syncSheepLogCustomMarkerInput(target);
     });
   }
   if (elements.predictedCatchClockMode) {
