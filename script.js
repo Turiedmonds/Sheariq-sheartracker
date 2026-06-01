@@ -6297,7 +6297,7 @@ function updateTrendFlags() {
 
   }
 
-  if (recentRows.length === windowSize && recentRows.every((entry) => {
+  if (rows.length >= windowSize * 2 && recentRows.length === windowSize && recentRows.every((entry) => {
     const fullCycle = Number(entry?.fullCycle);
     return Number.isFinite(fullCycle) && fullCycle > requiredCycle;
   })) {
