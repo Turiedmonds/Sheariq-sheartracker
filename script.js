@@ -791,14 +791,24 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   }
 
   const nextRefillSheepNumber = Number(nextRefill?.sheepNumber);
-  const secondsBeforeRefill = nextRefillEffectiveElapsedSeconds - effectiveElapsedSeconds;
-  const canSuggestRefillSheep = Number.isFinite(nextRefillSheepNumber)
-    && nextRefillSheepNumber > 0
-    && secondsBeforeRefill >= DRINK_REFILL_MIN_SECONDS_BEFORE_REFILL_TO_SUGGEST_EARLY;
-  const suggestedSheepNumber = canSuggestRefillSheep ? nextRefillSheepNumber : null;
-  const message = canSuggestRefillSheep
-    ? `Drink due after next refill — consider drink before Sheep ${nextRefillSheepNumber}.`
-    : "Drink due after next refill — consider earlier drink.";
+  const currentPhysicalSheepCount = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  const sheepUntilRefill = Number.isFinite(nextRefillSheepNumber) && Number.isFinite(currentPhysicalSheepCount)
+    ? Math.ceil(nextRefillSheepNumber - currentPhysicalSheepCount)
+    : null;
+  const suggestedSheepNumber = Number.isFinite(nextRefillSheepNumber) && nextRefillSheepNumber > 0
+    ? nextRefillSheepNumber
+    : null;
+
+  let message = "Drink due after next refill — consider drink before the next refill.";
+  if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill <= 1) {
+    message = "Drink due after next refill — consider drink after this sheep.";
+  } else if (sheepUntilRefill === 2) {
+    message = "Drink due after next refill — consider drink after the next sheep.";
+  } else if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill > 2 && sheepUntilRefill <= 5) {
+    message = `Drink due after next refill — consider drink in ${sheepUntilRefill - 1} sheep.`;
+  }
 
   return {
     type: "drinkRefillClash",
@@ -7558,13 +7568,13 @@ function updateTimingAlertDisplay() {
       ? "Cutter change now"
       : `Cutter change in ${cutterAlert.seconds}s`;
     setTimingAlertDisplay("cutter", alertText);
+  } else if (drinkRefillClashAdvisory) {
+    setTimingAlertDisplay("drink", drinkRefillClashAdvisory.message);
   } else if (drinkAlert) {
     const alertText = drinkAlert.mode === "now"
       ? "Drink now"
       : `Drink in ${drinkAlert.seconds}s`;
     setTimingAlertDisplay("drink", alertText);
-  } else if (drinkRefillClashAdvisory) {
-    setTimingAlertDisplay("drink", drinkRefillClashAdvisory.message);
   } else if (inLastQuarter) {
     setTimingAlertDisplay("last-quarter", "Last quarter");
   } else {
