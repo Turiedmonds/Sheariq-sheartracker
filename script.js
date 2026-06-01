@@ -6445,7 +6445,7 @@ function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricN
   }
 
   const absDeltaText = `${Math.abs(clue.delta).toFixed(1)}s`;
-  const directionText = clue.delta > 0 ? "longer" : "shorter";
+  const directionText = clue.delta > 0 ? "slower" : "faster";
   const sheepMarkerText = `Sheep ${clue.sheepNumber} had ${clue.markerLabel}.`;
   const sameMarkerCount = clue.sameMarkerTiming?.counts?.[metricKey] || 0;
   const sameMarkerDelta = getTrendFlagSameMarkerMetricDelta(clue, metricKey);
@@ -6462,7 +6462,7 @@ function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricN
   if (sameMarkerCount >= 2) {
     if (sameMarkerSupportsTrend) {
       const sameMarkerDeltaText = `${Math.abs(sameMarkerDelta).toFixed(1)}s`;
-      const sameMarkerDirectionText = sameMarkerDelta > 0 ? "longer" : "shorter";
+      const sameMarkerDirectionText = sameMarkerDelta > 0 ? "slower" : "faster";
       if (trendTone === "bad" && clue.delta > meaningfulThresholdSeconds) {
         const suffix = metricKey === "catchDuration"
           ? "a strong indicator it was the likely driver of most of the catch time loss"
