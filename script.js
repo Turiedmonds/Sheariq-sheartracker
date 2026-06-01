@@ -168,6 +168,59 @@ function getManualMarkerDisplayLabel(manualMarker) {
   return sanitizedMarker ? sanitizedMarker.label : "";
 }
 
+function getManualMarkerDedupKey(manualMarker) {
+  const sanitizedMarker = sanitizeManualMarker(manualMarker);
+  if (!sanitizedMarker) return "";
+  if (sanitizedMarker.type === MANUAL_MARKER_CUSTOM_TYPE) {
+    const normalizedCustomLabel = normalizeManualMarkerCustomLabel(sanitizedMarker.customLabel || sanitizedMarker.label);
+    return normalizedCustomLabel ? `${MANUAL_MARKER_CUSTOM_TYPE}:${normalizedCustomLabel.toLowerCase()}` : "";
+  }
+  return isValidManualMarkerType(sanitizedMarker.type) ? `builtin:${sanitizedMarker.type}` : "";
+}
+
+function dedupeManualMarkers(manualMarkers) {
+  if (!Array.isArray(manualMarkers)) return [];
+  const seenKeys = new Set();
+  return manualMarkers.reduce((markers, marker) => {
+    const sanitizedMarker = sanitizeManualMarker(marker);
+    const dedupKey = getManualMarkerDedupKey(sanitizedMarker);
+    if (!sanitizedMarker || !dedupKey || seenKeys.has(dedupKey)) return markers;
+    seenKeys.add(dedupKey);
+    markers.push(sanitizedMarker);
+    return markers;
+  }, []);
+}
+
+function sanitizeManualMarkerArray(manualMarkers) {
+  return dedupeManualMarkers(Array.isArray(manualMarkers) ? manualMarkers : []);
+}
+
+function getConfirmedManualMarkersForEntry(entry) {
+  if (!entry || typeof entry !== "object") return [];
+  const manualMarkers = sanitizeManualMarkerArray(entry.manualMarkers);
+  if (manualMarkers.length) return manualMarkers;
+  const manualMarker = sanitizeManualMarker(entry.manualMarker);
+  return manualMarker ? [manualMarker] : [];
+}
+
+function syncLegacyManualMarkerToFirstManualMarker(entry, manualMarkers = getConfirmedManualMarkersForEntry(entry)) {
+  if (!entry || typeof entry !== "object") return;
+  if (manualMarkers.length) {
+    entry.manualMarker = { ...manualMarkers[0] };
+  } else {
+    delete entry.manualMarker;
+  }
+}
+
+function getManualMarkersDisplayLabel(manualMarkers) {
+  return sanitizeManualMarkerArray(manualMarkers)
+    .map((manualMarker) => manualMarker.type === MANUAL_MARKER_CUSTOM_TYPE
+      ? `Custom: ${getManualMarkerDisplayLabel(manualMarker)}`
+      : getManualMarkerDisplayLabel(manualMarker))
+    .filter(Boolean)
+    .join(" + ");
+}
+
 function getSheepStatus(entry) {
   return entry && entry.status ? entry.status : SHEEP_STATUS.ACCEPTED;
 }
@@ -6374,13 +6427,14 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
   markerNoteCell.className = "sheep-log-marker-note-col";
   markerNoteCell.dataset.sheepId = entry.id || "";
 
-  const manualMarker = sanitizeManualMarker(entry.manualMarker);
+  const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+  const manualMarker = manualMarkers[0] || null;
   const noteText = normalizeSheepNote(entry.note);
   const allAutoMarkers = plannedDelayMarkers.get(entry.number) || [];
-  const autoMarkers = !manualMarker && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
+  const autoMarkers = !manualMarkers.length && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
 
   if (sheepLogMarkerNoteEditorSheepId && entry.id === sheepLogMarkerNoteEditorSheepId) {
-    const suggestedMarker = !manualMarker && allAutoMarkers.length ? allAutoMarkers[0] : null;
+    const suggestedMarker = !manualMarkers.length && allAutoMarkers.length ? allAutoMarkers[0] : null;
     markerNoteCell.classList.add("is-editing");
     markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarker, noteText, suggestedMarker));
     return markerNoteCell;
@@ -6402,16 +6456,17 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
     content.appendChild(tags);
   }
 
-  if (manualMarker || noteText) {
+  if (manualMarkers.length || noteText) {
     markerNoteCell.classList.add("has-marker-note");
     const summary = document.createElement("div");
     summary.className = "sheep-log-marker-note-summary";
 
-    if (manualMarker) {
+    if (manualMarkers.length) {
       const markerSummary = document.createElement("div");
       markerSummary.className = "sheep-log-manual-marker-summary";
-      markerSummary.textContent = `Confirmed: ${getManualMarkerDisplayLabel(manualMarker)}`;
-      markerSummary.title = getManualMarkerDisplayLabel(manualMarker);
+      const markerSummaryLabel = getManualMarkersDisplayLabel(manualMarkers);
+      markerSummary.textContent = markerSummaryLabel;
+      markerSummary.title = markerSummaryLabel;
       summary.appendChild(markerSummary);
     }
 
@@ -6898,8 +6953,12 @@ function updateSheepEntryMarkerNoteById(sheepId, manualMarker, noteText) {
     entries.forEach((entry) => {
       if (entry?.id !== sheepId) return;
       if (manualMarker) {
-        entry.manualMarker = { ...manualMarker };
+        const sanitizedMarker = sanitizeManualMarker(manualMarker);
+        const manualMarkers = sanitizedMarker ? [sanitizedMarker] : [];
+        entry.manualMarkers = manualMarkers;
+        syncLegacyManualMarkerToFirstManualMarker(entry, manualMarkers);
       } else {
+        delete entry.manualMarkers;
         delete entry.manualMarker;
       }
       if (noteText) {
@@ -6918,10 +6977,12 @@ function sanitizeManualMarkersOnSheepEntries(entries) {
   if (!Array.isArray(entries)) return;
   entries.forEach((entry) => {
     if (!entry || typeof entry !== "object") return;
-    const manualMarker = sanitizeManualMarker(entry.manualMarker);
-    if (manualMarker) {
-      entry.manualMarker = manualMarker;
+    const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+    if (manualMarkers.length) {
+      entry.manualMarkers = manualMarkers;
+      syncLegacyManualMarkerToFirstManualMarker(entry, manualMarkers);
     } else {
+      delete entry.manualMarkers;
       delete entry.manualMarker;
     }
     const noteText = normalizeSheepNote(entry.note);
