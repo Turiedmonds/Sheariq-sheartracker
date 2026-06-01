@@ -7506,7 +7506,8 @@ function updateTimingAlertDisplay() {
     return;
   }
 
-  const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const effectiveElapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
+  const elapsedSeconds = effectiveElapsedSeconds;
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const runComplete = runDurationSeconds > 0 && elapsedSeconds >= runDurationSeconds;
   if (runComplete) {
