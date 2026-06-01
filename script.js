@@ -4656,9 +4656,9 @@ function updateTargetPacePredictionSnapshot(liveValues) {
 
 function getTargetRunTotalPredictionLabel(requiredRunTotalSheep) {
   if (requiredRunTotalSheep === null) {
-    return "Predicted time to reach run target:";
+    return "Predicted target finish time:";
   }
-  return `Predicted time to reach run target (${requiredRunTotalSheep}):`;
+  return `Predicted target finish time (${requiredRunTotalSheep}):`;
 }
 
 
