@@ -1949,6 +1949,18 @@ td {
 }
 
 #panel-cycle .timing-alert-row,
+#panel-cycle .pen-refill-alert-row {
+  grid-template-columns: 1fr;
+  row-gap: 0.15rem;
+}
+
+#panel-cycle .timing-alert-row .panel-metric-value,
+#panel-cycle .pen-refill-alert-row .panel-metric-value {
+  justify-self: stretch;
+  text-align: left;
+}
+
+#panel-cycle .timing-alert-row,
 #panel-cycle .pen-refill-alert-row,
 #panel-pen-fill-planner .metric-row:has(#penStateModel),
 #panel-pen-fill-planner .metric-row:has(#penStateRefillStatus),
