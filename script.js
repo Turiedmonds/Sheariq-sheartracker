@@ -6072,8 +6072,7 @@ function formatClockHHMM(timestamp) {
 }
 
 function formatTrendWindowClock(entry, field) {
-  const dayClockField = field === "start" ? "startDayClockSeconds" : "endDayClockSeconds";
-  const dayClockSeconds = getFiniteClockNumber(entry?.[dayClockField]);
+  const dayClockSeconds = getSheepLogDayClockSeconds(entry, field);
   if (Number.isFinite(dayClockSeconds)) return formatSecondsFromMidnightClock(dayClockSeconds);
   return formatClock(field === "start" ? entry?.startTime : entry?.endTime);
 }
