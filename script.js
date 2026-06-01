@@ -6163,6 +6163,31 @@ function handleTrendGraphPointSelection(event) {
   }
 }
 
+function escapeTrendFlagHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function formatTrendFlagList(items) {
+  if (!items.length) return "";
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`;
+}
+
+function getTrendFlagMarkerLabels(windowRows) {
+  const markers = dedupeManualMarkers(windowRows.flatMap((entry) => getConfirmedManualMarkersForEntry(entry)));
+  return markers
+    .map((marker) => marker.type === MANUAL_MARKER_CUSTOM_TYPE
+      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
+      : getManualMarkerDisplayLabel(marker))
+    .filter(Boolean);
+}
+
 function updateTrendFlags() {
   if (!elements.trendFlags) return;
   const { requiredCycle } = calculateTargetMetrics();
@@ -6177,75 +6202,56 @@ function updateTrendFlags() {
   const catches = rows.map((s) => s.catchDuration);
   const windowSize = 5;
   const cards = [];
+  const meaningfulThresholdSeconds = 0.2;
 
-  const renderCard = ({ title, windowRows, avgCyclePrev, avgCycleCurr, avgCatchPrev, avgCatchCurr }) => {
+  const averageMetric = (windowRows, metricKey) => {
+    const values = windowRows
+      .map((entry) => Number(entry?.[metricKey]))
+      .filter((value) => Number.isFinite(value));
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+  };
+
+  const renderMetricCard = ({ title, label, contextMetricName, windowRows, previousAverage, latestAverage }) => {
     const meta = getTrendWindowMeta(windowRows, windowSize);
-    const cycleDelta = avgCycleCurr - avgCyclePrev;
-    const catchDelta = avgCatchCurr - avgCatchPrev;
+    const delta = latestAverage - previousAverage;
+    const markerLabels = getTrendFlagMarkerLabels(windowRows).map(escapeTrendFlagHtml);
+    const markerLine = markerLabels.length
+      ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the ${contextMetricName}.</div>`
+      : "";
     return `
       <div class="trend-flag">
         <div class="trend-flag-title">${title}</div>
         <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${meta.windowSize}</div>
         <div class="trend-flag-lines">
-          <div><span class="k">Total Time Per Sheep</span>: <span class="v">${formatSeconds(avgCyclePrev)} → ${formatSeconds(avgCycleCurr)}</span> <span class="d ${getDeltaTone(cycleDelta)}">${formatTrendDelta(cycleDelta)}</span></div>
-          <div><span class="k">Catch</span>: <span class="v">${formatSeconds(avgCatchPrev)} → ${formatSeconds(avgCatchCurr)}</span> <span class="d ${getDeltaTone(catchDelta)}">${formatTrendDelta(catchDelta)}</span></div>
+          <div><span class="k">${label}</span>: <span class="v">${formatSeconds(previousAverage)} → ${formatSeconds(latestAverage)}</span> <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
+          ${markerLine}
         </div>
       </div>
     `;
   };
 
-  if (cycles.length >= windowSize) {
-    const lastRows = rows.slice(-windowSize);
-    const last5Cycle = cycles.slice(-windowSize);
-    const avgLast5Cycle = last5Cycle.reduce((a, b) => a + b, 0) / last5Cycle.length;
-    const avgLast5Catch = catches.slice(-windowSize).reduce((a, b) => a + b, 0) / windowSize;
-    if (last5Cycle.every((v) => v > requiredCycle)) {
-      const lastMeta = getTrendWindowMeta(lastRows, windowSize);
-      cards.push(`
-        <div class="trend-flag">
-          <div class="trend-flag-title">Sustained behind</div>
-          <div class="trend-flag-meta">Sheep ${lastMeta.sheepStart}–${lastMeta.sheepEnd} • ${lastMeta.timeStart}–${lastMeta.timeEnd} • Window: last ${windowSize}</div>
-          <div class="trend-flag-lines">
-            <div><span class="k">Total Time Per Sheep</span>: <span class="v">Target ${formatSeconds(requiredCycle)} → ${formatSeconds(avgLast5Cycle)}</span> <span class="d bad">${formatTrendDelta(avgLast5Cycle - requiredCycle)}</span></div>
-            <div><span class="k">Catch</span>: <span class="v">Recent avg ${formatSeconds(avgLast5Catch)}</span> <span class="d neutral">(all 5 above target cycle)</span></div>
-          </div>
-        </div>
-      `);
-    }
-  }
-
-  if (cycles.length >= 10) {
+  if (rows.length >= 10) {
     const prevRows = rows.slice(-10, -5);
     const recentRows = rows.slice(-5);
-    const prevCycle = cycles.slice(-10, -5);
-    const recentCycle = cycles.slice(-5);
-    const prevCatch = catches.slice(-10, -5);
-    const recentCatch = catches.slice(-5);
-    const prevAvgCycle = prevCycle.reduce((a, b) => a + b, 0) / prevCycle.length;
-    const recentAvgCycle = recentCycle.reduce((a, b) => a + b, 0) / recentCycle.length;
-    const prevAvgCatch = prevCatch.reduce((a, b) => a + b, 0) / prevCatch.length;
-    const recentAvgCatch = recentCatch.reduce((a, b) => a + b, 0) / recentCatch.length;
+    const metricDefinitions = [
+      { title: "Catch time", label: "Catch", metricKey: "catchDuration", contextMetricName: "catch average" },
+      { title: "Shear time", label: "Shear", metricKey: "shearDuration", contextMetricName: "shear average" },
+      { title: "Total time per sheep", label: "Total Time Per Sheep", metricKey: "fullCycle", contextMetricName: "total time average" }
+    ];
 
-    if (recentAvgCycle > prevAvgCycle + 0.2) {
-      cards.push(renderCard({
-        title: "Pace slipping",
+    metricDefinitions.forEach((metric) => {
+      const previousAverage = averageMetric(prevRows, metric.metricKey);
+      const latestAverage = averageMetric(recentRows, metric.metricKey);
+      if (Math.abs(latestAverage - previousAverage) <= meaningfulThresholdSeconds) return;
+      cards.push(renderMetricCard({
+        title: metric.title,
+        label: metric.label,
+        contextMetricName: metric.contextMetricName,
         windowRows: recentRows,
-        avgCyclePrev: prevAvgCycle,
-        avgCycleCurr: recentAvgCycle,
-        avgCatchPrev: prevAvgCatch,
-        avgCatchCurr: recentAvgCatch
+        previousAverage,
+        latestAverage
       }));
-    }
-    if (prevAvgCycle > recentAvgCycle + 0.2) {
-      cards.push(renderCard({
-        title: "Recovery",
-        windowRows: recentRows,
-        avgCyclePrev: prevAvgCycle,
-        avgCycleCurr: recentAvgCycle,
-        avgCatchPrev: prevAvgCatch,
-        avgCatchCurr: recentAvgCatch
-      }));
-    }
+    });
   }
 
   if (!cards.length && cycles.length >= windowSize) {
