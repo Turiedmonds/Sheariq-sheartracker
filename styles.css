@@ -2107,16 +2107,20 @@ td {
   padding: 0.08rem 0.3rem;
 }
 
-#quarterPaceStatus.quarter-pace-neutral {
+#quarterPaceStatus.quarter-pace-neutral,
+#quarterTimeStatus.quarter-pace-neutral {
   color: #374151;
 }
 
 #quarterPaceStatus.quarter-pace-ahead,
-#quarterPaceStatus.quarter-pace-on {
+#quarterPaceStatus.quarter-pace-on,
+#quarterTimeStatus.quarter-pace-ahead,
+#quarterTimeStatus.quarter-pace-on {
   color: #166534;
 }
 
-#quarterPaceStatus.quarter-pace-behind {
+#quarterPaceStatus.quarter-pace-behind,
+#quarterTimeStatus.quarter-pace-behind {
   color: #991b1b;
 }
 
