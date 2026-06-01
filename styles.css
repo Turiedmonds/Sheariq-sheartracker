@@ -188,8 +188,14 @@ body {
 }
 
 .quality-rating-form-grid input,
+.quality-rating-form-grid select,
 .quality-rating-form-grid textarea {
   width: 100%;
+}
+
+.quality-rating-form-grid input[type="checkbox"] {
+  justify-self: start;
+  width: auto;
 }
 
 .quality-rating-form-grid textarea {
@@ -236,6 +242,16 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #4b5563;
+}
+
+.quality-rating-warning-badge {
+  justify-self: start;
+  border-radius: 999px;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.12rem 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 .quality-rating-history-actions {

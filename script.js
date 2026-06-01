@@ -37,6 +37,13 @@ const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
 const QUALITY_RATING_PERIOD_SECONDS = 1800;
+const QUALITY_WARNING_REASONS = Object.freeze([
+  "Quality rating over standard",
+  "Rule breach",
+  "Damaged sheep / cut",
+  "Sheep handling / porthole issue",
+  "Other"
+]);
 
 const DEFAULT_CONNECTION_SETTINGS = {
   ip: "192.168.33.1",
@@ -2380,6 +2387,9 @@ const elements = {
   qualityRatingOfficialCountInput: document.getElementById("qualityRatingOfficialCountInput"),
   qualityRatingPhysicalCountInput: document.getElementById("qualityRatingPhysicalCountInput"),
   qualityRatingNotesInput: document.getElementById("qualityRatingNotesInput"),
+  qualityRatingOfficialWarningInput: document.getElementById("qualityRatingOfficialWarningInput"),
+  qualityRatingWarningReasonInput: document.getElementById("qualityRatingWarningReasonInput"),
+  qualityRatingWarningNotesInput: document.getElementById("qualityRatingWarningNotesInput"),
   qualityRatingSaveBtn: document.getElementById("qualityRatingSaveBtn"),
   qualityRatingClearBtn: document.getElementById("qualityRatingClearBtn"),
   qualityRatingHistory: document.getElementById("qualityRatingHistory"),
@@ -3334,6 +3344,12 @@ function formatDurationValue(value) {
   return Number.isFinite(value) ? `${value.toFixed(3)}s` : "—";
 }
 
+function normalizeQualityWarningReason(value) {
+  if (typeof value !== "string") return "";
+  const reason = value.trim().slice(0, 80);
+  return QUALITY_WARNING_REASONS.includes(reason) ? reason : "";
+}
+
 function sanitizeQualityRatingRecord(record) {
   if (!record || typeof record !== "object") return null;
   const rawRating = record.qualityRating;
@@ -3351,6 +3367,9 @@ function sanitizeQualityRatingRecord(record) {
     return Number.isFinite(numberValue) ? numberValue : null;
   };
   const sanitizeNotes = (value) => typeof value === "string" ? value.trim().slice(0, 200) : "";
+  const officialWarning = record.officialWarning === true;
+  const warningReason = officialWarning ? normalizeQualityWarningReason(record.warningReason) : "";
+  const warningNotes = officialWarning ? sanitizeNotes(record.warningNotes) : "";
   const enteredAt = Number(record.enteredAt);
 
   return {
@@ -3362,6 +3381,9 @@ function sanitizeQualityRatingRecord(record) {
     officialCountForPeriod: sanitizeFiniteOrNull(record.officialCountForPeriod),
     physicalCountForPeriod: sanitizeFiniteOrNull(record.physicalCountForPeriod),
     notes: sanitizeNotes(record.notes),
+    officialWarning,
+    warningReason,
+    warningNotes,
     enteredAt: Number.isFinite(enteredAt) ? enteredAt : Date.now()
   };
 }
@@ -3435,6 +3457,17 @@ function setQualityRatingValidation(message = "") {
   elements.qualityRatingValidation.hidden = !message;
 }
 
+function updateQualityWarningFieldState() {
+  const warningChecked = Boolean(elements.qualityRatingOfficialWarningInput?.checked);
+  if (elements.qualityRatingWarningReasonInput) {
+    elements.qualityRatingWarningReasonInput.disabled = !warningChecked;
+    elements.qualityRatingWarningReasonInput.required = warningChecked;
+  }
+  if (elements.qualityRatingWarningNotesInput) {
+    elements.qualityRatingWarningNotesInput.disabled = !warningChecked;
+  }
+}
+
 function setQualityRatingCountDefaults(periodNumber) {
   const counts = getQualityPeriodDefaultCounts(periodNumber);
   if (elements.qualityRatingOfficialCountInput) elements.qualityRatingOfficialCountInput.value = String(counts.officialCountForPeriod);
@@ -3445,9 +3478,13 @@ function createQualityRatingRecordFromForm() {
   const periodNumber = Math.max(Math.floor(Number(elements.qualityRatingPeriodInput?.value)) || 0, 0);
   const qualityRating = (elements.qualityRatingInput?.value || "").trim();
   const notes = elements.qualityRatingNotesInput?.value || "";
+  const officialWarning = Boolean(elements.qualityRatingOfficialWarningInput?.checked);
+  const warningReason = officialWarning ? normalizeQualityWarningReason(elements.qualityRatingWarningReasonInput?.value || "") : "";
+  const warningNotes = officialWarning ? (elements.qualityRatingWarningNotesInput?.value || "") : "";
 
   if (!qualityRating) return { error: "Enter a quality rating before saving." };
   if (periodNumber <= 0) return { error: "Enter a positive period number." };
+  if (officialWarning && !warningReason) return { error: "Select a warning reason before saving an official warning." };
 
   const { officialCountForPeriod, physicalCountForPeriod } = getQualityPeriodDefaultCounts(periodNumber);
   const bounds = getQualityPeriodBounds(periodNumber);
@@ -3462,6 +3499,9 @@ function createQualityRatingRecordFromForm() {
       officialCountForPeriod,
       physicalCountForPeriod,
       notes,
+      officialWarning,
+      warningReason,
+      warningNotes,
       enteredAt: editId
         ? (appState.qualityRatings.find((rating) => rating.id === editId)?.enteredAt || Date.now())
         : Date.now()
@@ -3517,7 +3557,11 @@ function editQualityRating(recordId) {
   if (elements.qualityRatingOfficialCountInput) elements.qualityRatingOfficialCountInput.value = record.officialCountForPeriod ?? "";
   if (elements.qualityRatingPhysicalCountInput) elements.qualityRatingPhysicalCountInput.value = record.physicalCountForPeriod ?? "";
   if (elements.qualityRatingNotesInput) elements.qualityRatingNotesInput.value = record.notes || "";
+  if (elements.qualityRatingOfficialWarningInput) elements.qualityRatingOfficialWarningInput.checked = Boolean(record.officialWarning);
+  if (elements.qualityRatingWarningReasonInput) elements.qualityRatingWarningReasonInput.value = record.warningReason || "";
+  if (elements.qualityRatingWarningNotesInput) elements.qualityRatingWarningNotesInput.value = record.warningNotes || "";
   if (elements.qualityRatingSaveBtn) elements.qualityRatingSaveBtn.textContent = "Save Rating";
+  updateQualityWarningFieldState();
   setQualityRatingValidation("");
   elements.qualityRatingInput?.focus();
 }
@@ -3542,7 +3586,11 @@ function renderQualityRatingModal() {
   const ratings = sanitizeQualityRatings(appState.qualityRatings);
   if (ratings.length !== appState.qualityRatings.length) appState.qualityRatings = ratings;
   const latestRating = getLatestQualityRating();
-  setText(elements.qualityRatingLatestSummary, latestRating ? `Latest: ${latestRating.qualityRating}` : "No quality ratings yet.");
+  const warningCount = ratings.filter((rating) => rating.officialWarning).length;
+  setText(
+    elements.qualityRatingLatestSummary,
+    latestRating ? `Latest: ${latestRating.qualityRating} • Warnings: ${warningCount}` : "No quality ratings yet."
+  );
 
   if (!elements.qualityRatingHistory) return;
   elements.qualityRatingHistory.innerHTML = "";
@@ -3570,6 +3618,13 @@ function renderQualityRatingModal() {
     const meta = document.createElement("span");
     meta.textContent = `Official ${record.officialCountForPeriod ?? "—"} • Physical ${record.physicalCountForPeriod ?? "—"}`;
     details.appendChild(meta);
+
+    if (record.officialWarning) {
+      const warningBadge = document.createElement("span");
+      warningBadge.className = "quality-rating-warning-badge";
+      warningBadge.textContent = record.warningReason ? `Warning: ${record.warningReason}` : "Warning";
+      details.appendChild(warningBadge);
+    }
 
     if (record.notes) {
       const notes = document.createElement("span");
@@ -3607,7 +3662,11 @@ function resetQualityRatingForm() {
   if (elements.qualityRatingPeriodInput) elements.qualityRatingPeriodInput.value = String(periodNumber);
   if (elements.qualityRatingInput) elements.qualityRatingInput.value = "";
   if (elements.qualityRatingNotesInput) elements.qualityRatingNotesInput.value = "";
+  if (elements.qualityRatingOfficialWarningInput) elements.qualityRatingOfficialWarningInput.checked = false;
+  if (elements.qualityRatingWarningReasonInput) elements.qualityRatingWarningReasonInput.value = "";
+  if (elements.qualityRatingWarningNotesInput) elements.qualityRatingWarningNotesInput.value = "";
   if (elements.qualityRatingSaveBtn) elements.qualityRatingSaveBtn.textContent = "Save Rating";
+  updateQualityWarningFieldState();
   setQualityRatingCountDefaults(periodNumber);
   setQualityRatingValidation("");
 }
@@ -7797,10 +7856,15 @@ function updatePenFillForecastDisplay() {
   );
 }
 
-function getCurrentSheepRuntimeSeconds() {
+function getLiveDisplayNowMs() {
+  if (appState.paused && Number.isFinite(appState.pauseStartedAtMs)) return appState.pauseStartedAtMs;
+  return Date.now();
+}
+
+function getCurrentSheepRuntimeSeconds(displayNowMs = getLiveDisplayNowMs()) {
   if (!appState.runActive || !appState.currentCycle.catchStart) return null;
 
-  const now = Date.now();
+  const now = displayNowMs;
   const catchStart = appState.currentCycle.catchStart;
   if (appState.currentCycle.motorOn && appState.currentCycle.shearStart) {
     const catchDuration = Math.max((appState.currentCycle.shearStart - catchStart) / 1000, 0);
@@ -7811,7 +7875,7 @@ function getCurrentSheepRuntimeSeconds() {
   return Math.max((now - catchStart) / 1000, 0);
 }
 
-function updateCurrentSheepTimeLeft(requiredCycle) {
+function updateCurrentSheepTimeLeft(requiredCycle, displayNowMs = getLiveDisplayNowMs()) {
   if (!elements.currentSheepTimeLeft) return;
 
   elements.currentSheepTimeLeft.classList.remove(
@@ -7827,7 +7891,7 @@ function updateCurrentSheepTimeLeft(requiredCycle) {
     setText(elements.currentSheepTimeLeftLabel, "Current sheep time left");
   }
 
-  const currentSheepRuntime = getCurrentSheepRuntimeSeconds();
+  const currentSheepRuntime = getCurrentSheepRuntimeSeconds(displayNowMs);
   if (!Number.isFinite(requiredCycle) || requiredCycle <= 0 || !Number.isFinite(currentSheepRuntime)) {
     setText(elements.currentSheepTimeLeft, "—");
     elements.currentSheepTimeLeft.classList.add("on-pace-neutral");
@@ -7853,7 +7917,7 @@ function updateCurrentSheepTimeLeft(requiredCycle) {
   }
 }
 
-function updateTotalSheepTimeDisplay(requiredCycle) {
+function updateTotalSheepTimeDisplay(requiredCycle, displayNowMs = getLiveDisplayNowMs()) {
   if (!elements.currentTotalSheepTime) return;
 
   elements.currentTotalSheepTime.classList.remove("on-pace-good", "on-pace-bad", "on-pace-neutral");
@@ -7865,7 +7929,7 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
   }
 
   const liveSheepRuntime = appState.currentCycle.motorOn && appState.currentCycle.shearStart
-    ? getCurrentSheepRuntimeSeconds()
+    ? getCurrentSheepRuntimeSeconds(displayNowMs)
     : null;
   const lastSheep = appState.sheep.length ? appState.sheep[appState.sheep.length - 1] : null;
   const totalSheepTime = Number.isFinite(liveSheepRuntime) ? liveSheepRuntime : Number(lastSheep?.fullCycle);
@@ -7884,18 +7948,19 @@ function updateTotalSheepTimeDisplay(requiredCycle) {
 }
 
 function updateLivePanel() {
-  maybeHandleRunEndExpired();
-  const autoStartedNextRun = maybeAutoStartNextRunAfterBreak();
+  const liveDisplayNowMs = getLiveDisplayNowMs();
+  maybeHandleRunEndExpired(liveDisplayNowMs);
+  const autoStartedNextRun = maybeAutoStartNextRunAfterBreak(liveDisplayNowMs);
   if (autoStartedNextRun) return;
   const preparedForNextRunBreak = isPreparedForNextRunBreak();
   const shearCurrent = !preparedForNextRunBreak && appState.currentCycle.motorOn && appState.currentCycle.shearStart
-    ? (Date.now() - appState.currentCycle.shearStart) / 1000
+    ? (liveDisplayNowMs - appState.currentCycle.shearStart) / 1000
     : 0;
 
   const catchCurrent = !preparedForNextRunBreak && appState.runActive && !appState.currentCycle.motorOn && appState.currentCycle.catchStart
-    ? (Date.now() - appState.currentCycle.catchStart) / 1000
+    ? (liveDisplayNowMs - appState.currentCycle.catchStart) / 1000
     : 0;
-  let countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - Date.now()) / 1000, 0) : 0;
+  let countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - liveDisplayNowMs) / 1000, 0) : 0;
   if (preparedForNextRunBreak) {
     const schedule = getScheduleForCurrentType();
     const nextRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
@@ -7905,7 +7970,7 @@ function updateLivePanel() {
   setText(elements.motorState, appState.currentMotorDisplay);
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
-  updateTotalSheepTimeDisplay(calculateTargetMetrics().requiredCycle);
+  updateTotalSheepTimeDisplay(calculateTargetMetrics().requiredCycle, liveDisplayNowMs);
   setText(elements.runClock, formatCountdown(preparedForNextRunBreak ? 0 : getEffectiveElapsedSeconds()));
   setText(elements.runCountdown, formatCountdown(countdownSeconds));
   updateQuarterDisplay();
@@ -7922,7 +7987,7 @@ function updateLivePanel() {
   setText(elements.totalSheep, String(appState.daySheep.length));
   const currentSheepNumber = !appState.runActive ? 0 : (appState.currentCycle.motorOn && appState.currentCycle.shearStart ? appState.sheep.length + 1 : appState.sheep.length);
   setText(elements.currentSheepNumber, String(currentSheepNumber));
-  updateCurrentSheepTimeLeft(calculateTargetMetrics().requiredCycle);
+  updateCurrentSheepTimeLeft(calculateTargetMetrics().requiredCycle, liveDisplayNowMs);
 }
 
 function updateMarkerAverageDisplays() {
@@ -10506,6 +10571,8 @@ function bindEvents() {
       if (!appState.qualityRatingEditId) setQualityRatingCountDefaults(elements.qualityRatingPeriodInput.value);
     });
   }
+  if (elements.qualityRatingOfficialWarningInput) elements.qualityRatingOfficialWarningInput.addEventListener("change", updateQualityWarningFieldState);
+  updateQualityWarningFieldState();
   if (elements.qualityRatingHistory) {
     elements.qualityRatingHistory.addEventListener("click", (event) => {
       const actionTarget = event.target instanceof HTMLElement ? event.target.closest("[data-action]") : null;
