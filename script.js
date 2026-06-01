@@ -2434,6 +2434,7 @@ const elements = {
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
   quarterSheepCount: document.getElementById("quarterSheepCount"),
+  quarterPaceStatus: document.getElementById("quarterPaceStatus"),
   timingAlert: document.getElementById("timingAlert"),
   penRefillAlert: document.getElementById("penRefillAlert"),
   penFillForecastNext: document.getElementById("penFillForecastNext"),
@@ -3278,6 +3279,7 @@ const METRIC_VALUE_IDS = new Set([
   "currentQuarter",
   "quarterClock",
   "quarterSheepCount",
+  "quarterPaceStatus",
   "dayClock",
   "totalSheep",
   "currentSheepNumber",
@@ -7233,6 +7235,59 @@ function getCurrentQuarterSheepCount() {
   }).length;
 }
 
+function getQuarterPaceStatus(quarterElapsedSeconds = null) {
+  const requiredSecondsPerSheep = calculateTargetMetrics().requiredCycle;
+  if (!Number.isFinite(requiredSecondsPerSheep) || requiredSecondsPerSheep <= 0) {
+    return { text: "—", className: "quarter-pace-neutral" };
+  }
+
+  const actualQuarterSheep = getCurrentQuarterSheepCount();
+  const elapsedSeconds = Number.isFinite(quarterElapsedSeconds)
+    ? Math.max(quarterElapsedSeconds, 0)
+    : Math.max(getEffectiveElapsedSeconds() - getCurrentQuarterWindow().startSeconds, 0);
+  const expectedQuarterSheep = elapsedSeconds / requiredSecondsPerSheep;
+  if (!Number.isFinite(expectedQuarterSheep)) {
+    return { text: "—", className: "quarter-pace-neutral" };
+  }
+
+  const baseText = `${actualQuarterSheep} / ${expectedQuarterSheep.toFixed(1)} expected`;
+  const difference = actualQuarterSheep - expectedQuarterSheep;
+  if (Math.abs(difference) <= 0.5) {
+    return {
+      text: expectedQuarterSheep <= 0 ? baseText : `${baseText} — On pace`,
+      className: "quarter-pace-on"
+    };
+  }
+
+  if (difference > 0.5) {
+    return { text: `${baseText} — Ahead`, className: "quarter-pace-ahead" };
+  }
+
+  return { text: `${baseText} — Behind`, className: "quarter-pace-behind" };
+}
+
+function updateQuarterPaceStatus(quarterElapsedSeconds = null, hasRunStarted = true) {
+  const paceClasses = [
+    "quarter-pace-neutral",
+    "quarter-pace-ahead",
+    "quarter-pace-on",
+    "quarter-pace-behind"
+  ];
+
+  if (!elements.quarterPaceStatus) return;
+  elements.quarterPaceStatus.classList.remove(...paceClasses);
+
+  if (!hasRunStarted) {
+    setText(elements.quarterPaceStatus, "—");
+    elements.quarterPaceStatus.classList.add("quarter-pace-neutral");
+    return;
+  }
+
+  const status = getQuarterPaceStatus(quarterElapsedSeconds);
+  setText(elements.quarterPaceStatus, status.text);
+  elements.quarterPaceStatus.classList.add(status.className);
+}
+
 function updateQuarterDisplay() {
   const quarterSeconds = 900;
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
@@ -7241,6 +7296,7 @@ function updateQuarterDisplay() {
     setText(elements.currentQuarter, "—");
     setText(elements.quarterClock, "00:00");
     setText(elements.quarterSheepCount, "0");
+    updateQuarterPaceStatus(null, false);
     return;
   }
 
@@ -7248,11 +7304,13 @@ function updateQuarterDisplay() {
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const totalQuarters = Math.max(Math.ceil(runDurationSeconds / quarterSeconds), 1);
   const currentQuarterNumber = Math.min(Math.floor(elapsedSeconds / quarterSeconds) + 1, totalQuarters);
-  const quarterElapsedSeconds = elapsedSeconds % quarterSeconds;
+  const { startSeconds, endSeconds } = getCurrentQuarterWindow();
+  const quarterElapsedSeconds = Math.min(Math.max(elapsedSeconds - startSeconds, 0), Math.max(endSeconds - startSeconds, 0));
 
   setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
   setText(elements.quarterSheepCount, String(getCurrentQuarterSheepCount()));
+  updateQuarterPaceStatus(quarterElapsedSeconds, true);
 }
 
 function updateTimingAlertDisplay() {
