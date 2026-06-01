@@ -1927,6 +1927,39 @@ td {
   white-space: nowrap;
 }
 
+#panel-cycle .timing-alert-row .panel-metric-value,
+#panel-cycle .pen-refill-alert-row .panel-metric-value,
+#panel-pen-fill-planner #penStateModel,
+#panel-pen-fill-planner #penStateRefillStatus,
+#panel-pen-fill-planner #penFillEarlyReminder,
+#panel-pen-fill-planner #penFillForecastStatus,
+#panel-pen-fill-planner #penFillStrategyRecommendation,
+#panel-pen-fill-planner #penFillPlannerReason,
+#panel-pen-fill-planner #penFillConfirmStatus,
+#panel-target #catchPrediction,
+#panel-target #timeSpareToBell,
+#panel-target #currentSheepTimeLeft,
+#panel-trend-flags .status-box,
+#panel-trend-flags .trend-flag,
+#panel-reviews .review-entry {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+}
+
+#panel-cycle .timing-alert-row,
+#panel-cycle .pen-refill-alert-row,
+#panel-pen-fill-planner .metric-row:has(#penStateModel),
+#panel-pen-fill-planner .metric-row:has(#penStateRefillStatus),
+#panel-pen-fill-planner .metric-row:has(#penFillEarlyReminder),
+#panel-pen-fill-planner .metric-row:has(#penFillForecastStatus),
+#panel-pen-fill-planner .metric-row:has(#penFillStrategyRecommendation),
+#panel-pen-fill-planner .metric-row:has(#penFillPlannerReason),
+#panel-pen-fill-planner .metric-row:has(#penFillConfirmStatus) {
+  align-items: start;
+}
+
 #panel-cycle .run-badge-row {
   grid-template-columns: 1fr;
   margin-bottom: 0.15rem;
