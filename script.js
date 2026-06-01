@@ -5724,13 +5724,31 @@ function calculateTargetMetrics() {
   let timeSpareText = "—";
   let timeSpareIsAhead = null;
   let maxPossibleRunTotal = officialSheepDoneThisRun;
+  let maxCatchRunSeconds = elapsedRunSeconds;
+  const targetAlreadyReached = remainingToTarget <= 0;
+  let targetReachable = targetAlreadyReached;
 
   if (avgCycleSeconds > 0) {
     projectedFuturePhysicalSheep = Math.max(Math.floor(runRemainingSeconds / avgCycleSeconds), 0);
     projectedTotal = officialSheepDoneThisRun + projectedFuturePhysicalSheep;
     maxPossibleRunTotal = projectedTotal;
-    const targetCatchOffsetSeconds = remainingToTarget <= 0 ? 0 : Math.max(remainingToTarget - 1, 0) * avgCycleSeconds;
+    targetReachable = targetAlreadyReached || remainingToTarget <= projectedFuturePhysicalSheep;
+
+    const targetCatchOffsetSeconds = targetAlreadyReached
+      ? 0
+      : Math.max(remainingToTarget - 1, 0) * avgCycleSeconds;
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
+
+    // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the run ends.
+    // Keep this catch/start-based and in lockstep with projectedFuturePhysicalSheep; do not subtract an artificial end-of-run buffer.
+    maxCatchRunSeconds = projectedFuturePhysicalSheep > 0
+      ? elapsedRunSeconds + (projectedFuturePhysicalSheep - 1) * avgCycleSeconds
+      : elapsedRunSeconds;
+
+    if (targetReachable) {
+      targetCatchRunSeconds = Math.min(targetCatchRunSeconds, maxCatchRunSeconds);
+    }
+
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
       ? `Target-count sheep catch/start projected ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
@@ -5738,16 +5756,7 @@ function calculateTargetMetrics() {
     timeSpareIsAhead = timeDifference >= 0;
   }
 
-  // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the run ends.
-  let maxCatchRunSeconds = 0;
-  if (avgCycleSeconds > 0 && runLengthSeconds > 0) {
-    const maxExtraSheep = Math.floor(runRemainingSeconds / avgCycleSeconds);
-    const lastCatchStartRunSeconds = maxExtraSheep <= 0
-      ? elapsedRunSeconds
-      : elapsedRunSeconds + (maxExtraSheep - 1) * avgCycleSeconds;
-    const maxAllowed = Math.max(runLengthSeconds - 2, 0);
-    maxCatchRunSeconds = Math.min(lastCatchStartRunSeconds, maxAllowed);
-  }
+  targetCatchRunSeconds = Math.min(Math.max(targetCatchRunSeconds, 0), Math.max(runLengthSeconds, 0));
   maxCatchRunSeconds = Math.min(Math.max(maxCatchRunSeconds, 0), Math.max(runLengthSeconds, 0));
 
   const remainingSeconds = Math.max(runLengthSeconds - elapsedSeconds, 0);
@@ -5765,6 +5774,8 @@ function calculateTargetMetrics() {
     projectedFuturePhysicalSheep,
     requiredDaySheep,
     requiredRunSheep,
+    targetAlreadyReached,
+    targetReachable,
     targetCatchRunSeconds,
     timeSpareText,
     timeSpareIsAhead,
@@ -8859,11 +8870,15 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
   const predictedHourTotal = appState.runActive && appState.currentStats.avgCycle > 0
     ? Math.round(appState.currentStats.sheepPerHour)
     : null;
+  const targetCatchTime = target.targetReachable
+    ? formatTargetPaceDayClock(target.targetCatchRunSeconds)
+    : "Not reachable before run end";
+
   return {
     predictedQuarterTotal: quarter.predicted,
     predictedHourTotal,
     projectedTotal: target.projectedTotal,
-    estimatedLastCatchTime: formatTargetPaceDayClock(target.targetCatchRunSeconds),
+    estimatedLastCatchTime: targetCatchTime,
     maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
     catchPrediction: predictCatch(target, calculateRequiredRunTotalSheep())
   };
