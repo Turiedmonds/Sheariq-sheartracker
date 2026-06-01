@@ -6071,6 +6071,13 @@ function formatClockHHMM(timestamp) {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function formatTrendWindowClock(entry, field) {
+  const dayClockField = field === "start" ? "startDayClockSeconds" : "endDayClockSeconds";
+  const dayClockSeconds = getFiniteClockNumber(entry?.[dayClockField]);
+  if (Number.isFinite(dayClockSeconds)) return formatSecondsFromMidnightClock(dayClockSeconds);
+  return formatClock(field === "start" ? entry?.startTime : entry?.endTime);
+}
+
 function getTrendWindowMeta(windowRows, windowSize) {
   if (!windowRows.length) {
     return { sheepStart: 0, sheepEnd: 0, timeStart: "--:--", timeEnd: "--:--", windowSize };
@@ -6082,8 +6089,8 @@ function getTrendWindowMeta(windowRows, windowSize) {
   return {
     sheepStart,
     sheepEnd,
-    timeStart: formatClockHHMM(first.startTime),
-    timeEnd: formatClockHHMM(last.endTime),
+    timeStart: formatTrendWindowClock(first, "start"),
+    timeEnd: formatTrendWindowClock(last, "end"),
     windowSize
   };
 }
