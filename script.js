@@ -2434,8 +2434,8 @@ const elements = {
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
   quarterSheepCount: document.getElementById("quarterSheepCount"),
-  quarterPaceStatus: document.getElementById("quarterPaceStatus"),
-  quarterTimeStatus: document.getElementById("quarterTimeStatus"),
+  quarterTargetSheepCount: document.getElementById("quarterTargetSheepCount"),
+  quarterTargetCompletionTime: document.getElementById("quarterTargetCompletionTime"),
   timingAlert: document.getElementById("timingAlert"),
   penRefillAlert: document.getElementById("penRefillAlert"),
   penFillForecastNext: document.getElementById("penFillForecastNext"),
@@ -3280,8 +3280,7 @@ const METRIC_VALUE_IDS = new Set([
   "currentQuarter",
   "quarterClock",
   "quarterSheepCount",
-  "quarterPaceStatus",
-  "quarterTimeStatus",
+  "quarterTargetCompletionTime",
   "dayClock",
   "totalSheep",
   "currentSheepNumber",
@@ -7237,11 +7236,11 @@ function getCurrentQuarterSheepCount() {
   }).length;
 }
 
-const QUARTER_PACE_STATUS_CLASSES = [
-  "quarter-pace-neutral",
-  "quarter-pace-ahead",
-  "quarter-pace-on",
-  "quarter-pace-behind"
+const QUARTER_SHEEP_STATUS_CLASSES = [
+  "quarter-sheep-neutral",
+  "quarter-sheep-on",
+  "quarter-sheep-ahead",
+  "quarter-sheep-behind"
 ];
 
 function getQuarterElapsedSeconds(quarterElapsedSeconds = null) {
@@ -7250,101 +7249,71 @@ function getQuarterElapsedSeconds(quarterElapsedSeconds = null) {
     : Math.max(getEffectiveElapsedSeconds() - getCurrentQuarterWindow().startSeconds, 0);
 }
 
-function getQuarterPaceStatus(quarterElapsedSeconds = null) {
+function getCurrentQuarterTargetSheepCount() {
+  const requiredSecondsPerSheep = calculateTargetMetrics().requiredCycle;
+  if (!Number.isFinite(requiredSecondsPerSheep) || requiredSecondsPerSheep <= 0) return null;
+
+  const quarterTargetSheep = Math.ceil(900 / requiredSecondsPerSheep);
+  return Number.isFinite(quarterTargetSheep) && quarterTargetSheep > 0 ? quarterTargetSheep : null;
+}
+
+function getQuarterSheepPaceClass(quarterElapsedSeconds = null, actualQuarterSheep = getCurrentQuarterSheepCount()) {
   const requiredSecondsPerSheep = calculateTargetMetrics().requiredCycle;
   if (!Number.isFinite(requiredSecondsPerSheep) || requiredSecondsPerSheep <= 0) {
-    return { text: "—", className: "quarter-pace-neutral" };
+    return "quarter-sheep-neutral";
   }
 
-  const actualQuarterSheep = getCurrentQuarterSheepCount();
   const elapsedSeconds = getQuarterElapsedSeconds(quarterElapsedSeconds);
   const expectedQuarterSheep = elapsedSeconds / requiredSecondsPerSheep;
-  if (!Number.isFinite(expectedQuarterSheep)) {
-    return { text: "—", className: "quarter-pace-neutral" };
-  }
+  if (!Number.isFinite(expectedQuarterSheep)) return "quarter-sheep-neutral";
 
-  const baseText = `Sheep this quarter: ${actualQuarterSheep} / ${expectedQuarterSheep.toFixed(1)}`;
   const difference = actualQuarterSheep - expectedQuarterSheep;
-  if (Math.abs(difference) <= 0.5) {
-    return {
-      text: expectedQuarterSheep <= 0 ? baseText : `${baseText} — On pace`,
-      className: "quarter-pace-on"
-    };
-  }
-
-  if (difference > 0.5) {
-    return { text: `${baseText} — Ahead`, className: "quarter-pace-ahead" };
-  }
-
-  return { text: `${baseText} — Behind`, className: "quarter-pace-behind" };
+  if (difference > 0.5) return "quarter-sheep-ahead";
+  return difference < -0.5 ? "quarter-sheep-behind" : "quarter-sheep-on";
 }
 
-function getQuarterTimeStatus(quarterElapsedSeconds = null) {
-  const requiredSecondsPerSheep = calculateTargetMetrics().requiredCycle;
-  if (!Number.isFinite(requiredSecondsPerSheep) || requiredSecondsPerSheep <= 0) {
-    return { text: "—", className: "quarter-pace-neutral" };
-  }
+function getQuarterTargetCompletionTime(quarterElapsedSeconds = null, actualQuarterSheep = getCurrentQuarterSheepCount()) {
+  const quarterTargetSheep = getCurrentQuarterTargetSheepCount();
+  if (!Number.isFinite(quarterTargetSheep) || quarterTargetSheep <= 0 || actualQuarterSheep <= 0) return "—";
 
-  const actualQuarterSheep = getCurrentQuarterSheepCount();
   const elapsedSeconds = getQuarterElapsedSeconds(quarterElapsedSeconds);
-  const expectedTimeForActualSheep = actualQuarterSheep * requiredSecondsPerSheep;
-  const timeDifference = Math.round(expectedTimeForActualSheep - elapsedSeconds);
+  if (!Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return "—";
 
-  if (!Number.isFinite(timeDifference)) {
-    return { text: "—", className: "quarter-pace-neutral" };
-  }
+  const currentQuarterSecondsPerSheep = elapsedSeconds / actualQuarterSheep;
+  if (!Number.isFinite(currentQuarterSecondsPerSheep) || currentQuarterSecondsPerSheep <= 0) return "—";
 
-  if (Math.abs(timeDifference) < 1) {
-    return { text: "On time", className: "quarter-pace-on" };
-  }
+  const { startSeconds } = getCurrentQuarterWindow();
+  const estimatedSecondsToReachTargetFromQuarterStart = quarterTargetSheep * currentQuarterSecondsPerSheep;
+  const estimatedElapsedDaySeconds = startSeconds + estimatedSecondsToReachTargetFromQuarterStart;
+  const estimatedClockSeconds = appState.dayClockStartSecondsFromMidnight + estimatedElapsedDaySeconds;
 
-  if (timeDifference > 0) {
-    return { text: `+${timeDifference}s spare`, className: "quarter-pace-ahead" };
-  }
-
-  return { text: `${timeDifference}s behind`, className: "quarter-pace-behind" };
+  return Number.isFinite(estimatedClockSeconds)
+    ? formatSecondsFromMidnightClockAmPm(estimatedClockSeconds)
+    : "—";
 }
 
-function updateQuarterPaceStatus(quarterElapsedSeconds = null, hasRunStarted = true) {
-  if (!elements.quarterPaceStatus) return;
-  elements.quarterPaceStatus.classList.remove(...QUARTER_PACE_STATUS_CLASSES);
-
-  if (!hasRunStarted) {
-    setText(elements.quarterPaceStatus, "—");
-    elements.quarterPaceStatus.classList.add("quarter-pace-neutral");
-    return;
-  }
-
-  const status = getQuarterPaceStatus(quarterElapsedSeconds);
-  setText(elements.quarterPaceStatus, status.text);
-  elements.quarterPaceStatus.classList.add(status.className);
+function updateQuarterSheepPaceClass(className) {
+  if (!elements.quarterSheepCount) return;
+  elements.quarterSheepCount.classList.remove(...QUARTER_SHEEP_STATUS_CLASSES);
+  elements.quarterSheepCount.classList.add(className);
 }
 
-function updateQuarterTimeStatus(quarterElapsedSeconds = null, hasRunStarted = true) {
-  if (!elements.quarterTimeStatus) return;
-  elements.quarterTimeStatus.classList.remove(...QUARTER_PACE_STATUS_CLASSES);
-
-  if (!hasRunStarted) {
-    setText(elements.quarterTimeStatus, "—");
-    elements.quarterTimeStatus.classList.add("quarter-pace-neutral");
-    return;
-  }
-
-  const status = getQuarterTimeStatus(quarterElapsedSeconds);
-  setText(elements.quarterTimeStatus, status.text);
-  elements.quarterTimeStatus.classList.add(status.className);
+function updateQuarterTargetSheepCountLabel(quarterTargetSheep = getCurrentQuarterTargetSheepCount()) {
+  setText(elements.quarterTargetSheepCount, Number.isFinite(quarterTargetSheep) ? String(quarterTargetSheep) : "—");
 }
 
 function updateQuarterDisplay() {
   const quarterSeconds = 900;
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+  const quarterTargetSheep = getCurrentQuarterTargetSheepCount();
+  updateQuarterTargetSheepCountLabel(quarterTargetSheep);
 
   if (!hasRunStarted) {
     setText(elements.currentQuarter, "—");
     setText(elements.quarterClock, "00:00");
     setText(elements.quarterSheepCount, "0");
-    updateQuarterPaceStatus(null, false);
-    updateQuarterTimeStatus(null, false);
+    updateQuarterSheepPaceClass("quarter-sheep-neutral");
+    setText(elements.quarterTargetCompletionTime, "—");
     return;
   }
 
@@ -7354,12 +7323,13 @@ function updateQuarterDisplay() {
   const currentQuarterNumber = Math.min(Math.floor(elapsedSeconds / quarterSeconds) + 1, totalQuarters);
   const { startSeconds, endSeconds } = getCurrentQuarterWindow();
   const quarterElapsedSeconds = Math.min(Math.max(elapsedSeconds - startSeconds, 0), Math.max(endSeconds - startSeconds, 0));
+  const actualQuarterSheep = getCurrentQuarterSheepCount();
 
   setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
-  setText(elements.quarterSheepCount, String(getCurrentQuarterSheepCount()));
-  updateQuarterPaceStatus(quarterElapsedSeconds, true);
-  updateQuarterTimeStatus(quarterElapsedSeconds, true);
+  setText(elements.quarterSheepCount, String(actualQuarterSheep));
+  updateQuarterSheepPaceClass(getQuarterSheepPaceClass(quarterElapsedSeconds, actualQuarterSheep));
+  setText(elements.quarterTargetCompletionTime, getQuarterTargetCompletionTime(quarterElapsedSeconds, actualQuarterSheep));
 }
 
 function updateTimingAlertDisplay() {
