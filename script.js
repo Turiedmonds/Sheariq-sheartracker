@@ -6260,9 +6260,113 @@ function pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, 
   return standout[0] || metricClues.sort(sortByMagnitude)[0];
 }
 
-function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricName, metricAverageName, trendTone, meaningfulThresholdSeconds }) {
+
+function getTrendFlagCountWord(count) {
+  const words = ["Zero", "One", "Two", "Three", "Four", "Five"];
+  return words[count] || String(count);
+}
+
+function getTrendFlagMetricSubject(metricLabel, count) {
+  const subjects = {
+    catch: count === 1 ? "catch" : "catches",
+    shear: count === 1 ? "shear" : "shears",
+    "total time": count === 1 ? "total time" : "total times"
+  };
+  return subjects[metricLabel] || (count === 1 ? metricLabel : `${metricLabel}s`);
+}
+
+function buildTrendNoMarkerInsight({ windowRows, metricKey, metricName, comparisonAverage, trendTone, meaningfulThresholdSeconds }) {
+  const prefix = "No confirmed marker reason found.";
+  if (!Number.isFinite(comparisonAverage) || comparisonAverage <= 0) {
+    return `${prefix} Not enough run ${metricName} average data before this block to compare the latest 5.`;
+  }
+
+  const metricRows = windowRows
+    .map((entry, index) => {
+      const value = Number(entry?.[metricKey]);
+      if (!Number.isFinite(value)) return null;
+      const sheepNumber = Number.isFinite(entry?.number) ? entry.number : index + 1;
+      return {
+        index,
+        sheepNumber,
+        value,
+        delta: value - comparisonAverage
+      };
+    })
+    .filter(Boolean);
+
+  if (!metricRows.length) {
+    return `${prefix} Not enough ${metricName} timing data was recorded in the latest 5 to compare with the run average.`;
+  }
+
+  const noticeablyDifferent = Math.max(meaningfulThresholdSeconds, comparisonAverage * 0.08);
+  const aboveRows = metricRows.filter((row) => row.delta > noticeablyDifferent);
+  const belowRows = metricRows.filter((row) => row.delta < -noticeablyDifferent);
+  const slowestRows = [...metricRows].sort((a, b) => b.value - a.value);
+  const fastestRows = [...metricRows].sort((a, b) => a.value - b.value);
+  const slowest = slowestRows[0];
+  const secondSlowestDelta = slowestRows[1] ? Math.max(0, slowestRows[1].delta) : 0;
+  const fastest = fastestRows[0];
+  const secondFastestDelta = fastestRows[1] ? Math.max(0, -fastestRows[1].delta) : 0;
+  const slowestDelta = Math.max(0, slowest?.delta || 0);
+  const fastestDelta = Math.max(0, -(fastest?.delta || 0));
+  const slowestIsMainOutlier = slowestDelta > noticeablyDifferent
+    && (slowestDelta >= secondSlowestDelta + noticeablyDifferent || slowestDelta >= secondSlowestDelta * 1.5);
+  const fastestIsMainOutlier = fastestDelta > noticeablyDifferent
+    && (fastestDelta >= secondFastestDelta + noticeablyDifferent || fastestDelta >= secondFastestDelta * 1.5);
+  const lastTwoRows = metricRows.filter((row) => row.index >= windowRows.length - 2);
+  const lastOne = metricRows.find((row) => row.index === windowRows.length - 1);
+  const metricSubject = getTrendFlagMetricSubject(metricName, metricRows.length);
+
+  if (trendTone === "bad") {
+    if (slowestIsMainOutlier) {
+      return `${prefix} Sheep ${slowest.sheepNumber} had the slowest ${metricName} at ${slowest.value.toFixed(1)}s, about ${slowestDelta.toFixed(1)}s above the run average before this block.`;
+    }
+
+    if (lastTwoRows.length === 2 && lastTwoRows.every((row) => row.delta > noticeablyDifferent)) {
+      return `${prefix} The last two ${getTrendFlagMetricSubject(metricName, 2)} were both above the run average, so the slowdown appears to have built near the end of the block.`;
+    }
+
+    if (lastOne && lastOne.delta > noticeablyDifferent && aboveRows.length < 3) {
+      return `${prefix} The last ${getTrendFlagMetricSubject(metricName, 1)} was above the run average, so the late-block slowdown is worth checking.`;
+    }
+
+    if (aboveRows.length >= 3) {
+      return `${prefix} ${getTrendFlagCountWord(aboveRows.length)} of the latest 5 ${metricSubject} were above the run average, so this looks like a general ${metricName} slowdown.`;
+    }
+  }
+
+  if (trendTone === "good") {
+    if (fastestIsMainOutlier) {
+      return `${prefix} Sheep ${fastest.sheepNumber} had the fastest ${metricName} at ${fastest.value.toFixed(1)}s, about ${fastestDelta.toFixed(1)}s below the run average before this block.`;
+    }
+
+    if (belowRows.length >= 3) {
+      return `${prefix} ${getTrendFlagCountWord(belowRows.length)} of the latest 5 ${metricSubject} were below the run average, so this looks like a general ${metricName} lift.`;
+    }
+  }
+
+  if (slowestIsMainOutlier) {
+    return `${prefix} Sheep ${slowest.sheepNumber} had the slowest ${metricName} at ${slowest.value.toFixed(1)}s, about ${slowestDelta.toFixed(1)}s above the run average before this block. Worth checking.`;
+  }
+
+  if (fastestIsMainOutlier) {
+    return `${prefix} Sheep ${fastest.sheepNumber} had the fastest ${metricName} at ${fastest.value.toFixed(1)}s, about ${fastestDelta.toFixed(1)}s below the run average before this block. Worth checking.`;
+  }
+
+  return `${prefix} The latest 5 ${metricSubject} stayed close to the run average before this block.`;
+}
+
+function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricName, metricAverageName, trendTone, meaningfulThresholdSeconds, windowRows, comparisonAverage }) {
   if (!markerTimingClues.length) {
-    return "No confirmed markers were recorded in this block.";
+    return buildTrendNoMarkerInsight({
+      windowRows,
+      metricKey,
+      metricName,
+      comparisonAverage,
+      trendTone,
+      meaningfulThresholdSeconds
+    });
   }
 
   const clue = pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, meaningfulThresholdSeconds);
@@ -6371,7 +6475,9 @@ function updateTrendFlags() {
       metricName,
       metricAverageName,
       trendTone: trend.tone,
-      meaningfulThresholdSeconds
+      meaningfulThresholdSeconds,
+      windowRows,
+      comparisonAverage
     });
     const markerLine = `<div class="trend-flag-context">${escapeTrendFlagHtml(markerLineText)}</div>`;
     return `
