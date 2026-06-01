@@ -6535,6 +6535,81 @@ function formatTrendTargetNetLine(targetNetSeconds) {
   return `Overall: still about ${formatTrendTargetSeconds(targetNetSeconds)} behind target pace.`;
 }
 
+
+function formatTrendDriverSeconds(seconds) {
+  return Number.isFinite(seconds) ? Math.abs(seconds).toFixed(1) : "0.0";
+}
+
+function buildTrendTotalDriverExplanation({ catchDelta, shearDelta, totalDelta, blockCount, meaningfulThresholdSeconds }) {
+  const normalizeDelta = (delta) => Number.isFinite(delta) ? delta : 0;
+  const normalizedCatchDelta = normalizeDelta(catchDelta);
+  const normalizedShearDelta = normalizeDelta(shearDelta);
+  const normalizedTotalDelta = normalizeDelta(totalDelta);
+  const catchNet = normalizedCatchDelta * blockCount;
+  const shearNet = normalizedShearDelta * blockCount;
+  const totalStayedClose = Math.abs(normalizedTotalDelta) <= meaningfulThresholdSeconds;
+  const catchStayedClose = Math.abs(normalizedCatchDelta) <= meaningfulThresholdSeconds;
+  const shearStayedClose = Math.abs(normalizedShearDelta) <= meaningfulThresholdSeconds;
+  const catchLost = normalizedCatchDelta > meaningfulThresholdSeconds;
+  const shearLost = normalizedShearDelta > meaningfulThresholdSeconds;
+  const catchGained = normalizedCatchDelta < -meaningfulThresholdSeconds;
+  const shearGained = normalizedShearDelta < -meaningfulThresholdSeconds;
+  const catchSeconds = formatTrendDriverSeconds(catchNet);
+  const shearSeconds = formatTrendDriverSeconds(shearNet);
+
+  if (totalStayedClose) {
+    return "Total time stayed close to the run average before this block. Catch and shear changes were small.";
+  }
+
+  if (normalizedTotalDelta > 0) {
+    if (catchLost && shearGained) {
+      return `Catch lost about ${catchSeconds}s across this block, but faster shear gained about ${shearSeconds}s back.`;
+    }
+    if (shearLost && catchGained) {
+      return `Shear lost about ${shearSeconds}s across this block, but faster catch gained about ${catchSeconds}s back.`;
+    }
+    if (catchLost && shearLost) {
+      return `Total time increased because both catch and shear were slower. Catch lost about ${catchSeconds}s and shear lost about ${shearSeconds}s across this block.`;
+    }
+    if (catchLost && shearStayedClose) {
+      return `Total time increased mainly because catch time was slower. Catch lost about ${catchSeconds}s across this block, while shear stayed close.`;
+    }
+    if (shearLost && catchStayedClose) {
+      return `Total time increased mainly because shear time was slower. Shear lost about ${shearSeconds}s across this block, while catch stayed close.`;
+    }
+    if (catchLost) {
+      return `Total time increased mainly because catch time was slower. Catch lost about ${catchSeconds}s across this block.`;
+    }
+    if (shearLost) {
+      return `Total time increased mainly because shear time was slower. Shear lost about ${shearSeconds}s across this block.`;
+    }
+  }
+
+  if (catchGained && shearLost) {
+    return `Faster catch gained about ${catchSeconds}s across this block, while slower shear lost about ${shearSeconds}s.`;
+  }
+  if (shearGained && catchLost) {
+    return `Faster shear gained about ${shearSeconds}s across this block, while slower catch lost about ${catchSeconds}s.`;
+  }
+  if (catchGained && shearGained) {
+    return `Total time improved because both catch and shear were faster. Catch gained about ${catchSeconds}s and shear gained about ${shearSeconds}s across this block.`;
+  }
+  if (catchGained && shearStayedClose) {
+    return `Total time improved mainly because catch time was faster. Catch gained about ${catchSeconds}s across this block.`;
+  }
+  if (shearGained && catchStayedClose) {
+    return `Total time improved mainly because shear time was faster. Shear gained about ${shearSeconds}s across this block.`;
+  }
+  if (catchGained) {
+    return `Total time improved mainly because catch time was faster. Catch gained about ${catchSeconds}s across this block.`;
+  }
+  if (shearGained) {
+    return `Total time improved mainly because shear time was faster. Shear gained about ${shearSeconds}s across this block.`;
+  }
+
+  return "Total time stayed close to the run average before this block. Catch and shear changes were small.";
+}
+
 function updateTrendFlags() {
   if (!elements.trendFlags) return;
   const { requiredCycle } = calculateTargetMetrics();
@@ -6584,7 +6659,7 @@ function updateTrendFlags() {
     };
   };
 
-  const renderMetricCard = ({ title, label, metricKey, metricName, metricAverageName, windowRows, comparisonAverage, latestAverage, markerTimingClues }) => {
+  const renderMetricCard = ({ title, label, metricKey, metricName, metricAverageName, windowRows, comparisonAverage, latestAverage, markerTimingClues, driverExplanation }) => {
     const meta = getTrendWindowMeta(windowRows, windowSize);
     const delta = latestAverage - comparisonAverage;
     const trend = describeMetricTrend(delta, windowRows.length);
@@ -6599,6 +6674,9 @@ function updateTrendFlags() {
       comparisonAverage
     });
     const markerLine = `<div class="trend-flag-context">${escapeTrendFlagHtml(markerLineText)}</div>`;
+    const driverLine = driverExplanation
+      ? `<div class="trend-flag-context">${escapeTrendFlagHtml(driverExplanation)}</div>`
+      : "";
     return `
       <div class="trend-flag">
         <div class="trend-flag-title">${title}</div>
@@ -6609,6 +6687,7 @@ function updateTrendFlags() {
           <div><span class="k">Trend</span>: <span class="d ${trend.tone}">${trend.summary}</span></div>
           <div><span class="k">${label}</span>: <span class="d ${trend.tone}">${trend.deltaText}</span></div>
           <div><span class="k">Block net</span>: <span class="d ${trend.tone}">${trend.blockText}</span></div>
+          ${driverLine}
           ${markerLine}
         </div>
       </div>
@@ -6649,12 +6728,23 @@ function updateTrendFlags() {
       return averages;
     }, {});
     const metricKeys = metricDefinitions.map((metric) => metric.metricKey);
+    const latestAverages = metricDefinitions.reduce((averages, metric) => {
+      averages[metric.metricKey] = averageMetric(recentRows, metric.metricKey);
+      return averages;
+    }, {});
+    const totalDriverExplanation = buildTrendTotalDriverExplanation({
+      catchDelta: latestAverages.catchDuration - comparisonAverages.catchDuration,
+      shearDelta: latestAverages.shearDuration - comparisonAverages.shearDuration,
+      totalDelta: latestAverages.fullCycle - comparisonAverages.fullCycle,
+      blockCount: recentRows.length,
+      meaningfulThresholdSeconds
+    });
     const sameMarkerAverages = buildTrendFlagSameMarkerTimingAverages(comparisonRows, metricKeys);
     const markerTimingClues = buildTrendFlagMarkerTimingClues(recentRows, comparisonAverages, sameMarkerAverages);
 
     metricDefinitions.forEach((metric) => {
       const comparisonAverage = comparisonAverages[metric.metricKey];
-      const latestAverage = averageMetric(recentRows, metric.metricKey);
+      const latestAverage = latestAverages[metric.metricKey];
       cards.push(renderMetricCard({
         title: metric.title,
         label: metric.label,
@@ -6664,7 +6754,8 @@ function updateTrendFlags() {
         windowRows: recentRows,
         comparisonAverage,
         latestAverage,
-        markerTimingClues
+        markerTimingClues,
+        driverExplanation: metric.metricKey === "fullCycle" ? totalDriverExplanation : ""
       }));
     });
 
