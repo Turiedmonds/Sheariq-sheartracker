@@ -4840,9 +4840,40 @@ function updateFinishRunBreakButtonUI() {
   elements.finishRunBreakBtn.disabled = !canFinishBreak;
 }
 
-function handleFinishRunBreakClick() {
+function getEarlyBreakConfirmationDetails(now = Date.now()) {
+  if (!appState.runActive) return null;
+  if (!Number.isFinite(appState.runEndTimeMs)) return null;
+  if (now >= appState.runEndTimeMs) return null;
+
+  const secondsUntilRunEnd = Math.max((appState.runEndTimeMs - now) / 1000, 0);
+  return {
+    scheduledEndLabel: formatClock(appState.runEndTimeMs),
+    remainingLabel: formatCountdown(secondsUntilRunEnd)
+  };
+}
+
+async function confirmEarlyFinishRunBreak(now = Date.now()) {
+  const details = getEarlyBreakConfirmationDetails(now);
+  if (!details) return true;
+
+  return confirmModal({
+    title: "Finish run before scheduled end?",
+    message: `This run is not due to finish until ${details.scheduledEndLabel} (${details.remainingLabel} remaining). Starting the official break now will set the next-run start from the current time instead of the scheduled finish time.`,
+    confirmText: "Finish early",
+    cancelText: "Keep running"
+  });
+}
+
+async function handleFinishRunBreakClick() {
   if (appState.breakActive || appState.preparedForNextRunBreak) return;
   if (!appState.runActive && appState.sheep.length === 0) return;
+
+  const requestedAtMs = Date.now();
+  const confirmed = await confirmEarlyFinishRunBreak(requestedAtMs);
+  if (!confirmed) {
+    clearPanelInteractionHighlights();
+    return;
+  }
 
   const now = Date.now();
   const breakStartedAtMs = Number.isFinite(appState.runEndTimeMs) && now >= appState.runEndTimeMs
