@@ -801,13 +801,13 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
     ? nextRefillSheepNumber
     : null;
 
-  let message = "Drink due after next refill — consider drink before the next refill.";
+  let message = "Early Drink Warning — drink before the next refill.";
   if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill <= 1) {
-    message = "Drink due after next refill — consider drink after this sheep.";
+    message = "Early Drink Warning — drink on next catch.";
   } else if (sheepUntilRefill === 2) {
-    message = "Drink due after next refill — consider drink after the next sheep.";
-  } else if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill > 2 && sheepUntilRefill <= 5) {
-    message = `Drink due after next refill — consider drink in ${sheepUntilRefill - 1} sheep.`;
+    message = "Early Drink Warning — drink after the next sheep.";
+  } else if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill >= 3 && sheepUntilRefill <= 5) {
+    message = `Early Drink Warning — drink in ${sheepUntilRefill} sheep.`;
   }
 
   return {
