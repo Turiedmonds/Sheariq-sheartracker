@@ -2729,6 +2729,7 @@ const elements = {
   quarterTargetSheepCount: document.getElementById("quarterTargetSheepCount"),
   quarterTargetCompletionTime: document.getElementById("quarterTargetCompletionTime"),
   timingAlert: document.getElementById("timingAlert"),
+  nextDrinkCountdown: document.getElementById("nextDrinkCountdown"),
   penRefillAlert: document.getElementById("penRefillAlert"),
   penFillForecastNext: document.getElementById("penFillForecastNext"),
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
@@ -7730,6 +7731,7 @@ function applyMarkerSettingsFromInputs() {
   syncMarkerSettingsInputs();
   saveMarkerSettings();
   renderLogTable();
+  updateNextDrinkCountdownDisplay();
 }
 
 function resetMarkerSettings() {
@@ -7737,6 +7739,7 @@ function resetMarkerSettings() {
   syncMarkerSettingsInputs();
   saveMarkerSettings();
   renderLogTable();
+  updateNextDrinkCountdownDisplay();
 }
 
 function loadPlannedDelayMarkerVisibility() {
@@ -8195,6 +8198,58 @@ function updateQuarterDisplay() {
   setText(elements.quarterTargetCompletionTime, getQuarterTargetCompletionTime(quarterElapsedSeconds, actualQuarterSheep));
 }
 
+const TIMING_ALERT_GRACE_SECONDS = 10;
+
+function getNextPlannedDrinkCountdownState() {
+  const plannedTimingMinutes = Number(appState.markerSettings?.drink?.plannedTimingMinutes);
+  const drinkIntervalSeconds = plannedTimingMinutes * 60;
+  if (!Number.isFinite(drinkIntervalSeconds) || drinkIntervalSeconds <= 0) {
+    return { mode: "unavailable" };
+  }
+
+  const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
+  if (!hasRunStarted) {
+    return { mode: "not-started" };
+  }
+
+  const effectiveElapsedSeconds = Math.max(Number(getEffectiveElapsedSeconds()) || 0, 0);
+  const runDurationSeconds = Math.max(Number(getCurrentRunDurationSeconds()) || 0, 0);
+  const previousDrinkTime = Math.floor(effectiveElapsedSeconds / drinkIntervalSeconds) * drinkIntervalSeconds;
+  const secondsSincePreviousDrink = effectiveElapsedSeconds - previousDrinkTime;
+  const drinkDueNow = previousDrinkTime > 0
+    && secondsSincePreviousDrink >= 0
+    && secondsSincePreviousDrink <= TIMING_ALERT_GRACE_SECONDS;
+
+  if (drinkDueNow) {
+    return { mode: "due-now" };
+  }
+
+  const nextDrinkTime = (Math.floor(effectiveElapsedSeconds / drinkIntervalSeconds) + 1) * drinkIntervalSeconds;
+  if (runDurationSeconds > 0 && nextDrinkTime > runDurationSeconds) {
+    return { mode: "complete" };
+  }
+
+  return {
+    mode: "countdown",
+    secondsUntilNextDrink: Math.max(Math.ceil(nextDrinkTime - effectiveElapsedSeconds), 0)
+  };
+}
+
+function updateNextDrinkCountdownDisplay() {
+  const countdownState = getNextPlannedDrinkCountdownState();
+  const countdownText = countdownState.mode === "not-started"
+    ? "Start run"
+    : countdownState.mode === "countdown"
+      ? `in ${formatCountdown(countdownState.secondsUntilNextDrink)}`
+      : countdownState.mode === "due-now"
+        ? "Drink due now"
+        : countdownState.mode === "complete"
+          ? "No more scheduled drinks"
+          : "—";
+
+  setText(elements.nextDrinkCountdown, countdownText);
+}
+
 function updateTimingAlertDisplay() {
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
   const timingAlertRow = elements.timingAlert ? elements.timingAlert.closest(".timing-alert-row") : null;
@@ -8240,7 +8295,7 @@ function updateTimingAlertDisplay() {
   const CUTTER_INTERVAL_SECONDS = getPlannedTimingSeconds("cutter", 900);
   const COMB_INTERVAL_SECONDS = getPlannedTimingSeconds("comb", 3600);
   const ALERT_LEAD_SECONDS = 60;
-  const ALERT_GRACE_SECONDS = 10;
+  const ALERT_GRACE_SECONDS = TIMING_ALERT_GRACE_SECONDS;
   const LAST_QUARTER_SECONDS = 900;
 
   const getCadenceAlertState = (intervalSeconds) => {
@@ -8951,6 +9006,7 @@ function updateLivePanel() {
   updateQuarterDisplay();
   if (preparedForNextRunBreak) setText(elements.quarterClock, "00:00");
   updateTimingAlertDisplay();
+  updateNextDrinkCountdownDisplay();
   updatePenRefillAlertDisplay();
   updateBreakTimingDisplay();
   updateBreakOverlayDisplay();
