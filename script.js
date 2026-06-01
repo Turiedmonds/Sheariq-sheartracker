@@ -807,7 +807,7 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   } else if (sheepUntilRefill === 2) {
     message = "Early Drink Warning — drink after the next sheep.";
   } else if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill >= 3 && sheepUntilRefill <= 5) {
-    message = `Early Drink Warning — drink in ${sheepUntilRefill} sheep.`;
+    message = `Early Drink Warning — drink in ${sheepUntilRefill - 1} sheep.`;
   }
 
   return {
