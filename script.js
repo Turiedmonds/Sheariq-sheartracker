@@ -7250,7 +7250,7 @@ function getQuarterPaceStatus(quarterElapsedSeconds = null) {
     return { text: "—", className: "quarter-pace-neutral" };
   }
 
-  const baseText = `${actualQuarterSheep} / ${expectedQuarterSheep.toFixed(1)} expected`;
+  const baseText = `Sheep this quarter: ${actualQuarterSheep} / ${expectedQuarterSheep.toFixed(1)}`;
   const difference = actualQuarterSheep - expectedQuarterSheep;
   if (Math.abs(difference) <= 0.5) {
     return {
