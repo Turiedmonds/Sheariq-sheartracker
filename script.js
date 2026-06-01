@@ -6236,9 +6236,38 @@ function updateTrendFlags() {
     return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
   };
 
+  const describeMetricTrend = (delta, blockCount) => {
+    const normalizedDelta = Number.isFinite(delta) ? delta : 0;
+    const absoluteDelta = Math.abs(normalizedDelta);
+    const blockNetSeconds = absoluteDelta * blockCount;
+    if (absoluteDelta <= meaningfulThresholdSeconds) {
+      return {
+        tone: "neutral",
+        summary: "stayed close to the run average before this block",
+        deltaText: `${absoluteDelta.toFixed(3)}s difference per sheep`,
+        blockText: `stayed close across this block (${blockNetSeconds.toFixed(3)} seconds net)`
+      };
+    }
+    if (normalizedDelta > 0) {
+      return {
+        tone: "bad",
+        summary: "lost time",
+        deltaText: `${absoluteDelta.toFixed(3)}s slower per sheep`,
+        blockText: `lost about ${blockNetSeconds.toFixed(3)} seconds across this block`
+      };
+    }
+    return {
+      tone: "good",
+      summary: "gained time",
+      deltaText: `${absoluteDelta.toFixed(3)}s faster per sheep`,
+      blockText: `gained about ${blockNetSeconds.toFixed(3)} seconds across this block`
+    };
+  };
+
   const renderMetricCard = ({ title, label, contextMetricName, windowRows, comparisonAverage, latestAverage }) => {
     const meta = getTrendWindowMeta(windowRows, windowSize);
     const delta = latestAverage - comparisonAverage;
+    const trend = describeMetricTrend(delta, windowRows.length);
     const markerLabels = getTrendFlagMarkerLabels(windowRows).map(escapeTrendFlagHtml);
     const markerLine = markerLabels.length
       ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the ${contextMetricName}.</div>`
@@ -6250,8 +6279,9 @@ function updateTrendFlags() {
         <div class="trend-flag-lines">
           <div><span class="k">Latest block average</span>: <span class="v">${formatSeconds(latestAverage)}</span></div>
           <div><span class="k">Run avg before block</span>: <span class="v">${formatSeconds(comparisonAverage)}</span></div>
-          <div><span class="k">${label}</span>: <span class="d ${getDeltaTone(delta)}">${formatTrendDelta(delta)}</span></div>
-          <div><span class="k">Block net</span>: <span class="d ${getDeltaTone(delta)}">${formatTrendBlockNet(delta, windowRows.length)}</span></div>
+          <div><span class="k">Trend</span>: <span class="d ${trend.tone}">${trend.summary}</span></div>
+          <div><span class="k">${label}</span>: <span class="d ${trend.tone}">${trend.deltaText}</span></div>
+          <div><span class="k">Block net</span>: <span class="d ${trend.tone}">${trend.blockText}</span></div>
           ${markerLine}
         </div>
       </div>
@@ -6291,7 +6321,6 @@ function updateTrendFlags() {
     metricDefinitions.forEach((metric) => {
       const comparisonAverage = averageMetric(comparisonRows, metric.metricKey);
       const latestAverage = averageMetric(recentRows, metric.metricKey);
-      if (Math.abs(latestAverage - comparisonAverage) <= meaningfulThresholdSeconds) return;
       cards.push(renderMetricCard({
         title: metric.title,
         label: metric.label,
@@ -6311,23 +6340,6 @@ function updateTrendFlags() {
     cards.push(renderTargetWarningCard(recentRows));
   }
 
-  if (rows.length >= windowSize * 2 && !cards.length) {
-    const meta = getTrendWindowMeta(recentRows, windowSize);
-    const markerLabels = getTrendFlagMarkerLabels(recentRows).map(escapeTrendFlagHtml);
-    const markerLine = markerLabels.length
-      ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the total time average.</div>`
-      : `<div class="trend-flag-context">No confirmed markers were recorded in this block.</div>`;
-    cards.push(`
-      <div class="trend-flag">
-        <div class="trend-flag-title">No trend warnings</div>
-        <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
-        <div class="trend-flag-lines">
-          <div>Latest 5-sheep block is within ${formatSeconds(meaningfulThresholdSeconds)} per sheep of the run average before this block.</div>
-          ${markerLine}
-        </div>
-      </div>
-    `);
-  }
 
   if (!cards.length) {
     appState.trendFlags = [`No trend warnings yet. Need at least 10 sheep to compare the latest 5-sheep block with the run average before it.`];
