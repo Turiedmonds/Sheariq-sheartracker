@@ -6194,6 +6194,19 @@ function getTrendFlagMarkerLabels(windowRows) {
       : getManualMarkerDisplayLabel(marker))
     .filter(Boolean);
 }
+function formatTrendTargetSeconds(seconds) {
+  return Number.isFinite(seconds) ? `${Math.abs(seconds).toFixed(1)}s` : "0.0s";
+}
+
+function formatTrendTargetNetLine(targetNetSeconds) {
+  if (!Number.isFinite(targetNetSeconds) || Math.abs(targetNetSeconds) < 0.05) {
+    return "Overall: about on target pace.";
+  }
+  if (targetNetSeconds > 0) {
+    return `Overall: about ${formatTrendTargetSeconds(targetNetSeconds)} ahead of target pace.`;
+  }
+  return `Overall: still about ${formatTrendTargetSeconds(targetNetSeconds)} behind target pace.`;
+}
 
 function updateTrendFlags() {
   if (!elements.trendFlags) return;
@@ -6238,9 +6251,30 @@ function updateTrendFlags() {
     `;
   };
 
+  const renderTargetWarningCard = (latestRows) => {
+    const latestAverage = averageMetric(latestRows, "fullCycle");
+    const totalFullCycle = rows.reduce((sum, entry) => {
+      const fullCycle = Number(entry?.fullCycle);
+      return sum + (Number.isFinite(fullCycle) ? fullCycle : 0);
+    }, 0);
+    const targetNetSeconds = (requiredCycle * rows.length) - totalFullCycle;
+    return `
+      <div class="trend-flag">
+        <div class="trend-flag-title">Target warning</div>
+        <div class="trend-flag-lines">
+          <div>Latest 5 sheep were all slower than required target time.</div>
+          <div><span class="k">Target</span>: <span class="v">${formatTrendTargetSeconds(requiredCycle)}</span></div>
+          <div><span class="k">Latest block avg</span>: <span class="v">${formatTrendTargetSeconds(latestAverage)}</span></div>
+          <div>${formatTrendTargetNetLine(targetNetSeconds)}</div>
+        </div>
+      </div>
+    `;
+  };
+
+  const recentRows = rows.slice(-windowSize);
+
   if (rows.length >= windowSize * 2) {
     const comparisonRows = rows.slice(0, -windowSize);
-    const recentRows = rows.slice(-windowSize);
     const metricDefinitions = [
       { title: "Catch time", label: "Catch", metricKey: "catchDuration", contextMetricName: "catch average" },
       { title: "Shear time", label: "Shear", metricKey: "shearDuration", contextMetricName: "shear average" },
@@ -6261,23 +6295,31 @@ function updateTrendFlags() {
       }));
     });
 
-    if (!cards.length) {
-      const meta = getTrendWindowMeta(recentRows, windowSize);
-      const markerLabels = getTrendFlagMarkerLabels(recentRows).map(escapeTrendFlagHtml);
-      const markerLine = markerLabels.length
-        ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the total time average.</div>`
-        : `<div class="trend-flag-context">No confirmed markers were recorded in this block.</div>`;
-      cards.push(`
-        <div class="trend-flag">
-          <div class="trend-flag-title">No trend warnings</div>
-          <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
-          <div class="trend-flag-lines">
-            <div>Latest 5-sheep block is within ${formatSeconds(meaningfulThresholdSeconds)} per sheep of the run average before this block.</div>
-            ${markerLine}
-          </div>
+  }
+
+  if (recentRows.length === windowSize && recentRows.every((entry) => {
+    const fullCycle = Number(entry?.fullCycle);
+    return Number.isFinite(fullCycle) && fullCycle > requiredCycle;
+  })) {
+    cards.push(renderTargetWarningCard(recentRows));
+  }
+
+  if (rows.length >= windowSize * 2 && !cards.length) {
+    const meta = getTrendWindowMeta(recentRows, windowSize);
+    const markerLabels = getTrendFlagMarkerLabels(recentRows).map(escapeTrendFlagHtml);
+    const markerLine = markerLabels.length
+      ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the total time average.</div>`
+      : `<div class="trend-flag-context">No confirmed markers were recorded in this block.</div>`;
+    cards.push(`
+      <div class="trend-flag">
+        <div class="trend-flag-title">No trend warnings</div>
+        <div class="trend-flag-meta">Sheep ${meta.sheepStart}–${meta.sheepEnd} • ${meta.timeStart}–${meta.timeEnd} • Window: last ${windowSize}</div>
+        <div class="trend-flag-lines">
+          <div>Latest 5-sheep block is within ${formatSeconds(meaningfulThresholdSeconds)} per sheep of the run average before this block.</div>
+          ${markerLine}
         </div>
-      `);
-    }
+      </div>
+    `);
   }
 
   if (!cards.length) {
