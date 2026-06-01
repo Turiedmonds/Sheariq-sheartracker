@@ -4656,9 +4656,9 @@ function updateTargetPacePredictionSnapshot(liveValues) {
 
 function getTargetRunTotalPredictionLabel(requiredRunTotalSheep) {
   if (requiredRunTotalSheep === null) {
-    return "Predicted time to reach run target:";
+    return "Predicted time to catch target:";
   }
-  return `Predicted time to reach run target (${requiredRunTotalSheep}):`;
+  return `Predicted time to catch target (${requiredRunTotalSheep}):`;
 }
 
 
@@ -5729,12 +5729,12 @@ function calculateTargetMetrics() {
     projectedFuturePhysicalSheep = Math.max(Math.floor(runRemainingSeconds / avgCycleSeconds), 0);
     projectedTotal = officialSheepDoneThisRun + projectedFuturePhysicalSheep;
     maxPossibleRunTotal = projectedTotal;
-    const targetCatchOffsetSeconds = remainingToTarget <= 0 ? 0 : remainingToTarget * avgCycleSeconds;
+    const targetCatchOffsetSeconds = remainingToTarget <= 0 ? 0 : Math.max(remainingToTarget - 1, 0) * avgCycleSeconds;
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
-      ? `Run target reached ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
-      : `Run target will be missed by ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} at end of run`;
+      ? `Target-count sheep catch/start projected ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
+      : `Target-count sheep catch/start projected ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} after end of run`;
     timeSpareIsAhead = timeDifference >= 0;
   }
 
