@@ -2433,6 +2433,7 @@ const elements = {
   breakOverlayDismissBtn: document.getElementById("breakOverlayDismissBtn"),
   currentQuarter: document.getElementById("currentQuarter"),
   quarterClock: document.getElementById("quarterClock"),
+  quarterSheepCount: document.getElementById("quarterSheepCount"),
   timingAlert: document.getElementById("timingAlert"),
   penRefillAlert: document.getElementById("penRefillAlert"),
   penFillForecastNext: document.getElementById("penFillForecastNext"),
@@ -3276,6 +3277,7 @@ const METRIC_VALUE_IDS = new Set([
   "runCountdown",
   "currentQuarter",
   "quarterClock",
+  "quarterSheepCount",
   "dayClock",
   "totalSheep",
   "currentSheepNumber",
@@ -7207,6 +7209,30 @@ function calculateQuarterTotals(targetMetrics) {
   return { required, predicted };
 }
 
+function getCurrentQuarterWindow() {
+  const quarterSeconds = 900;
+  const elapsedSeconds = Math.max(Number(getEffectiveElapsedSeconds()) || 0, 0);
+  const runDurationSeconds = Math.max(Number(getCurrentRunDurationSeconds()) || 0, 0);
+  const totalQuarters = Math.max(Math.ceil(runDurationSeconds / quarterSeconds), 1);
+  const currentQuarterIndex = Math.min(Math.floor(elapsedSeconds / quarterSeconds), totalQuarters - 1);
+  const startSeconds = currentQuarterIndex * quarterSeconds;
+  const endSeconds = Math.min(startSeconds + quarterSeconds, runDurationSeconds);
+
+  return { startSeconds, endSeconds };
+}
+
+function getCurrentQuarterSheepCount() {
+  const { startSeconds, endSeconds } = getCurrentQuarterWindow();
+  if (!Array.isArray(appState.sheep)) return 0;
+
+  return appState.sheep.filter((entry) => {
+    const effectiveElapsedSeconds = Number(entry?.effectiveElapsedSeconds);
+    return Number.isFinite(effectiveElapsedSeconds)
+      && effectiveElapsedSeconds > startSeconds
+      && effectiveElapsedSeconds <= endSeconds;
+  }).length;
+}
+
 function updateQuarterDisplay() {
   const quarterSeconds = 900;
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
@@ -7214,6 +7240,7 @@ function updateQuarterDisplay() {
   if (!hasRunStarted) {
     setText(elements.currentQuarter, "—");
     setText(elements.quarterClock, "00:00");
+    setText(elements.quarterSheepCount, "0");
     return;
   }
 
@@ -7225,6 +7252,7 @@ function updateQuarterDisplay() {
 
   setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
+  setText(elements.quarterSheepCount, String(getCurrentQuarterSheepCount()));
 }
 
 function updateTimingAlertDisplay() {
