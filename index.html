@@ -1221,7 +1221,7 @@
         <div class="official-reject-summary">
           <div><span>Physical day count</span><strong id="officialRejectPhysicalCount">0</strong></div>
           <div><span>Official count</span><strong id="officialRejectOfficialCount">0</strong></div>
-          <div><span>Current rejects</span><strong id="officialRejectCurrentCount">0</strong></div>
+          <div><span>Rejected count</span><strong id="officialRejectCurrentCount">0</strong></div>
         </div>
         <div id="officialRejectValidation" class="quality-rating-validation" role="alert" hidden></div>
         <form id="officialRejectForm" class="quality-rating-form">
@@ -1231,8 +1231,8 @@
           </div>
           <div class="quality-rating-actions">
             <button id="officialRejectSaveBtn" type="submit">Save</button>
-            <button id="officialRejectIncrementBtn" type="button">+1 Reject</button>
-            <button id="officialRejectDecrementBtn" type="button">-1 Reject</button>
+            <button id="officialRejectIncrementBtn" type="button">Add 1 rejected sheep</button>
+            <button id="officialRejectDecrementBtn" type="button">Remove 1 rejected sheep</button>
             <button id="officialRejectCloseBtn" type="button">Close</button>
           </div>
         </form>
@@ -1248,7 +1248,7 @@
       </div>
       <div class="connection-help-modal-content quality-rating-modal-content">
         <p id="qualityRatingLatestSummary" class="quality-rating-latest-summary">No quality ratings yet.</p>
-        <p class="quality-rating-help-copy">Enter the quality rating from the judges/referees or liaison, usually by 30-minute period. Notes can record judge/referee comments. Lower rating is better.</p>
+        <p class="quality-rating-help-copy">Enter the quality rating from the judges/referees or liaison, usually by 30-minute period. Lower rating is better. Use the warning fields if officials give the shearer an official warning; warnings are recorded with the period/rating they relate to.</p>
         <div id="qualityRatingValidation" class="quality-rating-validation" role="alert" hidden></div>
 
         <form id="qualityRatingForm" class="quality-rating-form">
@@ -1263,6 +1263,22 @@
 
             <label for="qualityRatingNotesInput">Notes / judge comments</label>
             <textarea id="qualityRatingNotesInput" rows="3" maxlength="200"></textarea>
+
+            <label for="qualityRatingOfficialWarningInput">Record official warning?</label>
+            <input id="qualityRatingOfficialWarningInput" type="checkbox" />
+
+            <label for="qualityRatingWarningReasonInput">Warning reason</label>
+            <select id="qualityRatingWarningReasonInput">
+              <option value="">Select reason</option>
+              <option value="Quality rating over standard">Quality rating over standard</option>
+              <option value="Rule breach">Rule breach</option>
+              <option value="Damaged sheep / cut">Damaged sheep / cut</option>
+              <option value="Sheep handling / porthole issue">Sheep handling / porthole issue</option>
+              <option value="Other">Other</option>
+            </select>
+
+            <label for="qualityRatingWarningNotesInput">Warning notes</label>
+            <textarea id="qualityRatingWarningNotesInput" rows="2" maxlength="200"></textarea>
           </div>
 
           <div class="quality-rating-actions">
