@@ -6201,6 +6201,103 @@ function getTrendFlagMarkerLabels(windowRows) {
       : getManualMarkerDisplayLabel(marker))
     .filter(Boolean);
 }
+
+function getTrendFlagMarkerLabel(marker) {
+  if (!marker) return "";
+  return marker.type === MANUAL_MARKER_CUSTOM_TYPE
+    ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
+    : getManualMarkerDisplayLabel(marker);
+}
+
+function buildTrendFlagMarkerTimingClues(windowRows, comparisonAverages) {
+  return windowRows.flatMap((entry, index) => {
+    const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+    if (!manualMarkers.length) return [];
+    const sheepNumber = Number.isFinite(entry?.number) ? entry.number : index + 1;
+    const timings = {
+      catchDuration: Number(entry?.catchDuration),
+      shearDuration: Number(entry?.shearDuration),
+      fullCycle: Number(entry?.fullCycle)
+    };
+    const deltas = {
+      catchDuration: Number.isFinite(timings.catchDuration) && Number.isFinite(comparisonAverages.catchDuration)
+        ? timings.catchDuration - comparisonAverages.catchDuration
+        : NaN,
+      shearDuration: Number.isFinite(timings.shearDuration) && Number.isFinite(comparisonAverages.shearDuration)
+        ? timings.shearDuration - comparisonAverages.shearDuration
+        : NaN,
+      fullCycle: Number.isFinite(timings.fullCycle) && Number.isFinite(comparisonAverages.fullCycle)
+        ? timings.fullCycle - comparisonAverages.fullCycle
+        : NaN
+    };
+    return manualMarkers.map((marker) => ({
+      sheepNumber,
+      markerLabel: getTrendFlagMarkerLabel(marker),
+      catchDuration: timings.catchDuration,
+      shearDuration: timings.shearDuration,
+      fullCycle: timings.fullCycle,
+      deltas
+    })).filter((clue) => clue.markerLabel);
+  });
+}
+
+function pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, meaningfulThresholdSeconds) {
+  const metricClues = markerTimingClues
+    .map((clue) => ({ ...clue, delta: clue.deltas?.[metricKey] }))
+    .filter((clue) => Number.isFinite(clue.delta));
+  if (!metricClues.length) return null;
+
+  const sortByMagnitude = (a, b) => Math.abs(b.delta) - Math.abs(a.delta);
+  if (trendTone === "bad") {
+    const aligned = metricClues.filter((clue) => clue.delta > 0).sort(sortByMagnitude);
+    return aligned[0] || metricClues.sort(sortByMagnitude)[0];
+  }
+  if (trendTone === "good") {
+    const aligned = metricClues.filter((clue) => clue.delta < 0).sort(sortByMagnitude);
+    return aligned[0] || metricClues.sort(sortByMagnitude)[0];
+  }
+  const standout = metricClues.filter((clue) => Math.abs(clue.delta) > meaningfulThresholdSeconds).sort(sortByMagnitude);
+  return standout[0] || metricClues.sort(sortByMagnitude)[0];
+}
+
+function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricName, metricAverageName, trendTone, meaningfulThresholdSeconds }) {
+  if (!markerTimingClues.length) {
+    return "No confirmed markers were recorded in this block.";
+  }
+
+  const clue = pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, meaningfulThresholdSeconds);
+  if (!clue) {
+    return `Confirmed markers were recorded in this block, but there was not enough ${metricName} timing data to compare them with the run ${metricAverageName} before this block.`;
+  }
+
+  const absDeltaText = `${Math.abs(clue.delta).toFixed(1)}s`;
+  const directionText = clue.delta > 0 ? "longer" : "shorter";
+  const sheepMarkerText = `Sheep ${clue.sheepNumber} had ${clue.markerLabel}.`;
+  const closeText = `${sheepMarkerText} Its ${metricName} stayed close to the run ${metricAverageName} before this block. Worth checking, but it does not clearly explain ${trendTone === "good" ? "the faster block" : trendTone === "bad" ? "the slower block" : "the stayed-close result"}.`;
+
+  if (Math.abs(clue.delta) <= meaningfulThresholdSeconds) {
+    return closeText;
+  }
+
+  if (trendTone === "bad" && clue.delta > 0) {
+    const suffix = metricKey === "catchDuration"
+      ? "a strong indicator it drove most of the catch time loss"
+      : metricKey === "shearDuration"
+        ? "a strong indicator it was the likely driver of the shear time loss"
+        : "a strong indicator it appears to explain most of the lost time";
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, ${suffix}.`;
+  }
+
+  if (trendTone === "good" && clue.delta < 0) {
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, making it the clearest timing clue for the gained time.`;
+  }
+
+  if (trendTone === "neutral") {
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, the clearest timing clue, but the block stayed close overall.`;
+  }
+
+  return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block. Worth checking, but it does not clearly explain ${trendTone === "good" ? "the faster block" : "the slower block"}.`;
+}
 function formatTrendTargetSeconds(seconds) {
   return Number.isFinite(seconds) ? `${Math.abs(seconds).toFixed(1)}s` : "0.0s";
 }
@@ -6264,14 +6361,19 @@ function updateTrendFlags() {
     };
   };
 
-  const renderMetricCard = ({ title, label, contextMetricName, windowRows, comparisonAverage, latestAverage }) => {
+  const renderMetricCard = ({ title, label, metricKey, metricName, metricAverageName, windowRows, comparisonAverage, latestAverage, markerTimingClues }) => {
     const meta = getTrendWindowMeta(windowRows, windowSize);
     const delta = latestAverage - comparisonAverage;
     const trend = describeMetricTrend(delta, windowRows.length);
-    const markerLabels = getTrendFlagMarkerLabels(windowRows).map(escapeTrendFlagHtml);
-    const markerLine = markerLabels.length
-      ? `<div class="trend-flag-context">This block included ${formatTrendFlagList(markerLabels)} markers, which may have influenced the ${contextMetricName}.</div>`
-      : `<div class="trend-flag-context">No confirmed markers were recorded in this block.</div>`;
+    const markerLineText = formatTrendFlagMarkerTimingLine({
+      markerTimingClues,
+      metricKey,
+      metricName,
+      metricAverageName,
+      trendTone: trend.tone,
+      meaningfulThresholdSeconds
+    });
+    const markerLine = `<div class="trend-flag-context">${escapeTrendFlagHtml(markerLineText)}</div>`;
     return `
       <div class="trend-flag">
         <div class="trend-flag-title">${title}</div>
@@ -6313,21 +6415,29 @@ function updateTrendFlags() {
   if (rows.length >= windowSize * 2) {
     const comparisonRows = rows.slice(0, -windowSize);
     const metricDefinitions = [
-      { title: "Catch time", label: "Catch", metricKey: "catchDuration", contextMetricName: "catch average" },
-      { title: "Shear time", label: "Shear", metricKey: "shearDuration", contextMetricName: "shear average" },
-      { title: "Total time per sheep", label: "Total Time Per Sheep", metricKey: "fullCycle", contextMetricName: "total time average" }
+      { title: "Catch time", label: "Catch", metricKey: "catchDuration", metricName: "catch", metricAverageName: "catch average" },
+      { title: "Shear time", label: "Shear", metricKey: "shearDuration", metricName: "shear", metricAverageName: "shear average" },
+      { title: "Total time per sheep", label: "Total Time Per Sheep", metricKey: "fullCycle", metricName: "total time", metricAverageName: "total time average" }
     ];
+    const comparisonAverages = metricDefinitions.reduce((averages, metric) => {
+      averages[metric.metricKey] = averageMetric(comparisonRows, metric.metricKey);
+      return averages;
+    }, {});
+    const markerTimingClues = buildTrendFlagMarkerTimingClues(recentRows, comparisonAverages);
 
     metricDefinitions.forEach((metric) => {
-      const comparisonAverage = averageMetric(comparisonRows, metric.metricKey);
+      const comparisonAverage = comparisonAverages[metric.metricKey];
       const latestAverage = averageMetric(recentRows, metric.metricKey);
       cards.push(renderMetricCard({
         title: metric.title,
         label: metric.label,
-        contextMetricName: metric.contextMetricName,
+        metricKey: metric.metricKey,
+        metricName: metric.metricName,
+        metricAverageName: metric.metricAverageName,
         windowRows: recentRows,
         comparisonAverage,
-        latestAverage
+        latestAverage,
+        markerTimingClues
       }));
     });
 
