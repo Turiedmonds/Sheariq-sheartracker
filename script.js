@@ -746,6 +746,75 @@ function getPenFillForecastAssumption(options = {}) {
   return getPenFillForecastPoints(options).assumption;
 }
 
+const DRINK_REFILL_CLASH_WINDOW_SECONDS = 90;
+const DRINK_REFILL_EARLY_NOTICE_SECONDS = 120;
+const DRINK_REFILL_MIN_SECONDS_BEFORE_REFILL_TO_SUGGEST_EARLY = 20;
+
+function getNextDrinkRefillClashAdvisory(options = {}) {
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const plannedTimingMinutes = Object.prototype.hasOwnProperty.call(options, "plannedTimingMinutes")
+    ? Number(options.plannedTimingMinutes)
+    : Number(appState.markerSettings?.drink?.plannedTimingMinutes);
+  const drinkIntervalSeconds = plannedTimingMinutes * 60;
+
+  if (
+    !Number.isFinite(effectiveElapsedSeconds)
+    || effectiveElapsedSeconds < 0
+    || !Number.isFinite(drinkIntervalSeconds)
+    || drinkIntervalSeconds <= 0
+  ) {
+    return null;
+  }
+
+  const nextDrinkEffectiveElapsedSeconds = (Math.floor(effectiveElapsedSeconds / drinkIntervalSeconds) + 1) * drinkIntervalSeconds;
+  const forecast = getPenFillForecastPoints({
+    ...options,
+    effectiveElapsedSeconds,
+    maxForecastPoints: 1
+  });
+  const nextRefill = Array.isArray(forecast?.points) ? forecast.points[0] : null;
+  const nextRefillEffectiveElapsedSeconds = Number(nextRefill?.effectiveElapsedSeconds);
+
+  if (!Number.isFinite(nextRefillEffectiveElapsedSeconds) || nextRefillEffectiveElapsedSeconds < effectiveElapsedSeconds) {
+    return null;
+  }
+
+  const secondsBetweenDrinkAndRefill = nextDrinkEffectiveElapsedSeconds - nextRefillEffectiveElapsedSeconds;
+  const absoluteSecondsBetween = Math.abs(secondsBetweenDrinkAndRefill);
+  const drinkSoonAfterRefill = secondsBetweenDrinkAndRefill > 0
+    && secondsBetweenDrinkAndRefill <= DRINK_REFILL_EARLY_NOTICE_SECONDS;
+
+  if (absoluteSecondsBetween > DRINK_REFILL_CLASH_WINDOW_SECONDS && !drinkSoonAfterRefill) {
+    return null;
+  }
+
+  const nextRefillSheepNumber = Number(nextRefill?.sheepNumber);
+  const secondsBeforeRefill = nextRefillEffectiveElapsedSeconds - effectiveElapsedSeconds;
+  const canSuggestRefillSheep = Number.isFinite(nextRefillSheepNumber)
+    && nextRefillSheepNumber > 0
+    && secondsBeforeRefill >= DRINK_REFILL_MIN_SECONDS_BEFORE_REFILL_TO_SUGGEST_EARLY;
+  const suggestedSheepNumber = canSuggestRefillSheep ? nextRefillSheepNumber : null;
+  const message = canSuggestRefillSheep
+    ? `Drink/refill clash likely — consider drink before Sheep ${nextRefillSheepNumber}.`
+    : "Drink/refill clash likely — consider earlier drink.";
+
+  return {
+    type: "drinkRefillClash",
+    message,
+    nextDrinkEffectiveElapsedSeconds,
+    nextRefillEffectiveElapsedSeconds,
+    nextRefillSheepNumber: Number.isFinite(nextRefillSheepNumber) ? nextRefillSheepNumber : null,
+    secondsBetweenDrinkAndRefill,
+    suggestedSheepNumber
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.getNextDrinkRefillClashAdvisory = getNextDrinkRefillClashAdvisory;
+}
+
 function getMinimumRecommendedFillAmount(rule) {
   if (!rule) return null;
   if (rule.defaultRefillAmount === 15) return 12;
