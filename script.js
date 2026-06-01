@@ -782,11 +782,11 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   }
 
   const secondsBetweenDrinkAndRefill = nextDrinkEffectiveElapsedSeconds - nextRefillEffectiveElapsedSeconds;
-  const absoluteSecondsBetween = Math.abs(secondsBetweenDrinkAndRefill);
-  const drinkSoonAfterRefill = secondsBetweenDrinkAndRefill > 0
-    && secondsBetweenDrinkAndRefill <= DRINK_REFILL_EARLY_NOTICE_SECONDS;
+  const drinkDueAfterRefill = secondsBetweenDrinkAndRefill > 0;
+  const inClashWindowAfterRefill = secondsBetweenDrinkAndRefill <= DRINK_REFILL_CLASH_WINDOW_SECONDS;
+  const inEarlyNoticeAfterRefill = secondsBetweenDrinkAndRefill <= DRINK_REFILL_EARLY_NOTICE_SECONDS;
 
-  if (absoluteSecondsBetween > DRINK_REFILL_CLASH_WINDOW_SECONDS && !drinkSoonAfterRefill) {
+  if (!drinkDueAfterRefill || (!inClashWindowAfterRefill && !inEarlyNoticeAfterRefill)) {
     return null;
   }
 
@@ -797,8 +797,8 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
     && secondsBeforeRefill >= DRINK_REFILL_MIN_SECONDS_BEFORE_REFILL_TO_SUGGEST_EARLY;
   const suggestedSheepNumber = canSuggestRefillSheep ? nextRefillSheepNumber : null;
   const message = canSuggestRefillSheep
-    ? `Drink/refill clash likely — consider drink before Sheep ${nextRefillSheepNumber}.`
-    : "Drink/refill clash likely — consider earlier drink.";
+    ? `Drink due after next refill — consider drink before Sheep ${nextRefillSheepNumber}.`
+    : "Drink due after next refill — consider earlier drink.";
 
   return {
     type: "drinkRefillClash",
