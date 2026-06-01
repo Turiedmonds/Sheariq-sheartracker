@@ -6209,7 +6209,44 @@ function getTrendFlagMarkerLabel(marker) {
     : getManualMarkerDisplayLabel(marker);
 }
 
-function buildTrendFlagMarkerTimingClues(windowRows, comparisonAverages) {
+function buildTrendFlagSameMarkerTimingAverages(comparisonRows, metricKeys) {
+  const buckets = comparisonRows.reduce((markerBuckets, entry) => {
+    const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+    manualMarkers.forEach((marker) => {
+      const markerKey = getManualMarkerDedupKey(marker);
+      if (!markerKey) return;
+      if (!markerBuckets[markerKey]) {
+        markerBuckets[markerKey] = {
+          sampleCount: 0,
+          totals: {},
+          counts: {},
+          averages: {}
+        };
+      }
+      const bucket = markerBuckets[markerKey];
+      bucket.sampleCount += 1;
+      metricKeys.forEach((metricKey) => {
+        const value = Number(entry?.[metricKey]);
+        if (!Number.isFinite(value)) return;
+        bucket.totals[metricKey] = (bucket.totals[metricKey] || 0) + value;
+        bucket.counts[metricKey] = (bucket.counts[metricKey] || 0) + 1;
+      });
+    });
+    return markerBuckets;
+  }, {});
+
+  Object.values(buckets).forEach((bucket) => {
+    metricKeys.forEach((metricKey) => {
+      const count = bucket.counts[metricKey] || 0;
+      bucket.averages[metricKey] = count ? bucket.totals[metricKey] / count : NaN;
+    });
+    delete bucket.totals;
+  });
+
+  return buckets;
+}
+
+function buildTrendFlagMarkerTimingClues(windowRows, comparisonAverages, sameMarkerAverages = {}) {
   return windowRows.flatMap((entry, index) => {
     const manualMarkers = getConfirmedManualMarkersForEntry(entry);
     if (!manualMarkers.length) return [];
@@ -6230,15 +6267,48 @@ function buildTrendFlagMarkerTimingClues(windowRows, comparisonAverages) {
         ? timings.fullCycle - comparisonAverages.fullCycle
         : NaN
     };
-    return manualMarkers.map((marker) => ({
-      sheepNumber,
-      markerLabel: getTrendFlagMarkerLabel(marker),
-      catchDuration: timings.catchDuration,
-      shearDuration: timings.shearDuration,
-      fullCycle: timings.fullCycle,
-      deltas
-    })).filter((clue) => clue.markerLabel);
+    return manualMarkers.map((marker) => {
+      const markerKey = getManualMarkerDedupKey(marker);
+      const sameMarkerTiming = markerKey ? sameMarkerAverages[markerKey] : null;
+      return {
+        sheepNumber,
+        markerLabel: getTrendFlagMarkerLabel(marker),
+        markerKey,
+        catchDuration: timings.catchDuration,
+        shearDuration: timings.shearDuration,
+        fullCycle: timings.fullCycle,
+        deltas,
+        sameMarkerTiming: sameMarkerTiming ? {
+          sampleCount: sameMarkerTiming.sampleCount || 0,
+          counts: { ...sameMarkerTiming.counts },
+          averages: { ...sameMarkerTiming.averages }
+        } : {
+          sampleCount: 0,
+          counts: {},
+          averages: {}
+        }
+      };
+    }).filter((clue) => clue.markerLabel);
   });
+}
+
+function getTrendFlagSameMarkerMetricDelta(clue, metricKey) {
+  const value = Number(clue?.[metricKey]);
+  const sameMarkerAverage = Number(clue?.sameMarkerTiming?.averages?.[metricKey]);
+  return Number.isFinite(value) && Number.isFinite(sameMarkerAverage) ? value - sameMarkerAverage : NaN;
+}
+
+function getTrendFlagMarkerClueScore(clue, metricKey, trendTone, meaningfulThresholdSeconds) {
+  const runDelta = Number(clue?.delta);
+  const sameMarkerDelta = getTrendFlagSameMarkerMetricDelta(clue, metricKey);
+  const sameMarkerCount = clue?.sameMarkerTiming?.counts?.[metricKey] || 0;
+  const alignsWithTrend = (delta) => trendTone === "bad" ? delta > 0 : trendTone === "good" ? delta < 0 : Math.abs(delta) > meaningfulThresholdSeconds;
+  const runScore = Number.isFinite(runDelta) ? Math.abs(runDelta) : 0;
+  if (sameMarkerCount >= 2 && Number.isFinite(sameMarkerDelta)) {
+    const sameScore = Math.abs(sameMarkerDelta);
+    return (alignsWithTrend(sameMarkerDelta) ? sameScore + runScore : sameScore * 0.25) + (alignsWithTrend(runDelta) ? runScore : 0);
+  }
+  return runScore;
 }
 
 function pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, meaningfulThresholdSeconds) {
@@ -6247,17 +6317,18 @@ function pickTrendFlagMarkerTimingClue(markerTimingClues, metricKey, trendTone, 
     .filter((clue) => Number.isFinite(clue.delta));
   if (!metricClues.length) return null;
 
-  const sortByMagnitude = (a, b) => Math.abs(b.delta) - Math.abs(a.delta);
+  const sortByScore = (a, b) => getTrendFlagMarkerClueScore(b, metricKey, trendTone, meaningfulThresholdSeconds)
+    - getTrendFlagMarkerClueScore(a, metricKey, trendTone, meaningfulThresholdSeconds);
   if (trendTone === "bad") {
-    const aligned = metricClues.filter((clue) => clue.delta > 0).sort(sortByMagnitude);
-    return aligned[0] || metricClues.sort(sortByMagnitude)[0];
+    const aligned = metricClues.filter((clue) => clue.delta > 0).sort(sortByScore);
+    return aligned[0] || metricClues.sort(sortByScore)[0];
   }
   if (trendTone === "good") {
-    const aligned = metricClues.filter((clue) => clue.delta < 0).sort(sortByMagnitude);
-    return aligned[0] || metricClues.sort(sortByMagnitude)[0];
+    const aligned = metricClues.filter((clue) => clue.delta < 0).sort(sortByScore);
+    return aligned[0] || metricClues.sort(sortByScore)[0];
   }
-  const standout = metricClues.filter((clue) => Math.abs(clue.delta) > meaningfulThresholdSeconds).sort(sortByMagnitude);
-  return standout[0] || metricClues.sort(sortByMagnitude)[0];
+  const standout = metricClues.filter((clue) => Math.abs(clue.delta) > meaningfulThresholdSeconds).sort(sortByScore);
+  return standout[0] || metricClues.sort(sortByScore)[0];
 }
 
 
@@ -6377,30 +6448,78 @@ function formatTrendFlagMarkerTimingLine({ markerTimingClues, metricKey, metricN
   const absDeltaText = `${Math.abs(clue.delta).toFixed(1)}s`;
   const directionText = clue.delta > 0 ? "longer" : "shorter";
   const sheepMarkerText = `Sheep ${clue.sheepNumber} had ${clue.markerLabel}.`;
-  const closeText = `${sheepMarkerText} Its ${metricName} stayed close to the run ${metricAverageName} before this block. Worth checking, but it does not clearly explain ${trendTone === "good" ? "the faster block" : trendTone === "bad" ? "the slower block" : "the stayed-close result"}.`;
+  const sameMarkerCount = clue.sameMarkerTiming?.counts?.[metricKey] || 0;
+  const sameMarkerDelta = getTrendFlagSameMarkerMetricDelta(clue, metricKey);
+  const sameMarkerAverageText = `earlier ${clue.markerLabel} markers`;
+  const sameMarkerSupportsTrend = Number.isFinite(sameMarkerDelta)
+    && Math.abs(sameMarkerDelta) > meaningfulThresholdSeconds
+    && ((trendTone === "bad" && sameMarkerDelta > 0) || (trendTone === "good" && sameMarkerDelta < 0) || trendTone === "neutral");
+  const runAverageText = `run ${metricAverageName} before this block`;
+  const closeResultText = trendTone === "good" ? "the faster block" : trendTone === "bad" ? "the slower block" : "the stayed-close result";
+  const closeText = sameMarkerCount >= 2 && Number.isFinite(sameMarkerDelta)
+    ? `${sheepMarkerText} Its ${metricName} stayed close to ${sameMarkerAverageText}, so the marker is worth checking but does not clearly explain ${closeResultText}.`
+    : `${sheepMarkerText} Its ${metricName} stayed close to the ${runAverageText}. Worth checking, but it does not clearly explain ${closeResultText}.`;
+
+  if (sameMarkerCount >= 2) {
+    if (sameMarkerSupportsTrend) {
+      const sameMarkerDeltaText = `${Math.abs(sameMarkerDelta).toFixed(1)}s`;
+      const sameMarkerDirectionText = sameMarkerDelta > 0 ? "longer" : "shorter";
+      if (trendTone === "bad" && clue.delta > meaningfulThresholdSeconds) {
+        const suffix = metricKey === "catchDuration"
+          ? "a strong indicator it was the likely driver of most of the catch time loss"
+          : metricKey === "shearDuration"
+            ? "a strong indicator it was the likely driver of the shear time loss"
+            : "a strong indicator it was the likely driver of most of the lost time";
+        return `${sheepMarkerText} Its ${metricName} was ${sameMarkerDeltaText} ${sameMarkerDirectionText} than ${sameMarkerAverageText} and ${absDeltaText} ${directionText} than the ${runAverageText}, ${suffix}.`;
+      }
+      if (trendTone === "good" && clue.delta < -meaningfulThresholdSeconds) {
+        return `${sheepMarkerText} Its ${metricName} was ${sameMarkerDeltaText} ${sameMarkerDirectionText} than ${sameMarkerAverageText} and ${absDeltaText} ${directionText} than the ${runAverageText}, a strong indicator it was the likely driver of the gained time.`;
+      }
+      return `${sheepMarkerText} Its ${metricName} was ${sameMarkerDeltaText} ${sameMarkerDirectionText} than ${sameMarkerAverageText} and ${absDeltaText} ${directionText} than the ${runAverageText}, making it the clearest marker timing clue while the block stayed close overall.`;
+    }
+    return `${sheepMarkerText} Its ${metricName} stayed close to ${sameMarkerAverageText}, so the marker is worth checking but does not clearly explain ${closeResultText}.`;
+  }
 
   if (Math.abs(clue.delta) <= meaningfulThresholdSeconds) {
     return closeText;
   }
 
+  const runDeltaSupportsTrend = (trendTone === "bad" && clue.delta > meaningfulThresholdSeconds)
+    || (trendTone === "good" && clue.delta < -meaningfulThresholdSeconds)
+    || trendTone === "neutral";
+
+  if (sameMarkerCount === 1) {
+    if (runDeltaSupportsTrend) {
+      return `${sheepMarkerText} There was only one earlier ${clue.markerLabel} to compare with, so the stronger clue is that its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}.`;
+    }
+    return `${sheepMarkerText} There was only one earlier ${clue.markerLabel} to compare with. Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}, so the marker is worth checking but does not clearly explain ${closeResultText}.`;
+  }
+
+  if (sameMarkerCount === 0) {
+    if (runDeltaSupportsTrend) {
+      return `${sheepMarkerText} No earlier ${clue.markerLabel} marker average was available, but its ${metricName} was about ${absDeltaText} ${directionText} than the ${runAverageText}, making it the likely reason this block ${trendTone === "good" ? "gained time" : trendTone === "bad" ? "lost time" : "stood out"}.`;
+    }
+    return `${sheepMarkerText} No earlier ${clue.markerLabel} marker average was available. Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}, so the marker is worth checking but does not clearly explain ${closeResultText}.`;
+  }
+
   if (trendTone === "bad" && clue.delta > 0) {
     const suffix = metricKey === "catchDuration"
-      ? "a strong indicator it drove most of the catch time loss"
+      ? "a strong indicator it was the likely driver of most of the catch time loss"
       : metricKey === "shearDuration"
         ? "a strong indicator it was the likely driver of the shear time loss"
-        : "a strong indicator it appears to explain most of the lost time";
-    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, ${suffix}.`;
+        : "a strong indicator it was the likely driver of most of the lost time";
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}, ${suffix}.`;
   }
 
   if (trendTone === "good" && clue.delta < 0) {
-    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, making it the clearest timing clue for the gained time.`;
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}, making it the clearest timing clue for the gained time.`;
   }
 
   if (trendTone === "neutral") {
-    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block, the clearest timing clue, but the block stayed close overall.`;
+    return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}, the clearest timing clue, but the block stayed close overall.`;
   }
 
-  return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the run ${metricAverageName} before this block. Worth checking, but it does not clearly explain ${trendTone === "good" ? "the faster block" : "the slower block"}.`;
+  return `${sheepMarkerText} Its ${metricName} was ${absDeltaText} ${directionText} than the ${runAverageText}. Worth checking, but it does not clearly explain ${trendTone === "good" ? "the faster block" : "the slower block"}.`;
 }
 function formatTrendTargetSeconds(seconds) {
   return Number.isFinite(seconds) ? `${Math.abs(seconds).toFixed(1)}s` : "0.0s";
@@ -6529,7 +6648,9 @@ function updateTrendFlags() {
       averages[metric.metricKey] = averageMetric(comparisonRows, metric.metricKey);
       return averages;
     }, {});
-    const markerTimingClues = buildTrendFlagMarkerTimingClues(recentRows, comparisonAverages);
+    const metricKeys = metricDefinitions.map((metric) => metric.metricKey);
+    const sameMarkerAverages = buildTrendFlagSameMarkerTimingAverages(comparisonRows, metricKeys);
+    const markerTimingClues = buildTrendFlagMarkerTimingClues(recentRows, comparisonAverages, sameMarkerAverages);
 
     metricDefinitions.forEach((metric) => {
       const comparisonAverage = comparisonAverages[metric.metricKey];
