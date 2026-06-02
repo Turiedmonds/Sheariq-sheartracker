@@ -2582,6 +2582,7 @@ const appState = {
   dismissedPenFillPromptKey: null,
   effectiveElapsedBeforePauseMs: 0,
   effectiveResumeRealMs: null,
+  discardedResetElapsedMs: 0,
   trendBucketMinutes: 15,
   trendBuckets: {},
   reviewBlocks: [],
@@ -4104,14 +4105,17 @@ function formatCountdown(totalSeconds) {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+function getDiscardedResetElapsedMs() {
+  const discardedResetElapsedMs = Number(appState.discardedResetElapsedMs);
+  return Number.isFinite(discardedResetElapsedMs) ? Math.max(discardedResetElapsedMs, 0) : 0;
+}
+
 function getEffectiveElapsedSeconds() {
-  if (!appState.runActive && appState.effectiveResumeRealMs === null) {
-    return appState.effectiveElapsedBeforePauseMs / 1000;
+  let elapsedMs = Number(appState.effectiveElapsedBeforePauseMs) || 0;
+  if (appState.runActive && !appState.paused && appState.effectiveResumeRealMs !== null) {
+    elapsedMs += Math.max(Date.now() - appState.effectiveResumeRealMs, 0);
   }
-  if (appState.paused || appState.effectiveResumeRealMs === null) {
-    return appState.effectiveElapsedBeforePauseMs / 1000;
-  }
-  return (appState.effectiveElapsedBeforePauseMs + Math.max(Date.now() - appState.effectiveResumeRealMs, 0)) / 1000;
+  return Math.max(elapsedMs - getDiscardedResetElapsedMs(), 0) / 1000;
 }
 
 function formatElapsedMMSS(seconds) {
@@ -4791,6 +4795,7 @@ function resetRunState() {
   appState.dayClockPausedSecondsFromMidnight = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = null;
+  appState.discardedResetElapsedMs = 0;
   appState.trendBuckets = {};
   appState.reviewBlocks = [];
   appState.nextReviewBlockIndex = 1;
@@ -4934,6 +4939,7 @@ function startRun() {
   appState.pendingBreakStartedAtMs = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = appState.runStartTime;
+  appState.discardedResetElapsedMs = 0;
   appState.trendBuckets = {};
   appState.reviewBlocks = [];
   appState.nextReviewBlockIndex = 1;
@@ -5030,6 +5036,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   appState.runEndTimeMs = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = null;
+  appState.discardedResetElapsedMs = 0;
   resetPenFillForecastCountdownTarget();
 
   appState.preparedForNextRunBreak = true;
@@ -5698,9 +5705,35 @@ async function undoLastSheep() {
 function resetCurrentSheepTiming() {
   if (!canResetCurrentSheepTiming()) return;
 
+  const resetTimeMs = appState.paused && Number.isFinite(appState.pauseStartedAtMs)
+    ? appState.pauseStartedAtMs
+    : Date.now();
+  const catchStartMs = Number(appState.currentCycle?.catchStart);
+  const abandonedElapsedMs = Number.isFinite(catchStartMs)
+    ? Math.max(resetTimeMs - catchStartMs, 0)
+    : 0;
+
+  if (abandonedElapsedMs > 0) {
+    appState.discardedResetElapsedMs = getDiscardedResetElapsedMs() + abandonedElapsedMs;
+    if (Number.isFinite(appState.runEndTimeMs)) {
+      appState.runEndTimeMs += abandonedElapsedMs;
+    }
+    if (appState.paused && Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
+      const dayClockFloor = Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+        ? appState.dayClockStartSecondsFromMidnight
+        : 0;
+      appState.dayClockPausedSecondsFromMidnight = Math.max(
+        appState.dayClockPausedSecondsFromMidnight - (abandonedElapsedMs / 1000),
+        dayClockFloor
+      );
+    } else if (Number.isFinite(appState.dayClockStartRealMs)) {
+      appState.dayClockStartRealMs += abandonedElapsedMs;
+    }
+  }
+
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
-  appState.currentCycle.catchStart = Date.now();
+  appState.currentCycle.catchStart = resetTimeMs;
   appState.retryCatchOnResume = true;
   appState.currentMotorDisplay = "OFF";
   setPaused(true);
@@ -10025,6 +10058,7 @@ function getAutosavePayload() {
       panelCollapsed: appState.panelCollapsed,
       effectiveElapsedBeforePauseMs: appState.effectiveElapsedBeforePauseMs,
       effectiveResumeRealMs: appState.effectiveResumeRealMs,
+      discardedResetElapsedMs: getDiscardedResetElapsedMs(),
       simulationMode: appState.simulationMode,
       simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
       simulationCustomMinutes: sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes),
@@ -10446,6 +10480,9 @@ function restoreSessionPayload(raw, options = {}) {
     elements.customHours.disabled = elements.runType.value !== "custom";
   }
   appState.retryCatchOnResume = Boolean(appState.retryCatchOnResume);
+  appState.discardedResetElapsedMs = Object.prototype.hasOwnProperty.call(raw.state, "discardedResetElapsedMs")
+    ? getDiscardedResetElapsedMs()
+    : 0;
   appState.simulationMode = Boolean(appState.simulationMode);
   appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
   if (!appState.simulationMode) {
