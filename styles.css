@@ -1751,6 +1751,14 @@ td {
   touch-action: manipulation;
 }
 
+.manual-save-choice-actions {
+  flex-wrap: wrap;
+}
+
+.manual-save-choice-actions button {
+  flex: 1 1 12rem;
+}
+
 @media (max-width: 700px) {
   .form-grid,
   .form-grid.single-row {
