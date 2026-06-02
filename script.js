@@ -10376,7 +10376,84 @@ async function handleImportSessionFileChange(event) {
   }
 }
 
-async function saveManualSession() {
+function manualSaveChoiceModal() {
+  return new Promise((resolve) => {
+    const oldOverlay = document.getElementById("manualSaveChoiceModalOverlay");
+    if (oldOverlay) oldOverlay.remove();
+
+    const overlay = document.createElement("div");
+    overlay.id = "manualSaveChoiceModalOverlay";
+    overlay.className = "modal-overlay";
+
+    const dialog = document.createElement("div");
+    dialog.className = "modal-dialog";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", "manualSaveChoiceModalTitle");
+    dialog.tabIndex = -1;
+
+    const title = document.createElement("h3");
+    title.id = "manualSaveChoiceModalTitle";
+    title.textContent = "Save Session";
+
+    const message = document.createElement("p");
+    message.textContent = "Choose how to save the current in-memory session.";
+
+    const actions = document.createElement("div");
+    actions.className = "modal-actions manual-save-choice-actions";
+
+    const newBtn = document.createElement("button");
+    newBtn.type = "button";
+    newBtn.textContent = "Save as new session";
+
+    const overwriteBtn = document.createElement("button");
+    overwriteBtn.type = "button";
+    overwriteBtn.textContent = "Overwrite existing save";
+
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "Cancel";
+
+    actions.append(newBtn, overwriteBtn, cancelBtn);
+    dialog.append(title, message, actions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    setLayoutScrollLock(true);
+
+    const close = (choice) => {
+      overlay.remove();
+      setLayoutScrollLock(false);
+      resolve(choice);
+    };
+    newBtn.addEventListener("click", () => close("new"));
+    overwriteBtn.addEventListener("click", () => close("overwrite"));
+    cancelBtn.addEventListener("click", () => close("cancel"));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close("cancel");
+    });
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close("cancel");
+      }
+    });
+    dialog.focus();
+  });
+}
+
+function createManualSaveId() {
+  return `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function writeManualSave(id, payload, name, index = loadManualSaveIndex()) {
+  const summary = createManualSaveSummary(payload, name);
+  const entry = { id, ...summary };
+  localStorage.setItem(getManualSaveStorageKey(id), JSON.stringify({ ...payload, manualSave: entry }));
+  saveManualSaveIndex([entry, ...index.filter((item) => item.id !== id)]);
+  return entry;
+}
+
+async function saveManualSessionAsNew() {
   const payload = getAutosavePayload();
   payload.type = "manual";
   payload.savedAt = Date.now();
@@ -10388,31 +10465,75 @@ async function saveManualSession() {
     return;
   }
 
-  const summary = createManualSaveSummary(payload, name);
+  const entry = writeManualSave(createManualSaveId(), payload, name);
+  updateManualSessionStatus(`Saved manual session: ${entry.name}`);
+}
+
+function getManualSaveDetailLines(entry) {
+  const savedDate = entry?.savedAt ? new Date(entry.savedAt).toLocaleString() : "Unknown date";
+  return [
+    `Saved: ${savedDate}`,
+    `Run: ${entry?.runNumber || 1}`,
+    `Sheep: ${entry?.sheepTotal || 0}`,
+    `Status: ${entry?.status || "Unknown"}`,
+    `Farm: ${entry?.farm || "Session"}`,
+    `Session: ${[entry?.recordType, entry?.runType].filter(Boolean).join(" • ") || "Record type/session info n/a"}`
+  ];
+}
+
+async function overwriteManualSession() {
   const index = loadManualSaveIndex();
-  const existing = index.find((entry) => entry.name === name && entry.sessionIdentity === summary.sessionIdentity);
-  let id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  if (existing) {
-    const choice = window.prompt(
-      `A manual save named "${name}" already exists for this session.\nType O to overwrite, N to save as a new copy, or C to cancel.`,
-      "O"
-    );
-    const normalizedChoice = (choice || "").trim().toLowerCase();
-    if (normalizedChoice === "o" || normalizedChoice === "overwrite") {
-      id = existing.id;
-    } else if (normalizedChoice === "n" || normalizedChoice === "new") {
-      id = `manual-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    } else {
-      updateManualSessionStatus("Manual save cancelled");
-      return;
-    }
+  if (!index.length) {
+    await confirmModal({
+      title: "No manual saves found",
+      message: "There are no existing manual saves to overwrite. Save this session as new first.",
+      confirmText: "OK",
+      cancelText: "OK"
+    });
+    updateManualSessionStatus("No manual saves to overwrite");
+    return;
   }
 
-  const entry = { id, ...summary };
-  localStorage.setItem(getManualSaveStorageKey(id), JSON.stringify({ ...payload, manualSave: entry }));
-  const nextIndex = [entry, ...index.filter((item) => item.id !== id)];
-  saveManualSaveIndex(nextIndex);
-  updateManualSessionStatus(`Saved manual session: ${entry.name}`);
+  const selected = await openManualSessionPickerModal({
+    title: "Overwrite Existing Save",
+    emptyMessage: "No manual sessions saved yet.",
+    actionText: "Overwrite",
+    modalId: "manualSessionOverwriteModalOverlay"
+  });
+  if (!selected) {
+    updateManualSessionStatus("Manual save cancelled");
+    return;
+  }
+
+  const confirmed = await confirmModal({
+    title: "Overwrite manual save?",
+    message: [`Replace this saved session with the current in-memory session?`, ``, selected.name || "Manual session", ...getManualSaveDetailLines(selected)].join("\n"),
+    confirmText: "Overwrite Save",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) {
+    updateManualSessionStatus("Manual save cancelled");
+    return;
+  }
+
+  const payload = getAutosavePayload();
+  payload.type = "manual";
+  payload.savedAt = Date.now();
+  const entry = writeManualSave(selected.id, payload, selected.name || generateSuggestedManualSaveName(payload), index);
+  updateManualSessionStatus(`Overwrote manual session: ${entry.name}`);
+}
+
+async function saveManualSession() {
+  const choice = await manualSaveChoiceModal();
+  if (choice === "new") {
+    await saveManualSessionAsNew();
+    return;
+  }
+  if (choice === "overwrite") {
+    await overwriteManualSession();
+    return;
+  }
+  updateManualSessionStatus("Manual save cancelled");
 }
 
 function readManualSave(id) {
@@ -10458,6 +10579,94 @@ async function deleteManualSession(id) {
   openManualSessionLoadModal();
 }
 
+function renderManualSessionDetails(entry) {
+  const details = document.createElement("div");
+  details.className = "manual-session-details";
+  const name = document.createElement("strong");
+  name.textContent = entry.name || "Manual session";
+  details.appendChild(name);
+  getManualSaveDetailLines(entry).forEach((line) => {
+    const item = document.createElement("span");
+    item.textContent = line;
+    details.appendChild(item);
+  });
+  return details;
+}
+
+function openManualSessionPickerModal({ title, emptyMessage, actionText, modalId }) {
+  return new Promise((resolve) => {
+    const oldOverlay = document.getElementById(modalId);
+    if (oldOverlay) oldOverlay.remove();
+    const overlay = document.createElement("div");
+    overlay.id = modalId;
+    overlay.className = "modal-overlay";
+
+    const dialog = document.createElement("div");
+    dialog.className = "modal-dialog manual-session-modal";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-labelledby", `${modalId}Title`);
+    dialog.tabIndex = -1;
+
+    const heading = document.createElement("h3");
+    heading.id = `${modalId}Title`;
+    heading.textContent = title;
+
+    const list = document.createElement("div");
+    list.className = "manual-session-list";
+
+    const index = loadManualSaveIndex();
+    if (!index.length) {
+      const empty = document.createElement("p");
+      empty.textContent = emptyMessage;
+      list.appendChild(empty);
+    } else {
+      index.forEach((entry) => {
+        const row = document.createElement("div");
+        row.className = "manual-session-row";
+        const actions = document.createElement("div");
+        actions.className = "manual-session-row-actions";
+        const selectBtn = document.createElement("button");
+        selectBtn.type = "button";
+        selectBtn.textContent = actionText;
+        selectBtn.addEventListener("click", () => close(entry));
+        actions.appendChild(selectBtn);
+        row.append(renderManualSessionDetails(entry), actions);
+        list.appendChild(row);
+      });
+    }
+
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.textContent = "Cancel";
+    const footerActions = document.createElement("div");
+    footerActions.className = "modal-actions";
+    footerActions.appendChild(closeBtn);
+    dialog.append(heading, list, footerActions);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    setLayoutScrollLock(true);
+
+    function close(selection = null) {
+      overlay.remove();
+      setLayoutScrollLock(false);
+      resolve(selection);
+    }
+
+    closeBtn.addEventListener("click", () => close(null));
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) close(null);
+    });
+    overlay.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        close(null);
+      }
+    });
+    dialog.focus();
+  });
+}
+
 function openManualSessionLoadModal() {
   const oldOverlay = document.getElementById("manualSessionLoadModalOverlay");
   if (oldOverlay) oldOverlay.remove();
@@ -10487,14 +10696,6 @@ function openManualSessionLoadModal() {
     index.forEach((entry) => {
       const row = document.createElement("div");
       row.className = "manual-session-row";
-      const details = document.createElement("div");
-      details.className = "manual-session-details";
-      const savedDate = entry.savedAt ? new Date(entry.savedAt).toLocaleString() : "Unknown date";
-      details.innerHTML = `<strong></strong><span></span><span></span>`;
-      details.querySelector("strong").textContent = entry.name || "Manual session";
-      const spans = details.querySelectorAll("span");
-      spans[0].textContent = `${savedDate} • ${entry.status || "Unknown"}`;
-      spans[1].textContent = `${entry.farm || "Session"} • ${entry.recordType || "Record type n/a"} • Run ${entry.runNumber || 1} • Sheep ${entry.sheepTotal || 0}`;
       const actions = document.createElement("div");
       actions.className = "manual-session-row-actions";
       const loadBtn = document.createElement("button");
@@ -10514,7 +10715,7 @@ function openManualSessionLoadModal() {
         deleteManualSession(entry.id);
       });
       actions.append(loadBtn, deleteBtn);
-      row.append(details, actions);
+      row.append(renderManualSessionDetails(entry), actions);
       list.appendChild(row);
     });
   }
