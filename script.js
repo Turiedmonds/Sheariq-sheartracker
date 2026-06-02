@@ -24,7 +24,7 @@ const PERFORMANCE_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.performanceSectionsC
 const PERFORMANCE_SECTIONS_ORDER_STORAGE_KEY = "sheariq.performanceSectionsOrder";
 const DAY_CONFIG_SECTIONS_COLLAPSED_STORAGE_KEY = "sheariq.dayConfigSectionsCollapsed";
 const DEFAULT_PERFORMANCE_SECTION_ORDER = ["sheepCount", "averages", "latestExtremes"];
-const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "manualSave", "status"];
+const DEFAULT_SIM_SECTION_ORDER = ["simulationMode", "runControls", "autosave", "manualSave", "sessionTransfer", "status"];
 const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
@@ -2842,6 +2842,7 @@ const elements = {
   loadLastSaveBtn: document.getElementById("loadLastSaveBtn"),
   saveSessionBtn: document.getElementById("saveSessionBtn"),
   loadSessionBtn: document.getElementById("loadSessionBtn"),
+  exportSessionBtn: document.getElementById("exportSessionBtn"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
@@ -3311,6 +3312,9 @@ function initializeSimulationSections() {
   });
   if (sectionMap.has("manualSave") && !appliedOrder.includes("manualSave") && appliedOrder.includes("autosave")) {
     appliedOrder.splice(appliedOrder.indexOf("autosave") + 1, 0, "manualSave");
+  }
+  if (sectionMap.has("sessionTransfer") && !appliedOrder.includes("sessionTransfer") && appliedOrder.includes("manualSave")) {
+    appliedOrder.splice(appliedOrder.indexOf("manualSave") + 1, 0, "sessionTransfer");
   }
   DEFAULT_SIM_SECTION_ORDER.forEach((sectionId) => {
     if (sectionMap.has(sectionId) && !appliedOrder.includes(sectionId)) appliedOrder.push(sectionId);
@@ -10222,6 +10226,40 @@ function updateManualSessionStatus(message) {
   elements.autosaveStatus.textContent = `${elements.autosaveStatus.textContent} — ${message}`;
 }
 
+function getSessionExportFilename(exportedAt = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  const year = exportedAt.getFullYear();
+  const month = pad(exportedAt.getMonth() + 1);
+  const day = pad(exportedAt.getDate());
+  const hour = pad(exportedAt.getHours());
+  const minute = pad(exportedAt.getMinutes());
+  return `SHEARiQ_ShearTracker_${year}-${month}-${day}_${hour}-${minute}.json`;
+}
+
+function exportSession() {
+  const payload = getAutosavePayload();
+  const exportedAt = new Date();
+  const envelope = {
+    app: "SHEARiQ Shear Tracker",
+    kind: "sheariq.sheartracker.sessionTransfer",
+    version: 1,
+    exportedAt: exportedAt.toISOString(),
+    summary: createManualSaveSummary(payload, "Session export"),
+    payload
+  };
+  const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const downloadLink = document.createElement("a");
+  downloadLink.href = url;
+  downloadLink.download = getSessionExportFilename(exportedAt);
+  downloadLink.style.display = "none";
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  URL.revokeObjectURL(url);
+  updateManualSessionStatus("Exported session JSON");
+}
+
 async function saveManualSession() {
   const payload = getAutosavePayload();
   payload.type = "manual";
@@ -11367,6 +11405,7 @@ function bindEvents() {
   if (elements.loadLastSaveBtn) elements.loadLastSaveBtn.addEventListener("click", loadLastSave);
   if (elements.saveSessionBtn) elements.saveSessionBtn.addEventListener("click", saveManualSession);
   if (elements.loadSessionBtn) elements.loadSessionBtn.addEventListener("click", openManualSessionLoadModal);
+  if (elements.exportSessionBtn) elements.exportSessionBtn.addEventListener("click", exportSession);
   if (elements.trendBucketSize) {
     elements.trendBucketSize.addEventListener("change", () => {
       appState.trendBucketMinutes = Number(elements.trendBucketSize.value) || 15;
