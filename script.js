@@ -10087,8 +10087,9 @@ function getAutosavePayload() {
   };
 }
 
-function autosaveState() {
-  if (!appState.autosaveEnabled) return;
+function autosaveState(options = {}) {
+  const force = Boolean(options.force);
+  if (!appState.autosaveEnabled && !force) return;
   localStorage.setItem(getAutosaveStorageKey(), JSON.stringify(getAutosavePayload()));
 }
 
@@ -10361,7 +10362,7 @@ async function importSessionFromFile(file) {
     updateManualSessionStatus("Import failed: missing state object");
     return;
   }
-  autosaveState();
+  autosaveState({ force: true });
   updateManualSessionStatus("Imported session JSON");
 }
 
