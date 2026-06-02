@@ -752,7 +752,22 @@ function getPenFillForecastAssumption(options = {}) {
 
 const DRINK_REFILL_CLASH_WINDOW_SECONDS = 90;
 const DRINK_REFILL_EARLY_NOTICE_SECONDS = 120;
+const DRINK_REFILL_ALLOWED_SHIFT_SECONDS = 70;
+const DRINK_REFILL_DELAYED_SHEEP_AFTER_REFILL = 2;
 const DRINK_REFILL_MIN_SECONDS_BEFORE_REFILL_TO_SUGGEST_EARLY = 20;
+
+function getDrinkRefillEarlyOptionMessage(sheepUntilRefill, delayedOptionTooLate = false) {
+  if (delayedOptionTooLate) {
+    return "Drink timing — drink before refill; delay too late.";
+  }
+  if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill <= 1) {
+    return "Drink timing — drink on next catch.";
+  }
+  if (sheepUntilRefill === 2) {
+    return "Drink timing — drink after next sheep.";
+  }
+  return "Drink timing — drink before next refill.";
+}
 
 function getNextDrinkRefillClashAdvisory(options = {}) {
   const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
@@ -761,6 +776,9 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   const plannedTimingMinutes = Object.prototype.hasOwnProperty.call(options, "plannedTimingMinutes")
     ? Number(options.plannedTimingMinutes)
     : Number(appState.markerSettings?.drink?.plannedTimingMinutes);
+  const avgCycleSeconds = Object.prototype.hasOwnProperty.call(options, "avgCycleSeconds")
+    ? Number(options.avgCycleSeconds)
+    : Number(appState.currentStats?.avgCycle);
   const drinkIntervalSeconds = plannedTimingMinutes * 60;
 
   if (
@@ -768,6 +786,8 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
     || effectiveElapsedSeconds < 0
     || !Number.isFinite(drinkIntervalSeconds)
     || drinkIntervalSeconds <= 0
+    || !Number.isFinite(avgCycleSeconds)
+    || avgCycleSeconds <= 0
   ) {
     return null;
   }
@@ -776,6 +796,7 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   const forecast = getPenFillForecastPoints({
     ...options,
     effectiveElapsedSeconds,
+    avgCycleSeconds,
     maxForecastPoints: 1
   });
   const nextRefill = Array.isArray(forecast?.points) ? forecast.points[0] : null;
@@ -804,15 +825,22 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
   const suggestedSheepNumber = Number.isFinite(nextRefillSheepNumber) && nextRefillSheepNumber > 0
     ? nextRefillSheepNumber
     : null;
+  const earlyOptionEffectiveElapsedSeconds = Math.max(
+    effectiveElapsedSeconds,
+    nextRefillEffectiveElapsedSeconds - avgCycleSeconds
+  );
+  const delayedOptionEffectiveElapsedSeconds = nextRefillEffectiveElapsedSeconds
+    + (DRINK_REFILL_DELAYED_SHEEP_AFTER_REFILL * avgCycleSeconds);
+  const earlyOptionDistanceSeconds = Math.abs(nextDrinkEffectiveElapsedSeconds - earlyOptionEffectiveElapsedSeconds);
+  const delayedOptionDistanceSeconds = Math.abs(nextDrinkEffectiveElapsedSeconds - delayedOptionEffectiveElapsedSeconds);
+  const delayedOptionWithinAllowedShift = delayedOptionDistanceSeconds <= DRINK_REFILL_ALLOWED_SHIFT_SECONDS;
+  const delayedOptionTooLate = delayedOptionEffectiveElapsedSeconds > nextDrinkEffectiveElapsedSeconds + DRINK_REFILL_ALLOWED_SHIFT_SECONDS;
+  const delayedOptionCloserThanEarly = delayedOptionDistanceSeconds < earlyOptionDistanceSeconds;
+  const preferDelayedOption = delayedOptionWithinAllowedShift && delayedOptionCloserThanEarly;
 
-  let message = "Early Drink Warning — drink before the next refill.";
-  if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill <= 1) {
-    message = "Early Drink Warning — drink on next catch.";
-  } else if (sheepUntilRefill === 2) {
-    message = "Early Drink Warning — drink after the next sheep.";
-  } else if (Number.isFinite(sheepUntilRefill) && sheepUntilRefill >= 3 && sheepUntilRefill <= 5) {
-    message = `Early Drink Warning — drink in ${sheepUntilRefill - 1} sheep.`;
-  }
+  const message = preferDelayedOption
+    ? "Drink timing — wait 2 sheep after refill."
+    : getDrinkRefillEarlyOptionMessage(sheepUntilRefill, delayedOptionTooLate);
 
   return {
     type: "drinkRefillClash",
@@ -821,7 +849,11 @@ function getNextDrinkRefillClashAdvisory(options = {}) {
     nextRefillEffectiveElapsedSeconds,
     nextRefillSheepNumber: Number.isFinite(nextRefillSheepNumber) ? nextRefillSheepNumber : null,
     secondsBetweenDrinkAndRefill,
-    suggestedSheepNumber
+    suggestedSheepNumber,
+    recommendedDrinkTiming: preferDelayedOption ? "delayed" : "early",
+    earlyOptionEffectiveElapsedSeconds,
+    delayedOptionEffectiveElapsedSeconds,
+    delayedOptionSheepAfterRefill: DRINK_REFILL_DELAYED_SHEEP_AFTER_REFILL
   };
 }
 
