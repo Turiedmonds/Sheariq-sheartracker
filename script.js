@@ -35,6 +35,10 @@ const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
 const SW_CACHE_NAME = "sheariq-shear-tracker-v4";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
+const SESSION_TRANSFER_APP = "SHEARiQ Shear Tracker";
+const SESSION_TRANSFER_KIND = "sheariq.sheartracker.sessionTransfer";
+const SESSION_TRANSFER_VERSION = 1;
+const SESSION_IMPORT_MAX_BYTES = 5 * 1024 * 1024;
 const AUTOSAVE_INTERVAL_OPTIONS_SECONDS = Object.freeze([15, 30, 60, 120, 300]);
 const QUALITY_RATING_PERIOD_SECONDS = 1800;
 const QUALITY_WARNING_REASONS = Object.freeze([
@@ -2843,6 +2847,8 @@ const elements = {
   saveSessionBtn: document.getElementById("saveSessionBtn"),
   loadSessionBtn: document.getElementById("loadSessionBtn"),
   exportSessionBtn: document.getElementById("exportSessionBtn"),
+  importSessionBtn: document.getElementById("importSessionBtn"),
+  importSessionFileInput: document.getElementById("importSessionFileInput"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
@@ -10240,9 +10246,9 @@ function exportSession() {
   const payload = getAutosavePayload();
   const exportedAt = new Date();
   const envelope = {
-    app: "SHEARiQ Shear Tracker",
-    kind: "sheariq.sheartracker.sessionTransfer",
-    version: 1,
+    app: SESSION_TRANSFER_APP,
+    kind: SESSION_TRANSFER_KIND,
+    version: SESSION_TRANSFER_VERSION,
     exportedAt: exportedAt.toISOString(),
     summary: createManualSaveSummary(payload, "Session export"),
     payload
@@ -10258,6 +10264,115 @@ function exportSession() {
   downloadLink.remove();
   URL.revokeObjectURL(url);
   updateManualSessionStatus("Exported session JSON");
+}
+
+function openImportSessionPicker() {
+  if (!elements.importSessionFileInput) return;
+  elements.importSessionFileInput.click();
+}
+
+function validateImportedSessionJson(parsed) {
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    return { ok: false, error: "Import failed: JSON must contain a session object." };
+  }
+
+  const hasEnvelopeMetadata = Object.prototype.hasOwnProperty.call(parsed, "app")
+    || Object.prototype.hasOwnProperty.call(parsed, "kind")
+    || Object.prototype.hasOwnProperty.call(parsed, "version")
+    || Object.prototype.hasOwnProperty.call(parsed, "payload");
+  if (!hasEnvelopeMetadata) {
+    if (!parsed.state || typeof parsed.state !== "object" || Array.isArray(parsed.state)) {
+      return { ok: false, error: "Import failed: missing state object." };
+    }
+    return { ok: true, payload: parsed };
+  }
+
+  if (parsed.app !== SESSION_TRANSFER_APP || parsed.kind !== SESSION_TRANSFER_KIND) {
+    return { ok: false, error: "Import failed: this is not a SHEΔR iQ Shear Tracker session export." };
+  }
+  if (Number(parsed.version) > SESSION_TRANSFER_VERSION) {
+    return { ok: false, error: "Import failed: this export version is newer than this app supports." };
+  }
+  if (parsed.version !== SESSION_TRANSFER_VERSION) {
+    return { ok: false, error: "Import failed: unsupported session export version." };
+  }
+  if (!parsed.payload || typeof parsed.payload !== "object" || Array.isArray(parsed.payload)) {
+    return { ok: false, error: "Import failed: missing session payload." };
+  }
+  if (!parsed.payload.state || typeof parsed.payload.state !== "object" || Array.isArray(parsed.payload.state)) {
+    return { ok: false, error: "Import failed: missing state object." };
+  }
+
+  return { ok: true, payload: parsed.payload };
+}
+
+async function importSessionFromFile(file) {
+  if (!file) return;
+  if (file.size <= 0) {
+    updateManualSessionStatus("Import failed: empty file");
+    return;
+  }
+  if (file.size > SESSION_IMPORT_MAX_BYTES) {
+    updateManualSessionStatus("Import failed: file is larger than 5 MB");
+    return;
+  }
+
+  let text = "";
+  try {
+    text = await file.text();
+  } catch (error) {
+    console.debug("Failed to read session import file", error);
+    updateManualSessionStatus("Import failed: could not read file");
+    return;
+  }
+
+  if (!text.trim()) {
+    updateManualSessionStatus("Import failed: empty file");
+    return;
+  }
+
+  let parsed = null;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    console.debug("Failed to parse session import JSON", error);
+    updateManualSessionStatus("Import failed: malformed JSON");
+    return;
+  }
+
+  const validation = validateImportedSessionJson(parsed);
+  if (!validation.ok) {
+    updateManualSessionStatus(validation.error);
+    return;
+  }
+
+  const confirmed = await confirmModal({
+    title: "Import session JSON?",
+    message: "Importing will replace the current session in this browser. Imported active sessions will be restored paused. This is not live sync. The imported session will become the local session on this device.",
+    confirmText: "Import Session",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) {
+    updateManualSessionStatus("Import cancelled");
+    return;
+  }
+
+  if (!restoreSessionPayload(validation.payload, { source: "manual", forcePaused: true })) {
+    updateManualSessionStatus("Import failed: missing state object");
+    return;
+  }
+  autosaveState();
+  updateManualSessionStatus("Imported session JSON");
+}
+
+async function handleImportSessionFileChange(event) {
+  const input = event.target;
+  const file = input?.files?.[0] || null;
+  try {
+    await importSessionFromFile(file);
+  } finally {
+    if (input) input.value = "";
+  }
 }
 
 async function saveManualSession() {
@@ -11406,6 +11521,8 @@ function bindEvents() {
   if (elements.saveSessionBtn) elements.saveSessionBtn.addEventListener("click", saveManualSession);
   if (elements.loadSessionBtn) elements.loadSessionBtn.addEventListener("click", openManualSessionLoadModal);
   if (elements.exportSessionBtn) elements.exportSessionBtn.addEventListener("click", exportSession);
+  if (elements.importSessionBtn) elements.importSessionBtn.addEventListener("click", openImportSessionPicker);
+  if (elements.importSessionFileInput) elements.importSessionFileInput.addEventListener("change", handleImportSessionFileChange);
   if (elements.trendBucketSize) {
     elements.trendBucketSize.addEventListener("change", () => {
       appState.trendBucketMinutes = Number(elements.trendBucketSize.value) || 15;
