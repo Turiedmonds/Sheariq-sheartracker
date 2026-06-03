@@ -10540,7 +10540,7 @@ function exportPdf() {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(17, 24, 39);
-  doc.text("SHEΔR iQ Shear Tracker Report", PDF_EXPORT_MARGIN, pdfExportCursorY);
+  doc.text("SHEAR iQ Shear Tracker Report", PDF_EXPORT_MARGIN, pdfExportCursorY);
   pdfExportCursorY += 7;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8);
