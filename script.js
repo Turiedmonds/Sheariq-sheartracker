@@ -32,7 +32,7 @@ const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
 const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
-const SW_CACHE_NAME = "sheariq-shear-tracker-v6";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v7";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const SESSION_TRANSFER_APP = "SHEARiQ Shear Tracker";
@@ -10521,14 +10521,14 @@ function addPdfPageFooters(doc) {
 }
 
 function exportPdf() {
-  const JsPdfCtor = window.jspdf?.jsPDF;
-  if (!JsPdfCtor || typeof JsPdfCtor !== "function") {
+  if (!window.jspdf?.jsPDF || typeof window.jspdf.jsPDF !== "function") {
     showPdfExportLibraryError("PDF export is unavailable because jsPDF did not load. Please refresh while online so the app can cache the local PDF library files.");
     return;
   }
 
-  const doc = new JsPdfCtor({ orientation: "portrait", unit: "mm", format: "a4" });
-  if (typeof doc.autoTable !== "function") {
+  const doc = new window.jspdf.jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const hasAutoTable = typeof doc.autoTable === "function";
+  if (!hasAutoTable) {
     showPdfExportLibraryError("PDF export is unavailable because jsPDF AutoTable did not load. Please refresh while online so the app can cache the local PDF library files.");
     return;
   }
