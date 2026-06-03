@@ -32,7 +32,7 @@ const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
 const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
-const SW_CACHE_NAME = "sheariq-shear-tracker-v5";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v6";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const SESSION_TRANSFER_APP = "SHEARiQ Shear Tracker";
@@ -10317,6 +10317,48 @@ function getPdfRunStatusLabel() {
   return parts.length ? parts.join(" • ") : "Idle";
 }
 
+function isElementVisibleForPdf(elementOrId) {
+  const element = typeof elementOrId === "string" ? document.getElementById(elementOrId) : elementOrId;
+  if (!element) return false;
+  if (element.hidden || element.closest("[hidden]")) return false;
+  return true;
+}
+
+function getVisibleSafeText(elementOrId, fallback = "—") {
+  if (!isElementVisibleForPdf(elementOrId)) return fallback;
+  return getSafeText(elementOrId, fallback);
+}
+
+function getPdfPenRefillPlannerRows() {
+  const rows = [
+    ["Pen count", getSafeText("penStateCurrentCount")],
+    ["Last refill amount", getSafeText("penStateLastConfirmedFill")],
+    ["Average refill interval", getSafeText("penFillAverageInterval")],
+    ["Last 3 refill intervals", getSafeText("penFillRecentIntervals")],
+    ["Assumed refill amount", getSafeText("penStateModel")],
+    ["Refill status", getSafeText("penStateRefillStatus")],
+    ["Next refill", getSafeText("penFillForecastNext")],
+    ["Refill reminder", getSafeText("penFillEarlyReminder")],
+    ["Final projected refill", getSafeText("penFillForecastFinal")],
+    ["Final refill status", getSafeText("penFillForecastStatus")],
+    ["Refill strategy", getSafeText("penFillStrategyRecommendation")],
+    ["Reason", getSafeText("penFillPlannerReason")]
+  ];
+  if (isElementVisibleForPdf("penFillConfirmSection")) {
+    rows.push(["Confirmation instruction", getVisibleSafeText("penFillConfirmInstruction")]);
+    rows.push(["Confirmation status", getVisibleSafeText("penFillConfirmStatus")]);
+  }
+  return rows;
+}
+
+function showPdfExportLibraryError(message) {
+  const safeMessage = message || "PDF export libraries are not available. Please refresh while online so the app can cache the local PDF libraries.";
+  console.error(safeMessage);
+  if (typeof alert === "function") {
+    alert(safeMessage);
+  }
+}
+
 function sanitizePdfFilenamePart(value) {
   const cleaned = String(value || "")
     .normalize("NFKD")
@@ -10399,6 +10441,7 @@ function getPdfExportSnapshot() {
       nextDrinkCountdown: getSafeText("nextDrinkCountdown"),
       penRefillAlert: getSafeText("penRefillAlert")
     },
+    penRefillPlannerRows: getPdfPenRefillPlannerRows(),
     targetPaceVisible,
     sheep: clonePdfArray(appState.sheep),
     daySheep: clonePdfArray(appState.daySheep),
@@ -10409,7 +10452,6 @@ function getPdfExportSnapshot() {
     trendFlags: Array.isArray(appState.trendFlags) ? [...appState.trendFlags] : [],
     currentStats: { ...(appState.currentStats || {}) },
     officialRejectedAdjustment: Number(appState.officialRejectedAdjustment) || 0,
-    markerSettings: appState.markerSettings ? JSON.parse(JSON.stringify(appState.markerSettings)) : {},
     target: { ...(appState.target || {}) }
   };
 }
@@ -10480,15 +10522,20 @@ function addPdfPageFooters(doc) {
 
 function exportPdf() {
   const JsPdfCtor = window.jspdf?.jsPDF;
-  if (!JsPdfCtor || typeof JsPdfCtor !== "function" || typeof JsPdfCtor.prototype.autoTable !== "function") {
-    console.error("PDF export libraries are not available.");
+  if (!JsPdfCtor || typeof JsPdfCtor !== "function") {
+    showPdfExportLibraryError("PDF export is unavailable because jsPDF did not load. Please refresh while online so the app can cache the local PDF library files.");
+    return;
+  }
+
+  const doc = new JsPdfCtor({ orientation: "portrait", unit: "mm", format: "a4" });
+  if (typeof doc.autoTable !== "function") {
+    showPdfExportLibraryError("PDF export is unavailable because jsPDF AutoTable did not load. Please refresh while online so the app can cache the local PDF library files.");
     return;
   }
 
   const snapshot = getPdfExportSnapshot();
   pdfExportCursorY = PDF_EXPORT_MARGIN;
   pdfExportGeneratedAtLabel = snapshot.exportedAt;
-  const doc = new JsPdfCtor({ orientation: "portrait", unit: "mm", format: "a4" });
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -10548,9 +10595,9 @@ function exportPdf() {
 
   addPdfSectionTitle(doc, "6. Pen Refill Planner");
   addPdfKeyValueTable(doc, [
+    ...snapshot.penRefillPlannerRows,
     ["Pen refill alert", snapshot.live.penRefillAlert],
-    ["Refill events", snapshot.penFillEvents.length],
-    ["Marker settings", JSON.stringify(snapshot.markerSettings)]
+    ["Refill events", snapshot.penFillEvents.length]
   ]);
   addPdfDataTable(doc, ["Sheep", "Amount", "Source", "Time", "Note"], snapshot.penFillEvents.map((event) => [
     event.sheepNumber ?? event.physicalSheepTakenFromPen ?? "—",
