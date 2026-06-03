@@ -223,6 +223,7 @@
             <div class="button-row session-transfer-actions">
               <button id="exportSessionBtn" type="button">Export session</button>
               <button id="importSessionBtn" type="button">Import session</button>
+              <button id="exportPdfBtn" type="button">Export PDF</button>
               <input id="importSessionFileInput" type="file" accept=".json,application/json" hidden />
             </div>
           </div>
@@ -1507,6 +1508,8 @@
     </form>
   </div>
 
+  <script src="vendor/jspdf.umd.min.js"></script>
+  <script src="vendor/jspdf.plugin.autotable.min.js"></script>
   <script src="script.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

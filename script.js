@@ -32,7 +32,7 @@ const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
 const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
-const SW_CACHE_NAME = "sheariq-shear-tracker-v4";
+const SW_CACHE_NAME = "sheariq-shear-tracker-v5";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
 const SESSION_TRANSFER_APP = "SHEARiQ Shear Tracker";
@@ -2880,6 +2880,7 @@ const elements = {
   loadSessionBtn: document.getElementById("loadSessionBtn"),
   exportSessionBtn: document.getElementById("exportSessionBtn"),
   importSessionBtn: document.getElementById("importSessionBtn"),
+  exportPdfBtn: document.getElementById("exportPdfBtn"),
   importSessionFileInput: document.getElementById("importSessionFileInput"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
@@ -10299,6 +10300,321 @@ function exportSession() {
   updateManualSessionStatus("Exported session JSON");
 }
 
+
+const PDF_EXPORT_MARGIN = 10;
+let pdfExportCursorY = PDF_EXPORT_MARGIN;
+let pdfExportGeneratedAtLabel = "";
+
+function getSafeText(elementOrId, fallback = "—") {
+  const element = typeof elementOrId === "string" ? document.getElementById(elementOrId) : elementOrId;
+  if (!element) return fallback;
+  const text = String(element.textContent || "").replace(/\s+/g, " ").trim();
+  return text || fallback;
+}
+
+function getPdfRunStatusLabel() {
+  const parts = [getSafeText("runStatus", "Idle"), getSafeText("runBadge", "")].filter((part) => part && part !== "—");
+  return parts.length ? parts.join(" • ") : "Idle";
+}
+
+function sanitizePdfFilenamePart(value) {
+  const cleaned = String(value || "")
+    .normalize("NFKD")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+  return cleaned || "Unknown";
+}
+
+function getPdfExportFilename(snapshot = getPdfExportSnapshot()) {
+  const exportedAt = snapshot.exportedAtDate || new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const timestamp = `${exportedAt.getFullYear()}-${pad(exportedAt.getMonth() + 1)}-${pad(exportedAt.getDate())}_${pad(exportedAt.getHours())}-${pad(exportedAt.getMinutes())}`;
+  const sessionDate = sanitizePdfFilenamePart(snapshot.sessionDate || "No-Date");
+  const farm = sanitizePdfFilenamePart(snapshot.farm || "Unknown-Farm");
+  const runNumber = sanitizePdfFilenamePart(snapshot.runNumber || "1");
+  return `SHEARiQ_ShearTracker_${sessionDate}_${farm}_Run-${runNumber}_${timestamp}.pdf`;
+}
+
+function clonePdfArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => item && typeof item === "object" ? { ...item } : item);
+}
+
+function formatPdfNumber(value, digits = 3) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue.toFixed(digits) : "—";
+}
+
+function formatPdfDateTime(ms) {
+  const numberValue = Number(ms);
+  if (!Number.isFinite(numberValue) || numberValue <= 0) return "—";
+  return new Date(numberValue).toLocaleString();
+}
+
+function getPdfExportSnapshot() {
+  const exportedAtDate = new Date();
+  const trendBuckets = typeof getSortedBucketSummaries === "function" ? getSortedBucketSummaries() : [];
+  const targetPaceVisible = [
+    ["Required cycle", "requiredCycle"],
+    ["Required rate", "requiredRate"],
+    ["Projected total", "projectedTotal"],
+    ["Predicted quarter total", "predictedQuarterTotal"],
+    ["Predicted hour total", "predictedHourTotal"],
+    ["Required day total", "requiredDayTotalSheep"],
+    ["Required run total", "requiredRunTotalSheep"],
+    ["Required quarter total", "requiredQuarterTotal"],
+    ["Estimated last catch", "estimatedLastCatchTime"],
+    ["Time spare to bell", "timeSpareToBell"],
+    ["Current sheep time left", "currentSheepTimeLeft"],
+    ["Max catch time", "maxCatchTime"],
+    ["Catch prediction", "catchPrediction"],
+    ["Block minutes", "blockMinutes"],
+    ["Block results", "blockResults"]
+  ].map(([label, id]) => [label, getSafeText(id)]);
+
+  return {
+    exportedAtDate,
+    exportedAt: exportedAtDate.toLocaleString(),
+    sessionDate: elements.sessionDate?.value || appState.sessionDate || "",
+    farm: elements.farmInput?.value || appState.farm || "",
+    runNumber: Number(appState.currentRunIndex) + 1,
+    runType: elements.runType?.value || "—",
+    recordType: getRecordTypeLabel(appState.recordType),
+    runStatus: getPdfRunStatusLabel(),
+    live: {
+      motorState: getSafeText("motorState"),
+      currentCatch: getSafeText("currentCatch"),
+      currentShear: getSafeText("currentShear"),
+      currentTotalSheepTime: getSafeText("currentTotalSheepTime"),
+      runClock: getSafeText("runClock"),
+      runCountdown: getSafeText("runCountdown"),
+      dayClock: getSafeText("dayClock"),
+      currentQuarter: getSafeText("currentQuarter"),
+      quarterClock: getSafeText("quarterClock"),
+      quarterSheepCount: getSafeText("quarterSheepCount"),
+      quarterTargetCompletionTime: getSafeText("quarterTargetCompletionTime"),
+      timingAlert: getSafeText("timingAlert"),
+      nextDrinkCountdown: getSafeText("nextDrinkCountdown"),
+      penRefillAlert: getSafeText("penRefillAlert")
+    },
+    targetPaceVisible,
+    sheep: clonePdfArray(appState.sheep),
+    daySheep: clonePdfArray(appState.daySheep),
+    penFillEvents: clonePdfArray(appState.penFillEvents),
+    qualityRatings: clonePdfArray(appState.qualityRatings),
+    reviewBlocks: clonePdfArray(appState.reviewBlocks),
+    trendBuckets: clonePdfArray(trendBuckets),
+    trendFlags: Array.isArray(appState.trendFlags) ? [...appState.trendFlags] : [],
+    currentStats: { ...(appState.currentStats || {}) },
+    officialRejectedAdjustment: Number(appState.officialRejectedAdjustment) || 0,
+    markerSettings: appState.markerSettings ? JSON.parse(JSON.stringify(appState.markerSettings)) : {},
+    target: { ...(appState.target || {}) }
+  };
+}
+
+function ensurePdfSpace(doc, needed = 16) {
+  const pageHeight = doc.internal.pageSize.getHeight();
+  if (pdfExportCursorY + needed > pageHeight - PDF_EXPORT_MARGIN - 8) {
+    doc.addPage();
+    pdfExportCursorY = PDF_EXPORT_MARGIN;
+  }
+}
+
+function addPdfSectionTitle(doc, title) {
+  ensurePdfSpace(doc, 12);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.setTextColor(31, 41, 55);
+  doc.text(title, PDF_EXPORT_MARGIN, pdfExportCursorY);
+  doc.setDrawColor(31, 41, 55);
+  doc.line(PDF_EXPORT_MARGIN, pdfExportCursorY + 2, doc.internal.pageSize.getWidth() - PDF_EXPORT_MARGIN, pdfExportCursorY + 2);
+  pdfExportCursorY += 6;
+}
+
+function addPdfKeyValueTable(doc, rows) {
+  const body = rows.map((row) => [row[0] || "—", row[1] === undefined || row[1] === null || row[1] === "" ? "—" : String(row[1])]);
+  addPdfDataTable(doc, ["Item", "Value"], body, { styles: { fontSize: 8 } });
+}
+
+function addPdfDataTable(doc, columns, rows, options = {}) {
+  if (!rows.length) {
+    addPdfNoData(doc, options.noDataMessage || "No data yet.");
+    return;
+  }
+  doc.autoTable({
+    startY: pdfExportCursorY,
+    head: [columns],
+    body: rows,
+    margin: { left: PDF_EXPORT_MARGIN, right: PDF_EXPORT_MARGIN, top: PDF_EXPORT_MARGIN, bottom: 16 },
+    styles: { fontSize: 7, cellPadding: 1.5, overflow: "linebreak" },
+    headStyles: { fillColor: [229, 231, 235], textColor: [31, 41, 55] },
+    ...options
+  });
+  pdfExportCursorY = (doc.lastAutoTable?.finalY || pdfExportCursorY) + 5;
+}
+
+function addPdfNoData(doc, message) {
+  ensurePdfSpace(doc, 8);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(107, 114, 128);
+  doc.text(message || "No data yet.", PDF_EXPORT_MARGIN, pdfExportCursorY);
+  pdfExportCursorY += 7;
+}
+
+function addPdfPageFooters(doc) {
+  const pageCount = doc.internal.getNumberOfPages();
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(107, 114, 128);
+    doc.text(`Generated ${pdfExportGeneratedAtLabel}`, PDF_EXPORT_MARGIN, height - 7);
+    doc.text(`Page ${page} of ${pageCount}`, width - PDF_EXPORT_MARGIN, height - 7, { align: "right" });
+  }
+}
+
+function exportPdf() {
+  const JsPdfCtor = window.jspdf?.jsPDF;
+  if (!JsPdfCtor || typeof JsPdfCtor !== "function" || typeof JsPdfCtor.prototype.autoTable !== "function") {
+    console.error("PDF export libraries are not available.");
+    return;
+  }
+
+  const snapshot = getPdfExportSnapshot();
+  pdfExportCursorY = PDF_EXPORT_MARGIN;
+  pdfExportGeneratedAtLabel = snapshot.exportedAt;
+  const doc = new JsPdfCtor({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(17, 24, 39);
+  doc.text("SHEΔR iQ Shear Tracker Report", PDF_EXPORT_MARGIN, pdfExportCursorY);
+  pdfExportCursorY += 7;
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.text(`Generated ${snapshot.exportedAt}`, PDF_EXPORT_MARGIN, pdfExportCursorY);
+  pdfExportCursorY += 8;
+
+  addPdfSectionTitle(doc, "1. Header / Report Info");
+  addPdfKeyValueTable(doc, [
+    ["Session date", snapshot.sessionDate || "—"],
+    ["Farm", snapshot.farm || "—"],
+    ["Run number", snapshot.runNumber],
+    ["Time system", snapshot.runType],
+    ["Record type", snapshot.recordType],
+    ["Run status", snapshot.runStatus]
+  ]);
+
+  addPdfSectionTitle(doc, "2. Run Summary");
+  addPdfKeyValueTable(doc, [
+    ["Run sheep", snapshot.sheep.length],
+    ["Day sheep", snapshot.daySheep.length],
+    ["Official rejected adjustment", snapshot.officialRejectedAdjustment],
+    ["Motor", snapshot.live.motorState],
+    ["Run clock", snapshot.live.runClock],
+    ["Run countdown", snapshot.live.runCountdown],
+    ["Day clock", snapshot.live.dayClock]
+  ]);
+
+  addPdfSectionTitle(doc, "3. Performance Averages");
+  addPdfKeyValueTable(doc, [
+    ["Average shear", `${formatPdfNumber(snapshot.currentStats.avgShear)}s`],
+    ["Average catch", `${formatPdfNumber(snapshot.currentStats.avgCatch)}s`],
+    ["Average cycle", `${formatPdfNumber(snapshot.currentStats.avgCycle)}s`],
+    ["Sheep per hour", formatPdfNumber(snapshot.currentStats.sheepPerHour, 1)],
+    ["Current catch", snapshot.live.currentCatch],
+    ["Current shear", snapshot.live.currentShear],
+    ["Current total sheep time", snapshot.live.currentTotalSheepTime]
+  ]);
+
+  addPdfSectionTitle(doc, "4. Target / Pace");
+  addPdfKeyValueTable(doc, snapshot.targetPaceVisible);
+
+  addPdfSectionTitle(doc, "5. Timing / Alerts");
+  addPdfKeyValueTable(doc, [
+    ["Current quarter", snapshot.live.currentQuarter],
+    ["Quarter clock", snapshot.live.quarterClock],
+    ["Quarter sheep count", snapshot.live.quarterSheepCount],
+    ["Quarter target completion time", snapshot.live.quarterTargetCompletionTime],
+    ["Timing alert", snapshot.live.timingAlert],
+    ["Next drink countdown", snapshot.live.nextDrinkCountdown],
+    ["Pen refill alert", snapshot.live.penRefillAlert]
+  ]);
+
+  addPdfSectionTitle(doc, "6. Pen Refill Planner");
+  addPdfKeyValueTable(doc, [
+    ["Pen refill alert", snapshot.live.penRefillAlert],
+    ["Refill events", snapshot.penFillEvents.length],
+    ["Marker settings", JSON.stringify(snapshot.markerSettings)]
+  ]);
+  addPdfDataTable(doc, ["Sheep", "Amount", "Source", "Time", "Note"], snapshot.penFillEvents.map((event) => [
+    event.sheepNumber ?? event.physicalSheepTakenFromPen ?? "—",
+    event.actualFillAmount ?? event.fillAmount ?? event.refillAmount ?? "—",
+    event.source || "—",
+    formatPdfDateTime(event.timestamp || event.createdAt),
+    event.note || event.reason || "—"
+  ]));
+
+  addPdfSectionTitle(doc, "7. Trend Flags");
+  if (snapshot.trendFlags.length) {
+    addPdfDataTable(doc, ["Flag"], snapshot.trendFlags.map((flag) => [flag]));
+  } else {
+    addPdfNoData(doc, "No trend flags yet.");
+  }
+
+  addPdfSectionTitle(doc, "8. 15-Minute Reviews");
+  addPdfDataTable(doc, ["Range", "Sheep", "Avg cycle", "Delta", "Status"], snapshot.reviewBlocks.map((block) => [
+    block.range || "—",
+    block.count ?? "—",
+    Number.isFinite(Number(block.avgCycle)) ? `${Number(block.avgCycle).toFixed(3)}s` : "—",
+    block.deltaText || "—",
+    block.status || "—"
+  ]));
+
+  addPdfSectionTitle(doc, "9. Trend Graph Data");
+  addPdfDataTable(doc, ["Bucket", "Start", "Sheep", "Avg cycle", "Avg catch"], snapshot.trendBuckets.map((bucket) => [
+    bucket.key ?? "—",
+    Number.isFinite(Number(bucket.startElapsed)) ? formatCountdown(bucket.startElapsed) : "—",
+    bucket.count ?? "—",
+    `${formatPdfNumber(bucket.avgCycle)}s`,
+    `${formatPdfNumber(bucket.avgCatch)}s`
+  ]));
+
+  if (snapshot.qualityRatings.length) {
+    addPdfSectionTitle(doc, "10. Quality Ratings");
+    addPdfDataTable(doc, ["Period", "Rating", "Official", "Physical", "Warning", "Notes"], snapshot.qualityRatings.map((rating) => [
+      rating.periodNumber || "—",
+      rating.qualityRating || "—",
+      rating.officialCountForPeriod ?? "—",
+      rating.physicalCountForPeriod ?? "—",
+      rating.officialWarning ? [rating.warningReason, rating.warningNotes].filter(Boolean).join(" — ") || "Yes" : "No",
+      rating.notes || "—"
+    ]));
+  }
+
+  addPdfSectionTitle(doc, "11. Sheep Log");
+  addPdfDataTable(doc, ["#", "Day #", "Status", "Start", "End", "Catch", "Shear", "Total", "Markers", "Notes"], snapshot.sheep.map((entry) => [
+    entry.number ?? "—",
+    entry.dayNumber ?? "—",
+    entry.status || "—",
+    Number.isFinite(Number(entry.startDayClockSeconds)) ? formatSecondsFromMidnightClock(entry.startDayClockSeconds) : formatPdfDateTime(entry.startTime),
+    Number.isFinite(Number(entry.endDayClockSeconds)) ? formatSecondsFromMidnightClock(entry.endDayClockSeconds) : formatPdfDateTime(entry.endTime),
+    `${formatPdfNumber(entry.catchDuration)}s`,
+    `${formatPdfNumber(entry.shearDuration)}s`,
+    `${formatPdfNumber(entry.fullCycle)}s`,
+    getManualMarkersDisplayLabel(entry.manualMarkers || (entry.manualMarker ? [entry.manualMarker] : [])) || "—",
+    entry.note || entry.rejectedReason || "—"
+  ]), { styles: { fontSize: 6 } });
+
+  addPdfPageFooters(doc);
+  doc.save(getPdfExportFilename(snapshot));
+}
+
 function openImportSessionPicker() {
   if (!elements.importSessionFileInput) return;
   elements.importSessionFileInput.click();
@@ -11756,6 +12072,7 @@ function bindEvents() {
   if (elements.loadSessionBtn) elements.loadSessionBtn.addEventListener("click", openManualSessionLoadModal);
   if (elements.exportSessionBtn) elements.exportSessionBtn.addEventListener("click", exportSession);
   if (elements.importSessionBtn) elements.importSessionBtn.addEventListener("click", openImportSessionPicker);
+  if (elements.exportPdfBtn) elements.exportPdfBtn.addEventListener("click", exportPdf);
   if (elements.importSessionFileInput) elements.importSessionFileInput.addEventListener("change", handleImportSessionFileChange);
   if (elements.trendBucketSize) {
     elements.trendBucketSize.addEventListener("change", () => {
