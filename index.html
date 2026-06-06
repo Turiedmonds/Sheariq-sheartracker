@@ -878,6 +878,7 @@
       <div class="panel-header" draggable="true">
         <h2 id="run-review-title">Run Review</h2>
         <div class="panel-header-actions">
+          <button id="reviewRunBtn" class="btn-inline-small" type="button" disabled>Review Run</button>
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
@@ -918,6 +919,18 @@
   </main>
 
 
+
+  <div id="reviewRunModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal review-run-modal" role="dialog" aria-modal="true" aria-labelledby="reviewRunModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="reviewRunModalTitle">Review Run</h3>
+        <button id="reviewRunModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Review Run">✕</button>
+      </div>
+      <div id="reviewRunModalContent" class="connection-help-modal-content review-run-modal-content">
+        <div class="status-box minimal-status">No completed run snapshot yet.</div>
+      </div>
+    </div>
+  </div>
 
   <div id="dayConfigHelpModalOverlay" class="connection-help-modal-overlay" hidden>
     <div class="connection-help-modal" role="dialog" aria-modal="true" aria-labelledby="dayConfigHelpModalTitle">

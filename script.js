@@ -2626,6 +2626,7 @@ const appState = {
   nextReviewBlockIndex: 1,
   runReviewText: "Run review will be generated when you stop a run.",
   trendFlags: ["Set a target to enable trend flags."],
+  latestCompletedRunSnapshot: null,
   panelSizes: {},
   autosaveTimerId: null,
   trendGraphRenderPoints: [],
@@ -2892,6 +2893,10 @@ const elements = {
   trendDetailsToggle: document.getElementById("trendDetailsToggle"),
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
+  reviewRunBtn: document.getElementById("reviewRunBtn"),
+  reviewRunModalOverlay: document.getElementById("reviewRunModalOverlay"),
+  reviewRunModalCloseBtn: document.getElementById("reviewRunModalCloseBtn"),
+  reviewRunModalContent: document.getElementById("reviewRunModalContent"),
   trendFlags: document.getElementById("trendFlags"),
   autosaveSettingsBtn: document.getElementById("autosaveSettingsBtn"),
   autosaveSettingsModalOverlay: document.getElementById("autosaveSettingsModalOverlay"),
@@ -4846,6 +4851,7 @@ function resetRunState() {
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
+  appState.latestCompletedRunSnapshot = null;
   appState.targetPacePredictionSnapshot = null;
   appState.pendingPenFillPromptKey = null;
   appState.dismissedPenFillPromptKey = null;
@@ -5077,6 +5083,8 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   }
 
   generateRunReview();
+  appState.latestCompletedRunSnapshot = buildCompletedRunSnapshot();
+  updateReviewRunButtonState();
 
   appState.runActive = false;
   appState.paused = false;
@@ -5142,6 +5150,7 @@ function resetRun() {
   renderBlock(Number(elements.blockMinutes.value) || 15);
   updateLivePanel();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+  updateReviewRunButtonState();
   renderReviewList();
   drawTrendGraph();
   updateTrendFlags();
@@ -6353,6 +6362,355 @@ function renderRunReviewSummary(summary) {
   });
   review.appendChild(markerSection);
   elements.runReviewText.appendChild(review);
+}
+
+
+const COMPLETED_RUN_SNAPSHOT_VERSION = 1;
+
+function cloneSnapshotValue(value, fallback = null) {
+  if (value === undefined) return fallback;
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    console.debug("Failed to clone completed run snapshot value", error);
+    return fallback;
+  }
+}
+
+function buildCompletedRunKeyValueRows(pairs) {
+  return pairs.map(([label, value]) => [label, value === undefined || value === null || value === "" ? "—" : String(value)]);
+}
+
+function getCompletedRunPerformanceRows() {
+  return buildCompletedRunKeyValueRows([
+    ["Total sheep shorn", getSafeText("totalSheep")],
+    ["Official count", getSafeText("officialSheepCount")],
+    ["Rejects", getSafeText("rejectedSheepCount")],
+    ["Quality", getSafeText("qualityRatingSummary")],
+    ["Average catch time", getSafeText("avgCatch")],
+    ["Average shear time", getSafeText("avgShear")],
+    ["Average Total Time Per Sheep", getSafeText("avgCycle")],
+    ["Sheep per hour", getSafeText("sheepPerHour")],
+    ["Drink average", getSafeText("markerAvgDrink")],
+    ["Cutter change average", getSafeText("markerAvgCutter")],
+    ["Comb/handpiece change average", getSafeText("markerAvgComb")],
+    [getSafeText("lastCatchTimeLabel", "Last catch time:"), getSafeText("lastCatchTime")],
+    [getSafeText("lastShearTimeLabel", "Last shear time:"), getSafeText("lastShearTime")],
+    [getSafeText("lastSheepTimeLabel", "Last total sheep time:"), getSafeText("lastSheepTime")],
+    ["Fastest sheep today", getSafeText("fastestSheepToday")],
+    ["Slowest sheep today", getSafeText("slowestSheepToday")]
+  ]);
+}
+
+function getCompletedRunTargetPaceRows() {
+  return buildCompletedRunKeyValueRows([
+    ["Required average total time per sheep", getSafeText("requiredCycle")],
+    ["Required 15-minute total", getSafeText("requiredQuarterTotal")],
+    ["Required sheep per hour", getSafeText("requiredRate")],
+    ["Required run total", getSafeText("requiredRunTotalSheep")],
+    ["Required daily total", getSafeText("requiredDayTotalSheep")],
+    ["Predicted 15-minute total", getSafeText("predictedQuarterTotal")],
+    ["Predicted hour total", getSafeText("predictedHourTotal")],
+    ["Predicted official run total", getSafeText("projectedTotal")],
+    [getSafeText("estimatedLastCatchTimeLabel", "Predicted time to catch target:"), getSafeText("estimatedLastCatchTime")],
+    ["Predicted final catch of run", getSafeText("maxCatchTime")],
+    ["Pace difference per sheep", getSafeText("catchPrediction")],
+    [getSafeText("timeSpareToBellLabel", "Run target timing"), getSafeText("timeSpareToBell")]
+  ]);
+}
+
+function getCompletedRunTimingRows() {
+  return buildCompletedRunKeyValueRows([
+    ["Motor state", getSafeText("motorState")],
+    ["Current catch time", getSafeText("currentCatch")],
+    ["Current shear time", getSafeText("currentShear")],
+    ["Total time per sheep", getSafeText("currentTotalSheepTime")],
+    ["Run clock", getSafeText("runClock")],
+    ["Run countdown", getSafeText("runCountdown")],
+    ["Day clock", getSafeText("dayClock")],
+    ["Quarter", getSafeText("currentQuarter")],
+    ["Quarter clock", getSafeText("quarterClock")],
+    ["Sheep this quarter", getSafeText("quarterSheepCount")],
+    ["Quarter target completion time", getSafeText("quarterTargetCompletionTime")],
+    ["Timing alert", getSafeText("timingAlert")],
+    ["Next drink", getSafeText("nextDrinkCountdown")],
+    ["Pen refill", getSafeText("penRefillAlert")]
+  ]);
+}
+
+function getCompletedRunReviewRows() {
+  return Array.isArray(appState.reviewBlocks)
+    ? appState.reviewBlocks.map((block) => [
+      block.range || "—",
+      block.count ?? "—",
+      Number.isFinite(Number(block.avgCycle)) ? `${Number(block.avgCycle).toFixed(3)}s` : "—",
+      block.deltaText || "—",
+      block.status || "—"
+    ])
+    : [];
+}
+
+function getCompletedRunTrendBucketRows(bucketSummaries = getSortedBucketSummaries()) {
+  return Array.isArray(bucketSummaries)
+    ? bucketSummaries.map((bucket) => [
+      bucket.key ?? "—",
+      Number.isFinite(Number(bucket.startElapsed)) ? formatCountdown(bucket.startElapsed) : "—",
+      bucket.count ?? "—",
+      Number.isFinite(Number(bucket.avgCycle)) ? `${Number(bucket.avgCycle).toFixed(3)}s` : "—",
+      Number.isFinite(Number(bucket.avgCatch)) ? `${Number(bucket.avgCatch).toFixed(3)}s` : "—"
+    ])
+    : [];
+}
+
+function getCompletedRunSheepLogRows() {
+  return Array.isArray(appState.sheep)
+    ? appState.sheep.map((entry) => {
+      const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+      const markerLabel = getManualMarkersDisplayLabel(manualMarkers);
+      const noteText = normalizeSheepNote(entry?.note);
+      return [
+        entry?.number ?? "—",
+        formatSheepLogClock(entry, "start"),
+        formatSheepLogClock(entry, "end"),
+        formatSeconds(entry?.catchDuration),
+        formatSeconds(entry?.shearDuration),
+        formatSeconds(entry?.fullCycle),
+        markerLabel || "—",
+        noteText || "—"
+      ];
+    })
+    : [];
+}
+
+function getCompletedRunQualityRows() {
+  return sanitizeQualityRatings(appState.qualityRatings).map((rating) => [
+    rating.periodNumber || "—",
+    rating.qualityRating || "—",
+    rating.officialCountForPeriod ?? "—",
+    rating.physicalCountForPeriod ?? "—",
+    rating.officialWarning ? [rating.warningReason, rating.warningNotes].filter(Boolean).join(" — ") || "Yes" : "No",
+    rating.notes || "—"
+  ]);
+}
+
+function buildCompletedRunSnapshot() {
+  const sheep = Array.isArray(appState.sheep) ? appState.sheep : [];
+  const lastSheep = sheep[sheep.length - 1] || null;
+  const trendBucketSummaries = getSortedBucketSummaries();
+  const currentRunPenFillEvents = getCurrentRunPenFillEvents();
+  return {
+    schema: "sheariq.latestCompletedRunSnapshot",
+    version: COMPLETED_RUN_SNAPSHOT_VERSION,
+    capturedAt: new Date().toISOString(),
+    farm: elements.farmInput?.value || appState.farm || "",
+    sessionDate: elements.sessionDate?.value || "",
+    recordType: appState.recordType || "none",
+    recordTypeLabel: getRecordTypeLabel(appState.recordType),
+    runType: elements.runType?.value || "8",
+    runTypeLabel: getTimeSystemLabel(elements.runType?.value || "8"),
+    runIndex: Number(appState.currentRunIndex) || 0,
+    runNumber: (Number(appState.currentRunIndex) || 0) + 1,
+    runStartTime: appState.runStartTime,
+    officialScheduledRunEndTime: getOfficialScheduledRunEndTimeMs(),
+    actualLastSheepEndTime: Number.isFinite(Number(lastSheep?.endTime)) ? Number(lastSheep.endTime) : null,
+    effectiveElapsedSeconds: getEffectiveElapsedSeconds(),
+    targetSheep: Number(elements.targetSheepInput?.value ?? appState.target?.sheep ?? 0) || 0,
+    runLengthSeconds: getCurrentRunDurationSeconds(),
+    currentStats: cloneSnapshotValue(appState.currentStats, {}),
+    target: cloneSnapshotValue(appState.target, {}),
+    targetPacePredictionSnapshot: cloneSnapshotValue(appState.targetPacePredictionSnapshot, null),
+    sheep: cloneSnapshotValue(sheep, []),
+    penFillEvents: cloneSnapshotValue(currentRunPenFillEvents, []),
+    qualityRatings: cloneSnapshotValue(sanitizeQualityRatings(appState.qualityRatings), []),
+    officialRejectedAdjustment: getOfficialRejectedAdjustmentCount(),
+    reviewBlocks: cloneSnapshotValue(appState.reviewBlocks, []),
+    trendBuckets: cloneSnapshotValue(trendBucketSummaries, []),
+    trendFlags: Array.isArray(appState.trendFlags) ? [...appState.trendFlags] : [],
+    runReviewText: appState.runReviewText || "",
+    display: {
+      performanceRows: getCompletedRunPerformanceRows(),
+      targetPaceRows: getCompletedRunTargetPaceRows(),
+      timingRows: getCompletedRunTimingRows(),
+      penRefillPlannerRows: getPdfPenRefillPlannerRows(),
+      reviewRows: getCompletedRunReviewRows(),
+      trendFlagRows: Array.isArray(appState.trendFlags) ? appState.trendFlags.map((flag) => [flag]) : [],
+      trendBucketRows: getCompletedRunTrendBucketRows(trendBucketSummaries),
+      sheepLogRows: getCompletedRunSheepLogRows(),
+      qualityRows: getCompletedRunQualityRows()
+    }
+  };
+}
+
+function hasCompletedRunSnapshot() {
+  return Boolean(appState.latestCompletedRunSnapshot && typeof appState.latestCompletedRunSnapshot === "object");
+}
+
+function updateReviewRunButtonState() {
+  if (!elements.reviewRunBtn) return;
+  const hasSnapshot = hasCompletedRunSnapshot();
+  elements.reviewRunBtn.disabled = !hasSnapshot;
+  elements.reviewRunBtn.title = hasSnapshot ? "Open the latest completed run snapshot" : "No completed run snapshot yet";
+}
+
+function formatReviewRunDateTime(value) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp)) return "—";
+  return new Date(timestamp).toLocaleString();
+}
+
+function appendReviewRunSection(parent, title) {
+  const section = document.createElement("section");
+  section.className = "review-run-section";
+  const heading = document.createElement("h4");
+  heading.textContent = title;
+  section.appendChild(heading);
+  parent.appendChild(section);
+  return section;
+}
+
+function appendReviewRunKeyValueTable(parent, rows) {
+  const table = document.createElement("table");
+  table.className = "review-run-table review-run-key-value-table";
+  const tbody = document.createElement("tbody");
+  (Array.isArray(rows) ? rows : []).forEach(([label, value]) => {
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.scope = "row";
+    th.textContent = String(label || "—").replace(/:\s*$/, "");
+    const td = document.createElement("td");
+    td.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+    tr.append(th, td);
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  parent.appendChild(table);
+}
+
+function appendReviewRunDataTable(parent, headers, rows, emptyText = "No data captured.") {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  if (!safeRows.length) {
+    const empty = document.createElement("div");
+    empty.className = "status-box minimal-status";
+    empty.textContent = emptyText;
+    parent.appendChild(empty);
+    return;
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "review-run-table-wrap";
+  const table = document.createElement("table");
+  table.className = "review-run-table";
+  const thead = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  headers.forEach((header) => {
+    const th = document.createElement("th");
+    th.textContent = header;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  const tbody = document.createElement("tbody");
+  safeRows.forEach((row) => {
+    const tr = document.createElement("tr");
+    row.forEach((value) => {
+      const td = document.createElement("td");
+      td.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.append(thead, tbody);
+  wrap.appendChild(table);
+  parent.appendChild(wrap);
+}
+
+function renderReviewRunModal(snapshot) {
+  if (!elements.reviewRunModalContent) return;
+  elements.reviewRunModalContent.innerHTML = "";
+  if (!snapshot) {
+    const empty = document.createElement("div");
+    empty.className = "status-box minimal-status";
+    empty.textContent = "No completed run snapshot yet.";
+    elements.reviewRunModalContent.appendChild(empty);
+    return;
+  }
+
+  const intro = document.createElement("div");
+  intro.className = "review-run-intro status-box minimal-status";
+  intro.textContent = `Frozen snapshot captured ${snapshot.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : "at run finish"}. Live panels continue to update separately.`;
+  elements.reviewRunModalContent.appendChild(intro);
+
+  const runInfo = appendReviewRunSection(elements.reviewRunModalContent, "Run Info");
+  appendReviewRunKeyValueTable(runInfo, buildCompletedRunKeyValueRows([
+    ["Farm", snapshot.farm || "—"],
+    ["Session date", snapshot.sessionDate || "—"],
+    ["Record type", snapshot.recordTypeLabel || snapshot.recordType || "—"],
+    ["Time system", snapshot.runTypeLabel || snapshot.runType || "—"],
+    ["Run", snapshot.runNumber ? `Run ${snapshot.runNumber}` : "—"],
+    ["Run start", formatReviewRunDateTime(snapshot.runStartTime)],
+    ["Official scheduled run end", formatReviewRunDateTime(snapshot.officialScheduledRunEndTime)],
+    ["Actual last sheep end", formatReviewRunDateTime(snapshot.actualLastSheepEndTime)],
+    ["Elapsed at capture", Number.isFinite(Number(snapshot.effectiveElapsedSeconds)) ? formatCountdown(snapshot.effectiveElapsedSeconds) : "—"],
+    ["Target sheep", snapshot.targetSheep ?? "—"],
+    ["Run length", Number.isFinite(Number(snapshot.runLengthSeconds)) ? formatCountdown(snapshot.runLengthSeconds) : "—"],
+    ["Official reject adjustment", snapshot.officialRejectedAdjustment ?? "0"]
+  ]));
+
+  const performance = appendReviewRunSection(elements.reviewRunModalContent, "Performance / Run Summary");
+  appendReviewRunKeyValueTable(performance, snapshot.display?.performanceRows || []);
+  if (snapshot.runReviewText) {
+    const reviewText = document.createElement("pre");
+    reviewText.className = "review-run-text";
+    reviewText.textContent = snapshot.runReviewText;
+    performance.appendChild(reviewText);
+  }
+
+  const targetPace = appendReviewRunSection(elements.reviewRunModalContent, "Target / Pace");
+  appendReviewRunKeyValueTable(targetPace, snapshot.display?.targetPaceRows || []);
+
+  const timing = appendReviewRunSection(elements.reviewRunModalContent, "Timing / Alerts");
+  appendReviewRunKeyValueTable(timing, snapshot.display?.timingRows || []);
+
+  const penPlanner = appendReviewRunSection(elements.reviewRunModalContent, "Pen Refill Planner");
+  appendReviewRunKeyValueTable(penPlanner, snapshot.display?.penRefillPlannerRows || []);
+  appendReviewRunDataTable(
+    penPlanner,
+    ["Sheep", "Amount", "Source", "Time", "Note"],
+    (Array.isArray(snapshot.penFillEvents) ? snapshot.penFillEvents : []).map((event) => [
+      event.sheepNumber ?? event.physicalSheepTakenFromPen ?? "—",
+      event.actualFillAmount ?? event.fillAmount ?? event.refillAmount ?? "—",
+      event.source || "—",
+      formatReviewRunDateTime(event.timestamp || event.createdAt),
+      event.note || event.reason || "—"
+    ]),
+    "No pen refill events captured for this run."
+  );
+
+  const flags = appendReviewRunSection(elements.reviewRunModalContent, "Trend Flags");
+  appendReviewRunDataTable(flags, ["Flag"], snapshot.display?.trendFlagRows || [], "No trend flags captured.");
+
+  const reviews = appendReviewRunSection(elements.reviewRunModalContent, "15-Minute Reviews");
+  appendReviewRunDataTable(reviews, ["Range", "Sheep", "Avg cycle", "Delta", "Status"], snapshot.display?.reviewRows || [], "No 15-minute reviews captured.");
+
+  const buckets = appendReviewRunSection(elements.reviewRunModalContent, "Trend Graph Bucket Data");
+  appendReviewRunDataTable(buckets, ["Bucket", "Start", "Sheep", "Avg cycle", "Avg catch"], snapshot.display?.trendBucketRows || [], "No trend bucket data captured.");
+
+  const sheepLog = appendReviewRunSection(elements.reviewRunModalContent, "Sheep Log");
+  appendReviewRunDataTable(sheepLog, ["Sheep", "Start", "End", "Catch", "Shear", "Total", "Markers", "Notes"], snapshot.display?.sheepLogRows || [], "No sheep captured for this run.");
+
+  const qualityRows = snapshot.display?.qualityRows || [];
+  if (qualityRows.length) {
+    const quality = appendReviewRunSection(elements.reviewRunModalContent, "Quality Ratings");
+    appendReviewRunDataTable(quality, ["Period", "Rating", "Official", "Physical", "Warning", "Notes"], qualityRows);
+  }
+}
+
+function openReviewRunModal() {
+  if (!hasCompletedRunSnapshot() || !elements.reviewRunModalOverlay) return;
+  renderReviewRunModal(appState.latestCompletedRunSnapshot);
+  elements.reviewRunModalOverlay.hidden = false;
+}
+
+function closeReviewRunModal() {
+  if (elements.reviewRunModalOverlay) elements.reviewRunModalOverlay.hidden = true;
 }
 
 function formatDeltaPlain(delta) {
@@ -10123,6 +10481,7 @@ function getAutosavePayload() {
       nextReviewBlockIndex: appState.nextReviewBlockIndex,
       runReviewText: appState.runReviewText,
       trendFlags: appState.trendFlags,
+      latestCompletedRunSnapshot: appState.latestCompletedRunSnapshot,
       panelCollapsed: appState.panelCollapsed,
       effectiveElapsedBeforePauseMs: appState.effectiveElapsedBeforePauseMs,
       effectiveResumeRealMs: appState.effectiveResumeRealMs,
@@ -11284,6 +11643,11 @@ function restoreSessionPayload(raw, options = {}) {
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings);
+  appState.latestCompletedRunSnapshot = Object.prototype.hasOwnProperty.call(raw.state, "latestCompletedRunSnapshot")
+    && appState.latestCompletedRunSnapshot
+    && typeof appState.latestCompletedRunSnapshot === "object"
+    ? appState.latestCompletedRunSnapshot
+    : null;
   migrateLegacyRejectedSheepStatusesToAdjustment();
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
@@ -11349,6 +11713,7 @@ function restoreSessionPayload(raw, options = {}) {
   renderReviewList();
   drawTrendGraph();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+  updateReviewRunButtonState();
   updateTrendFlags();
   updateTrendDetailsVisibility();
   if (options.source === "manual") {
@@ -12136,6 +12501,13 @@ function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
+  if (elements.reviewRunBtn) elements.reviewRunBtn.addEventListener("click", openReviewRunModal);
+  if (elements.reviewRunModalCloseBtn) elements.reviewRunModalCloseBtn.addEventListener("click", closeReviewRunModal);
+  if (elements.reviewRunModalOverlay) {
+    elements.reviewRunModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.reviewRunModalOverlay) closeReviewRunModal();
+    });
+  }
   if (elements.breakOverlayDismissBtn) elements.breakOverlayDismissBtn.addEventListener("click", hideBreakBannerForCurrentBreak);
   if (elements.breakOverlayShowBtn) elements.breakOverlayShowBtn.addEventListener("click", showBreakBannerForCurrentBreak);
   if (elements.pauseRunBtn) elements.pauseRunBtn.addEventListener("click", togglePauseRun);
@@ -12484,6 +12856,7 @@ function bindEvents() {
       closeSimulationControlsHelpModal();
       closeAutosaveSettingsModal();
       closeShortcutSettingsModal();
+      closeReviewRunModal();
     }
   }, { capture: true });
   if (elements.autosaveSettingsBtn) elements.autosaveSettingsBtn.addEventListener("click", openAutosaveSettingsModal);
@@ -12791,6 +13164,7 @@ function initialize() {
   renderLogTable();
   renderReviewList();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+  updateReviewRunButtonState();
   updatePauseButtonUI();
   updateFinishRunBreakButtonUI();
   updateStartRunButtonUI();
