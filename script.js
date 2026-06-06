@@ -7355,6 +7355,30 @@ function formatReviewRunSnapshotEntryClock(snapshot, entry, field) {
   return formatReviewRunDateTime(entry?.[timestampKey]);
 }
 
+function formatReviewRunSnapshotEventClock(snapshot, event) {
+  const storedDayClockKeys = [
+    "dayClockSecondsFromMidnight",
+    "dayClockSeconds",
+    "eventDayClockSeconds",
+    "timestampDayClockSeconds",
+    "createdAtDayClockSeconds"
+  ];
+  for (const key of storedDayClockKeys) {
+    const storedSeconds = getFiniteClockNumber(event?.[key]);
+    if (Number.isFinite(storedSeconds)) return formatReviewRunDayClockSecondsShort(storedSeconds);
+  }
+
+  const eventTimestamp = event?.timestamp || event?.createdAt;
+  const fallbackSeconds = getReviewRunDayClockSecondsFromTimestamp(
+    eventTimestamp,
+    snapshot?.runStartTime,
+    snapshot?.runStartDayClockSeconds
+  );
+  if (Number.isFinite(fallbackSeconds)) return formatReviewRunDayClockSecondsShort(fallbackSeconds);
+
+  return formatReviewRunDateTime(eventTimestamp);
+}
+
 function buildReviewRunSheepLogRows(snapshot) {
   const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
   const requiredCycle = getReviewRunRequiredCycle(snapshot);
@@ -7463,7 +7487,7 @@ function renderReviewRunModal(snapshot) {
       event.sheepNumber ?? event.physicalSheepTakenFromPen ?? "—",
       event.actualFillAmount ?? event.fillAmount ?? event.refillAmount ?? "—",
       event.source || "—",
-      formatReviewRunDateTime(event.timestamp || event.createdAt),
+      formatReviewRunSnapshotEventClock(snapshot, event),
       event.note || event.reason || "—"
     ]),
     "No pen refill events captured for this run."
