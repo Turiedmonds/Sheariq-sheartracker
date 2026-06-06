@@ -6035,6 +6035,55 @@ function calculateLivePerformanceExtremes() {
   return { fastest, slowest, last };
 }
 
+function getCurrentFinalCatchPredictionAnchorRunSeconds(elapsedRunSeconds = getEffectiveElapsedSeconds()) {
+  const fallbackElapsedSeconds = Number(elapsedRunSeconds);
+  const safeElapsedSeconds = Number.isFinite(fallbackElapsedSeconds) ? Math.max(fallbackElapsedSeconds, 0) : 0;
+  const activeCycleStartMs = appState.currentCycle?.catchStart ?? appState.currentCycle?.shearStart;
+  const hasActiveSheepOnBoard = Boolean(
+    appState.runActive
+    && appState.currentCycle?.motorOn
+    && appState.currentCycle?.shearStart
+    && Number.isFinite(activeCycleStartMs)
+  );
+
+  if (!hasActiveSheepOnBoard) {
+    return safeElapsedSeconds;
+  }
+
+  const secondsSinceActiveStart = Math.max((Date.now() - activeCycleStartMs) / 1000, 0);
+  return Math.max(safeElapsedSeconds - secondsSinceActiveStart, 0);
+}
+
+function getPredictedFinalCatchRunSeconds({
+  elapsedRunSeconds,
+  runLengthSeconds,
+  avgCycleSeconds,
+  anchorRunSeconds = elapsedRunSeconds
+} = {}) {
+  const safeRunLengthSeconds = Number(runLengthSeconds);
+  const safeAvgCycleSeconds = Number(avgCycleSeconds);
+  const rawAnchorRunSeconds = Number(anchorRunSeconds);
+
+  if (!Number.isFinite(safeRunLengthSeconds) || safeRunLengthSeconds <= 0) return null;
+  if (!Number.isFinite(safeAvgCycleSeconds) || safeAvgCycleSeconds <= 0) return null;
+  if (!Number.isFinite(rawAnchorRunSeconds)) return null;
+
+  const safeAnchorRunSeconds = Math.max(rawAnchorRunSeconds, 0);
+  const secondsFromAnchorToBell = safeRunLengthSeconds - safeAnchorRunSeconds;
+  if (secondsFromAnchorToBell <= 0) return null;
+
+  const catchStartsBeforeBell = Math.max(Math.ceil(secondsFromAnchorToBell / safeAvgCycleSeconds), 1);
+  let predictedFinalCatchRunSeconds = safeAnchorRunSeconds + ((catchStartsBeforeBell - 1) * safeAvgCycleSeconds);
+
+  while (predictedFinalCatchRunSeconds >= safeRunLengthSeconds && predictedFinalCatchRunSeconds >= safeAvgCycleSeconds) {
+    predictedFinalCatchRunSeconds -= safeAvgCycleSeconds;
+  }
+
+  return predictedFinalCatchRunSeconds < safeRunLengthSeconds
+    ? Math.max(predictedFinalCatchRunSeconds, 0)
+    : null;
+}
+
 function calculateTargetMetrics() {
   const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
   const runLengthSeconds = getCurrentRunDurationSeconds();
@@ -6058,6 +6107,7 @@ function calculateTargetMetrics() {
   let timeSpareIsAhead = null;
   let maxPossibleRunTotal = officialSheepDoneThisRun;
   let maxCatchRunSeconds = elapsedRunSeconds;
+  let predictedFinalCatchRunSeconds = null;
   const targetAlreadyReached = remainingToTarget <= 0;
   let targetReachable = targetAlreadyReached;
 
@@ -6077,6 +6127,13 @@ function calculateTargetMetrics() {
     maxCatchRunSeconds = projectedFuturePhysicalSheep > 0
       ? elapsedRunSeconds + (projectedFuturePhysicalSheep - 1) * avgCycleSeconds
       : elapsedRunSeconds;
+
+    predictedFinalCatchRunSeconds = getPredictedFinalCatchRunSeconds({
+      elapsedRunSeconds,
+      runLengthSeconds,
+      avgCycleSeconds,
+      anchorRunSeconds: getCurrentFinalCatchPredictionAnchorRunSeconds(elapsedRunSeconds)
+    });
 
     if (targetReachable) {
       targetCatchRunSeconds = Math.min(targetCatchRunSeconds, maxCatchRunSeconds);
@@ -6113,6 +6170,7 @@ function calculateTargetMetrics() {
     timeSpareText,
     timeSpareIsAhead,
     maxCatchRunSeconds,
+    predictedFinalCatchRunSeconds,
     maxPossibleRunTotal
   };
 }
@@ -10410,7 +10468,7 @@ function updateStatsPanel() {
   setText(elements.projectedTotal, displayPredictions.projectedTotal === null ? "—" : String(displayPredictions.projectedTotal));
   setText(elements.estimatedLastCatchTime, displayPredictions.estimatedLastCatchTime);
   setText(elements.timeSpareToBell, target.timeSpareText);
-  setText(elements.maxCatchTime, displayPredictions.maxCatchTime);
+  setText(elements.maxCatchTime, livePredictions.maxCatchTime);
   setText(elements.catchPrediction, displayPredictions.catchPrediction);
   if (elements.estimatedLastCatchTimeLabel) {
     setText(elements.estimatedLastCatchTimeLabel, getTargetRunTotalPredictionLabel(requiredRunTotalSheep));
@@ -10470,7 +10528,7 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
     predictedHourTotal,
     projectedTotal: target.projectedTotal,
     estimatedLastCatchTime: targetCatchTime,
-    maxCatchTime: formatPredictedCatchTime(target.maxCatchRunSeconds),
+    maxCatchTime: formatPredictedCatchTime(target.predictedFinalCatchRunSeconds),
     catchPrediction: predictCatch(target, calculateRequiredRunTotalSheep())
   };
 }
