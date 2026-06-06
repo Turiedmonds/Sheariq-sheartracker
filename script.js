@@ -6628,7 +6628,7 @@ function updateReviewRunSectionMoveButtons(container) {
   });
 }
 
-function appendReviewRunSection(parent, title) {
+function appendReviewRunSection(parent, title, options = {}) {
   const section = document.createElement("section");
   section.className = "review-run-section";
   const sectionIndex = parent.querySelectorAll(":scope > .review-run-section").length;
@@ -6695,6 +6695,14 @@ function appendReviewRunSection(parent, title) {
 
   section.append(header, body);
   parent.appendChild(section);
+
+  if (options.collapsedByDefault) {
+    section.classList.add("is-collapsed");
+    collapse.textContent = "Expand";
+    collapse.setAttribute("aria-expanded", "false");
+    collapse.setAttribute("aria-label", `Expand ${title} section`);
+  }
+
   updateReviewRunSectionMoveButtons(parent);
   return body;
 }
@@ -6704,14 +6712,24 @@ function normalizeReviewRunCell(value) {
     return {
       text: value.text === undefined || value.text === null || value.text === "" ? "—" : String(value.text),
       className: value.className || "",
-      title: value.title || ""
+      title: value.title || "",
+      node: value.node || null
     };
   }
   return {
     text: value === undefined || value === null || value === "" ? "—" : String(value),
     className: "",
-    title: ""
+    title: "",
+    node: null
   };
+}
+
+function appendReviewRunCellContent(cellElement, cell) {
+  if (cell?.node && typeof Node !== "undefined" && cell.node instanceof Node) {
+    cellElement.appendChild(cell.node);
+    return;
+  }
+  cellElement.textContent = cell?.text || "—";
 }
 
 function appendReviewRunKeyValueTable(parent, rows) {
@@ -6727,7 +6745,7 @@ function appendReviewRunKeyValueTable(parent, rows) {
     if (labelCell.className) th.className = labelCell.className;
     const td = document.createElement("td");
     const valueCell = normalizeReviewRunCell(value);
-    td.textContent = valueCell.text;
+    appendReviewRunCellContent(td, valueCell);
     if (valueCell.className) td.className = valueCell.className;
     if (valueCell.title) td.title = valueCell.title;
     tr.append(th, td);
@@ -6764,7 +6782,7 @@ function appendReviewRunDataTable(parent, headers, rows, emptyText = "No data ca
     row.forEach((value) => {
       const td = document.createElement("td");
       const cell = normalizeReviewRunCell(value);
-      td.textContent = cell.text;
+      appendReviewRunCellContent(td, cell);
       if (cell.className) td.className = cell.className;
       if (cell.title) td.title = cell.title;
       tr.appendChild(td);
@@ -6797,6 +6815,22 @@ function getReviewRunPaceClass(value, comparison) {
   const numericComparison = Number(comparison);
   if (!Number.isFinite(numericValue) || !Number.isFinite(numericComparison) || numericComparison <= 0) return "";
   return numericValue <= numericComparison ? "review-run-good" : "review-run-bad";
+}
+
+function formatReviewRunRequiredDelta(value, requiredCycle) {
+  const numericValue = Number(value);
+  const numericRequired = Number(requiredCycle);
+  if (!Number.isFinite(numericValue) || !Number.isFinite(numericRequired) || numericRequired <= 0) return "required average unavailable";
+  const delta = numericRequired - numericValue;
+  if (Math.abs(delta) < 0.05) return "equal to required";
+  return `${Math.abs(delta).toFixed(1)}s ${delta > 0 ? "quicker" : "slower"} than required`;
+}
+
+function getReviewRunRequiredDeltaClass(value, requiredCycle) {
+  const numericValue = Number(value);
+  const numericRequired = Number(requiredCycle);
+  if (!Number.isFinite(numericValue) || !Number.isFinite(numericRequired) || numericRequired <= 0) return "";
+  return numericValue <= numericRequired ? "review-run-good" : "review-run-bad";
 }
 
 function buildReviewRunPaceCell(text, value, comparison) {
@@ -6870,38 +6904,213 @@ function getReviewRunMarkerNoteContext(entries) {
   return parts.join(" ") || "No marker/note reason captured for this period.";
 }
 
-function buildReviewRunBestWorstValue(snapshot, bucket) {
+function getReviewRunSheepNumber(entry) {
+  const number = Number(entry?.number);
+  return Number.isFinite(number) ? number : Number.POSITIVE_INFINITY;
+}
+
+function getReviewRunEntryMarkerNoteContext(entry) {
+  const markerLabel = getManualMarkersDisplayLabel(getConfirmedManualMarkersForEntry(entry));
+  const noteText = normalizeSheepNote(entry?.note);
+  return [markerLabel, noteText].filter(Boolean).join(" — ");
+}
+
+function buildReviewRunDetailPanel(title, entries, requiredCycle, direction) {
+  const panel = document.createElement("div");
+  panel.className = "review-run-sheep-detail-panel";
+  panel.hidden = true;
+
+  const heading = document.createElement("strong");
+  heading.textContent = title;
+  panel.appendChild(heading);
+
+  const list = document.createElement("ul");
+  entries
+    .slice()
+    .sort((a, b) => getReviewRunSheepNumber(a) - getReviewRunSheepNumber(b))
+    .forEach((entry) => {
+      const item = document.createElement("li");
+      const fullCycle = Number(entry?.fullCycle);
+      const delta = direction === "quicker" ? requiredCycle - fullCycle : fullCycle - requiredCycle;
+      const context = direction === "slower" ? getReviewRunEntryMarkerNoteContext(entry) : "";
+      const sheepLabel = Number.isFinite(getReviewRunSheepNumber(entry)) ? getReviewRunSheepNumber(entry) : "—";
+      item.textContent = `Sheep ${sheepLabel} — ${formatSeconds(fullCycle)} total, ${Math.max(0, delta).toFixed(1)}s ${direction} than required${context ? ` — ${context}` : ""}`;
+      list.appendChild(item);
+    });
+  panel.appendChild(list);
+  return panel;
+}
+
+function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, threshold, labelText) {
+  const count = entries.length;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `review-run-count-link ${direction === "quicker" ? "review-run-count-link-good" : "review-run-count-link-bad"}`;
+  button.textContent = `${count} ${count === 1 ? "sheep" : "sheep"}`;
+  button.disabled = count === 0;
+
+  const sentence = document.createElement("p");
+  sentence.appendChild(button);
+  sentence.append(` ${labelText}`);
+
+  const panel = buildReviewRunDetailPanel(
+    `${count} ${count === 1 ? "sheep" : "sheep"} ${labelText}`,
+    entries,
+    requiredCycle,
+    direction
+  );
+  button.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+  });
+
+  parent.append(sentence, panel);
+}
+
+function getReviewRunBucketTimingGroups(entries, requiredCycle) {
+  const safeEntries = entries.filter((entry) => Number.isFinite(Number(entry?.fullCycle)));
+  const quicker = safeEntries.filter((entry) => Number(entry.fullCycle) < requiredCycle);
+  const slower = safeEntries.filter((entry) => Number(entry.fullCycle) > requiredCycle);
+  return {
+    quicker,
+    slower,
+    quickerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
+      groups[threshold] = safeEntries.filter((entry) => requiredCycle - Number(entry.fullCycle) >= threshold);
+      return groups;
+    }, {}),
+    slowerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
+      groups[threshold] = safeEntries.filter((entry) => Number(entry.fullCycle) - requiredCycle >= threshold);
+      return groups;
+    }, {})
+  };
+}
+
+function buildReviewRunBestWorstValue(snapshot, bucket, periodType = "period") {
   if (!bucket) return "n/a";
   const entries = getReviewRunEntriesInBucket(snapshot, bucket);
   const requiredCycle = getReviewRunRequiredCycle(snapshot);
   const avgCycle = Number(bucket.avgCycle);
   const count = Number(bucket.count || entries.length || 0);
   const range = getReviewRunBucketRange(snapshot, bucket);
-  const timingContext = Number.isFinite(avgCycle)
-    ? `${count} sheep, ${avgCycle.toFixed(1)}s average total time${Number.isFinite(requiredCycle) && requiredCycle > 0 ? `, ${Math.abs(avgCycle - requiredCycle).toFixed(1)}s ${avgCycle <= requiredCycle ? "under" : "over"} required average` : ""}.`
-    : `${count} sheep.`;
-  return `${range} — ${timingContext} ${getReviewRunMarkerNoteContext(entries)}`;
+
+  const wrapper = document.createElement("div");
+  wrapper.className = "review-run-best-worst-insight";
+
+  const summary = document.createElement("p");
+  summary.textContent = Number.isFinite(avgCycle)
+    ? `${range} — ${count} sheep, ${avgCycle.toFixed(1)}s average Total Time Per Sheep, ${formatReviewRunRequiredDelta(avgCycle, requiredCycle)}.`
+    : `${range} — ${count} sheep.`;
+  wrapper.appendChild(summary);
+
+  if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
+    const groups = getReviewRunBucketTimingGroups(entries, requiredCycle);
+    appendReviewRunInsightCount(wrapper, groups.quicker, requiredCycle, "quicker", 0, "were quicker than required.");
+    appendReviewRunInsightCount(wrapper, groups.slower, requiredCycle, "slower", 0, "were slower than required.");
+    [1, 2, 3].forEach((threshold) => {
+      appendReviewRunInsightCount(wrapper, groups.quickerAtLeast[threshold], requiredCycle, "quicker", threshold, `were at least ${threshold}s quicker.`);
+    });
+    [1, 2, 3].forEach((threshold) => {
+      appendReviewRunInsightCount(wrapper, groups.slowerAtLeast[threshold], requiredCycle, "slower", threshold, `were at least ${threshold}s slower.`);
+    });
+
+    const explanation = document.createElement("p");
+    const muchQuicker = groups.quickerAtLeast[2].length;
+    const muchSlower = groups.slowerAtLeast[3].length;
+    if (periodType === "best" && groups.quicker.length > groups.slower.length) {
+      explanation.textContent = "The period was strong because most sheep were consistently quicker than required.";
+    } else if (periodType === "worst" && muchSlower > 0) {
+      explanation.textContent = "The period lost time because several sheep were much slower than required.";
+    } else if (muchQuicker > muchSlower) {
+      explanation.textContent = "The period gained time because the quicker sheep outweighed the slower sheep.";
+    } else if (groups.slower.length > groups.quicker.length) {
+      explanation.textContent = "The period lost time because more sheep were slower than required.";
+    } else {
+      explanation.textContent = "The period stayed close to the required average overall.";
+    }
+    wrapper.appendChild(explanation);
+  }
+
+  const markerContext = document.createElement("p");
+  markerContext.textContent = getReviewRunMarkerNoteContext(entries);
+  wrapper.appendChild(markerContext);
+
+  return { node: wrapper, className: getReviewRunRequiredDeltaClass(avgCycle, requiredCycle) };
+}
+
+function getReviewRunPortionEntries(snapshot, parts, selectedIndex) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  if (!sheep.length || !Number.isFinite(selectedIndex)) return [];
+  const startIndex = Math.floor((sheep.length * selectedIndex) / parts);
+  const endIndex = Math.floor((sheep.length * (selectedIndex + 1)) / parts);
+  return sheep.slice(startIndex, endIndex);
+}
+
+function getReviewRunAverageFullCycle(entries) {
+  const values = entries.map((entry) => Number(entry?.fullCycle)).filter((value) => Number.isFinite(value));
+  return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+}
+
+function buildReviewRunPortionSummaryNode(entries, requiredCycle) {
+  const avgCycle = getReviewRunAverageFullCycle(entries);
+  const summary = document.createElement("div");
+  summary.className = `review-run-portion-summary ${getReviewRunRequiredDeltaClass(avgCycle, requiredCycle)}`.trim();
+  const avg = Number.isFinite(avgCycle) ? `${avgCycle.toFixed(3)}s average Total Time Per Sheep` : "n/a average Total Time Per Sheep";
+  summary.textContent = `${entries.length} sheep — ${avg} — ${formatReviewRunRequiredDelta(avgCycle, requiredCycle)}`;
+  return summary;
+}
+
+function appendReviewRunPortionSelectors(parent, snapshot) {
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  const controls = document.createElement("div");
+  controls.className = "review-run-portion-controls";
+
+  const quarterSummary = document.createElement("div");
+  const halfSummary = document.createElement("div");
+
+  const createSelectControl = (labelText, options, onChange) => {
+    const label = document.createElement("label");
+    label.className = "review-run-portion-control";
+    const span = document.createElement("span");
+    span.textContent = labelText;
+    const select = document.createElement("select");
+    options.forEach(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.appendChild(option);
+    });
+    select.addEventListener("change", () => onChange(Number(select.value)));
+    label.append(span, select);
+    return { label, select };
+  };
+
+  const renderQuarter = (index) => {
+    quarterSummary.innerHTML = "";
+    quarterSummary.appendChild(buildReviewRunPortionSummaryNode(getReviewRunPortionEntries(snapshot, 4, index), requiredCycle));
+  };
+  const renderHalf = (index) => {
+    halfSummary.innerHTML = "";
+    halfSummary.appendChild(buildReviewRunPortionSummaryNode(getReviewRunPortionEntries(snapshot, 2, index), requiredCycle));
+  };
+
+  const quarter = createSelectControl("Run quarter", [[0, "1st quarter"], [1, "2nd quarter"], [2, "3rd quarter"], [3, "4th quarter"]], renderQuarter);
+  const half = createSelectControl("Run half", [[0, "1st half"], [1, "2nd half"]], renderHalf);
+  controls.append(quarter.label, quarterSummary, half.label, halfSummary);
+  parent.appendChild(controls);
+  renderQuarter(0);
+  renderHalf(0);
 }
 
 function buildReviewRunPeriodRows(snapshot) {
   const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
   if (!sheep.length) return [];
-  const totalElapsed = Math.max(...sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0), 1);
-  const averageFor = (entries) => entries.length
-    ? entries.reduce((sum, entry) => sum + (Number(entry?.fullCycle) || 0), 0) / entries.length
-    : NaN;
   const requiredCycle = getReviewRunRequiredCycle(snapshot);
-  const firstQuarterAvg = averageFor(sheep.filter((entry) => Number(entry?.effectiveElapsedSeconds) <= totalElapsed * 0.25));
-  const firstHalfAvg = averageFor(sheep.filter((entry) => Number(entry?.effectiveElapsedSeconds) <= totalElapsed * 0.5));
   const buckets = Array.isArray(snapshot?.trendBuckets) ? snapshot.trendBuckets : [];
   const best = buckets.reduce((winner, bucket) => (!winner || Number(bucket.avgCycle) < Number(winner.avgCycle) ? bucket : winner), null);
   const worst = buckets.reduce((loser, bucket) => (!loser || Number(bucket.avgCycle) > Number(loser.avgCycle) ? bucket : loser), null);
   const bucketLabel = getReviewRunTrendBucketLabel(snapshot);
   return [
-    ["First quarter of run", buildReviewRunPaceCell(Number.isFinite(firstQuarterAvg) ? `${firstQuarterAvg.toFixed(3)}s Total Time Per Sheep` : "n/a", firstQuarterAvg, requiredCycle)],
-    ["First half of run", buildReviewRunPaceCell(Number.isFinite(firstHalfAvg) ? `${firstHalfAvg.toFixed(3)}s Total Time Per Sheep` : "n/a", firstHalfAvg, requiredCycle)],
-    [`Best ${bucketLabel} period`, buildReviewRunPaceCell(buildReviewRunBestWorstValue(snapshot, best), Number(best?.avgCycle), requiredCycle)],
-    [`Worst ${bucketLabel} period`, buildReviewRunPaceCell(buildReviewRunBestWorstValue(snapshot, worst), Number(worst?.avgCycle), requiredCycle)]
+    [`Best ${bucketLabel} period`, buildReviewRunBestWorstValue(snapshot, best, "best")],
+    [`Worst ${bucketLabel} period`, buildReviewRunBestWorstValue(snapshot, worst, "worst")]
   ];
 }
 
@@ -7022,12 +7231,14 @@ function renderReviewRunModal(snapshot) {
 
   const performance = appendReviewRunSection(elements.reviewRunModalContent, "Performance / Run Summary");
   appendReviewRunKeyValueTable(performance, buildReviewRunPerformanceRows(snapshot));
+  appendReviewRunPortionSelectors(performance, snapshot);
   appendReviewRunKeyValueTable(performance, buildReviewRunPeriodRows(snapshot));
   if (snapshot.runReviewText) {
+    const fullTextSummary = appendReviewRunSection(elements.reviewRunModalContent, "Full text summary", { collapsedByDefault: true });
     const reviewText = document.createElement("pre");
     reviewText.className = "review-run-text";
     reviewText.textContent = formatReviewRunTextForModal(snapshot.runReviewText, snapshot);
-    performance.appendChild(reviewText);
+    fullTextSummary.appendChild(reviewText);
   }
 
   const targetPace = appendReviewRunSection(elements.reviewRunModalContent, "Target / Pace");
