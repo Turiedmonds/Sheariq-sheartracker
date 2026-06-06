@@ -2735,6 +2735,25 @@ td.pace-neutral {
   max-width: 460px;
 }
 
+.pen-fill-adjust-section {
+  margin: 0 0 0.9rem;
+  padding: 0.75rem;
+  border: 1px solid #fce7f3;
+  border-radius: 10px;
+  background: #fff7fb;
+}
+
+.pen-fill-adjust-section h4 {
+  margin: 0 0 0.55rem;
+  color: #111827;
+}
+
+.pen-fill-adjust-help {
+  margin: 0 0 0.65rem;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
 .pen-fill-adjust-details {
   display: grid;
   gap: 0.35rem;
