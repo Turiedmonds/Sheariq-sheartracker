@@ -2579,6 +2579,7 @@ const appState = {
   breakBannerDismissedForCurrentBreak: false,
   pendingBreakAfterCurrentSheep: false,
   pendingBreakStartedAtMs: null,
+  pendingBreakSource: null,
   runEndTimeMs: null,
   officialRunEndTimeMs: null,
   currentRunIndex: 0,
@@ -4168,6 +4169,13 @@ function getEffectiveElapsedSeconds() {
   return Math.max(elapsedMs - getDiscardedResetElapsedMs(), 0) / 1000;
 }
 
+function getCurrentAppTimelineMs() {
+  if (Number.isFinite(appState.runStartTime)) {
+    return appState.runStartTime + (getEffectiveElapsedSeconds() * 1000);
+  }
+  return Date.now();
+}
+
 function formatElapsedMMSS(seconds) {
   const safe = Math.max(Math.floor(seconds || 0), 0);
   const mm = Math.floor(safe / 60);
@@ -4838,6 +4846,7 @@ function resetRunState() {
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
+  appState.pendingBreakSource = null;
   appState.runEndTimeMs = null;
   appState.officialRunEndTimeMs = null;
   appState.currentRunIndex = 0;
@@ -4940,21 +4949,25 @@ async function handleFinishRunBreakClick() {
     return;
   }
 
-  const now = Date.now();
+  const appTimelineNowMs = getCurrentAppTimelineMs();
   const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  const breakStartedAtMs = Number.isFinite(officialScheduledRunEndTimeMs) && now >= officialScheduledRunEndTimeMs
+  const breakStartedAtMs = Number.isFinite(officialScheduledRunEndTimeMs) && appTimelineNowMs >= officialScheduledRunEndTimeMs
     ? officialScheduledRunEndTimeMs
-    : now;
+    : appTimelineNowMs;
+  const breakSource = Number.isFinite(officialScheduledRunEndTimeMs) && appTimelineNowMs >= officialScheduledRunEndTimeMs
+    ? "record-day-break"
+    : "manual-finish-break";
 
   if (appState.currentCycle.motorOn) {
     appState.pendingBreakAfterCurrentSheep = true;
     appState.pendingBreakStartedAtMs = breakStartedAtMs;
+    appState.pendingBreakSource = breakSource;
     console.log("Finish break requested; waiting for current sheep to finish");
     updateFinishRunBreakButtonUI();
     return;
   }
 
-  finishRunAndEnterBreak("manual-finish-break", breakStartedAtMs);
+  finishRunAndEnterBreak(breakSource, breakStartedAtMs);
 }
 
 function startRun(startedAtMs = Date.now()) {
@@ -4998,6 +5011,7 @@ function startRun(startedAtMs = Date.now()) {
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
+  appState.pendingBreakSource = null;
   appState.effectiveElapsedBeforePauseMs = 0;
   appState.effectiveResumeRealMs = appState.runStartTime;
   appState.discardedResetElapsedMs = 0;
@@ -5051,6 +5065,7 @@ function stopRun() {
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
+  appState.pendingBreakSource = null;
   appState.runEndTimeMs = null;
   appState.officialRunEndTimeMs = null;
   resetPenFillForecastCountdownTarget();
@@ -5088,6 +5103,9 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   updateReviewRunButtonState();
 
   appState.runActive = false;
+  if (appState.paused) {
+    resumeDayClock();
+  }
   appState.paused = false;
   appState.pauseStartedAtMs = null;
 
@@ -5110,6 +5128,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
 
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
+  appState.pendingBreakSource = null;
 
   if (elements.startRunBtn) elements.startRunBtn.disabled = false;
   if (elements.stopRunBtn) elements.stopRunBtn.disabled = true;
@@ -5825,6 +5844,7 @@ function maybeHandleRunEndExpired(now = Date.now()) {
   if (appState.currentCycle.motorOn) {
     appState.pendingBreakAfterCurrentSheep = true;
     appState.pendingBreakStartedAtMs = officialScheduledRunEndTimeMs;
+    appState.pendingBreakSource = "record-day-break";
     console.log("Run expired; waiting for current sheep to finish before official break");
     return true;
   }
@@ -5915,11 +5935,12 @@ function handleMotorOff() {
   appState.currentMotorDisplay = "OFF";
 
   if (appState.pendingBreakAfterCurrentSheep) {
-    const scheduledBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs)
+    const pendingBreakSource = appState.pendingBreakSource || "record-day-break";
+    const pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs)
       ? appState.pendingBreakStartedAtMs
-      : (getOfficialScheduledRunEndTimeMs() ?? Date.now());
+      : (pendingBreakSource === "record-day-break" ? (getOfficialScheduledRunEndTimeMs() ?? Date.now()) : getCurrentAppTimelineMs());
     refreshAfterSheepEntry();
-    finishRunAndEnterBreak("record-day-break", scheduledBreakStartedAtMs);
+    finishRunAndEnterBreak(pendingBreakSource, pendingBreakStartedAtMs);
     return;
   }
 
@@ -5943,6 +5964,9 @@ function enterOfficialBreak(source = "official", breakStartedAtMs = Date.now()) 
   appState.currentCycle.catchStart = null;
 
   console.log("Official break started");
+  if (isDashboardPage() && !appState.liveTimerId) {
+    startLiveLoop();
+  }
   updateLivePanel();
   updateStatsPanel();
 }
@@ -5955,6 +5979,7 @@ function exitOfficialBreak() {
   appState.breakBannerDismissedForCurrentBreak = false;
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
+  appState.pendingBreakSource = null;
 
   // Reset the current cycle so counting only restarts from a clean
   // post-break motor ON event.
@@ -12490,6 +12515,7 @@ function restoreSessionPayload(raw, options = {}) {
   appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
   appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
   appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
+  appState.pendingBreakSource = null;
   appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
   sanitizeManualMarkersOnSheepEntries(appState.sheep);
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
