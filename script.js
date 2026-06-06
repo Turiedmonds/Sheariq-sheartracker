@@ -7355,6 +7355,31 @@ function formatReviewRunSnapshotEntryClock(snapshot, entry, field) {
   return formatReviewRunDateTime(entry?.[timestampKey]);
 }
 
+function findReviewRunRefillEventSheep(snapshot, event) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  if (!sheep.length || !event || typeof event !== "object") return null;
+
+  const eventSheepId = event.sheepId;
+  if (eventSheepId) {
+    const sheepById = sheep.find((entry) => entry?.id === eventSheepId);
+    if (sheepById) return sheepById;
+  }
+
+  const eventSheepNumber = getFiniteClockNumber(event.sheepNumber);
+  if (Number.isFinite(eventSheepNumber)) {
+    const sheepByEventNumber = sheep.find((entry) => Number(entry?.number) === eventSheepNumber);
+    if (sheepByEventNumber) return sheepByEventNumber;
+  }
+
+  const physicalSheepTakenFromPen = getFiniteClockNumber(event.physicalSheepTakenFromPen);
+  if (Number.isFinite(physicalSheepTakenFromPen)) {
+    const sheepByPhysicalNumber = sheep.find((entry) => Number(entry?.number) === physicalSheepTakenFromPen);
+    if (sheepByPhysicalNumber) return sheepByPhysicalNumber;
+  }
+
+  return null;
+}
+
 function formatReviewRunSnapshotEventClock(snapshot, event) {
   const storedDayClockKeys = [
     "dayClockSecondsFromMidnight",
@@ -7366,6 +7391,21 @@ function formatReviewRunSnapshotEventClock(snapshot, event) {
   for (const key of storedDayClockKeys) {
     const storedSeconds = getFiniteClockNumber(event?.[key]);
     if (Number.isFinite(storedSeconds)) return formatReviewRunDayClockSecondsShort(storedSeconds);
+  }
+
+  const matchingSheep = findReviewRunRefillEventSheep(snapshot, event);
+  const sheepEndDayClockSeconds = getFiniteClockNumber(matchingSheep?.endDayClockSeconds);
+  if (Number.isFinite(sheepEndDayClockSeconds)) return formatReviewRunDayClockSecondsShort(sheepEndDayClockSeconds);
+
+  const runStartDayClockSeconds = getFiniteClockNumber(snapshot?.runStartDayClockSeconds);
+  const eventEffectiveElapsedSeconds = getFiniteClockNumber(event?.effectiveElapsedSeconds);
+  if (Number.isFinite(runStartDayClockSeconds) && Number.isFinite(eventEffectiveElapsedSeconds)) {
+    return formatReviewRunDayClockSecondsShort(runStartDayClockSeconds + eventEffectiveElapsedSeconds);
+  }
+
+  const sheepEffectiveElapsedSeconds = getFiniteClockNumber(matchingSheep?.effectiveElapsedSeconds);
+  if (Number.isFinite(runStartDayClockSeconds) && Number.isFinite(sheepEffectiveElapsedSeconds)) {
+    return formatReviewRunDayClockSecondsShort(runStartDayClockSeconds + sheepEffectiveElapsedSeconds);
   }
 
   const eventTimestamp = event?.timestamp || event?.createdAt;
