@@ -6973,13 +6973,13 @@ function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, 
   parent.append(sentence, panel);
 }
 
-function appendReviewRunSubsetInsight(parent, entries, requiredCycle, direction, threshold, totalMatching) {
+function appendReviewRunSubsetInsight(parent, entries, requiredCycle, direction, threshold) {
   const count = entries.length;
   const item = document.createElement("li");
+  item.append(`${threshold}s+ ${direction}: `);
+
   const button = createReviewRunCountButton(entries, direction);
-  button.textContent = `${count}`;
   item.appendChild(button);
-  item.append(` of those ${totalMatching} ${direction} ${totalMatching === 1 ? "sheep" : "sheep"} ${count === 1 ? "was" : "were"} at least ${threshold}s ${direction} than required`);
 
   const panel = buildReviewRunDetailPanel(
     `${count} ${count === 1 ? "sheep" : "sheep"} at least ${threshold}s ${direction} than required`,
@@ -7029,16 +7029,75 @@ function appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, dir
 
   const subsetIntro = document.createElement("p");
   subsetIntro.className = "review-run-subset-intro";
-  subsetIntro.textContent = `Of those ${mainCount} ${direction} ${mainCount === 1 ? "sheep" : "sheep"}:`;
+  subsetIntro.textContent = `${direction === "quicker" ? "Quicker" : "Slower"} sheep breakdown:`;
   wrapper.appendChild(subsetIntro);
 
   const list = document.createElement("ul");
   list.className = "review-run-subset-list";
   const thresholdGroups = direction === "quicker" ? groups.quickerAtLeast : groups.slowerAtLeast;
   [1, 2, 3].forEach((threshold) => {
-    appendReviewRunSubsetInsight(list, thresholdGroups[threshold] || [], requiredCycle, direction, threshold, mainCount);
+    appendReviewRunSubsetInsight(list, thresholdGroups[threshold] || [], requiredCycle, direction, threshold);
   });
   wrapper.appendChild(list);
+}
+
+function getReviewRunCatchShearReasonInsight(snapshot, entries, direction) {
+  const avgCatch = Number(snapshot?.currentStats?.avgCatch);
+  const avgShear = Number(snapshot?.currentStats?.avgShear);
+  if (!Number.isFinite(avgCatch) || !Number.isFinite(avgShear) || avgCatch <= 0 || avgShear <= 0) return "";
+
+  const totals = entries.reduce((acc, entry) => {
+    const catchDuration = Number(entry?.catchDuration);
+    const shearDuration = Number(entry?.shearDuration);
+    if (Number.isFinite(catchDuration)) {
+      const delta = direction === "quicker" ? avgCatch - catchDuration : catchDuration - avgCatch;
+      if (delta > 0) acc.catch += delta;
+    }
+    if (Number.isFinite(shearDuration)) {
+      const delta = direction === "quicker" ? avgShear - shearDuration : shearDuration - avgShear;
+      if (delta > 0) acc.shear += delta;
+    }
+    return acc;
+  }, { catch: 0, shear: 0 });
+
+  const totalContribution = totals.catch + totals.shear;
+  if (totalContribution <= 0) {
+    return direction === "quicker"
+      ? "The block was quicker overall, but catch/shear split was mixed."
+      : "The block was slower overall, but catch/shear split was mixed.";
+  }
+
+  const catchShare = totals.catch / totalContribution;
+  const shearShare = totals.shear / totalContribution;
+  const clearlyMoreThreshold = 0.65;
+  const bothContributeThreshold = 0.30;
+
+  if (catchShare >= clearlyMoreThreshold) {
+    return direction === "quicker"
+      ? "Most of the time gained came from quicker catch times."
+      : "Most of the lost time came from slower catch times.";
+  }
+  if (shearShare >= clearlyMoreThreshold) {
+    return direction === "quicker"
+      ? "Most of the time gained came from quicker shear times."
+      : "Most of the lost time came from slower shear times.";
+  }
+  if (catchShare >= bothContributeThreshold && shearShare >= bothContributeThreshold) {
+    return direction === "quicker"
+      ? "The quicker block came from both quicker catches and quicker shearing."
+      : "The slower block came from both slower catches and slower shearing.";
+  }
+  return direction === "quicker"
+    ? "The block was quicker overall, but catch/shear split was mixed."
+    : "The block was slower overall, but catch/shear split was mixed.";
+}
+
+function appendReviewRunCatchShearReasonInsight(wrapper, snapshot, entries, direction) {
+  const insight = getReviewRunCatchShearReasonInsight(snapshot, entries, direction);
+  if (!insight) return;
+  const node = document.createElement("p");
+  node.textContent = insight;
+  wrapper.appendChild(node);
 }
 
 function buildReviewRunBestWorstValue(snapshot, bucket, blockType = "block") {
@@ -7062,6 +7121,7 @@ function buildReviewRunBestWorstValue(snapshot, bucket, blockType = "block") {
     const groups = getReviewRunBucketTimingGroups(entries, requiredCycle);
     if (blockType === "best") {
       appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, "quicker");
+      appendReviewRunCatchShearReasonInsight(wrapper, snapshot, entries, "quicker");
       const explanation = document.createElement("p");
       explanation.textContent = groups.quicker.length
         ? "This block was strongest because its quicker sheep lowered the average Total Time Per Sheep."
@@ -7069,6 +7129,7 @@ function buildReviewRunBestWorstValue(snapshot, bucket, blockType = "block") {
       wrapper.appendChild(explanation);
     } else if (blockType === "worst") {
       appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, "slower");
+      appendReviewRunCatchShearReasonInsight(wrapper, snapshot, entries, "slower");
       const explanation = document.createElement("p");
       explanation.textContent = groups.slower.length
         ? "This block lost the most time because its slower sheep lifted the average Total Time Per Sheep."
@@ -7111,11 +7172,6 @@ function getReviewRunBlockEntries(snapshot, block) {
   });
 }
 
-function getReviewRunOrdinalLabel(index) {
-  const labels = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth"];
-  return labels[index] || `Block ${index + 1}`;
-}
-
 function getReviewRunTimingBlockOptions(snapshot) {
   const durationSeconds = getReviewRunCompletedDurationSeconds(snapshot);
   if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return [];
@@ -7132,21 +7188,8 @@ function getReviewRunTimingBlockOptions(snapshot) {
     addOption(`Quarter ${index + 1}`, index * 15 * 60, (index + 1) * 15 * 60);
   }
 
-  const thirtyMinuteCount = Math.floor(durationSeconds / (30 * 60));
-  for (let index = 0; index < thirtyMinuteCount; index += 1) {
-    addOption(`${getReviewRunOrdinalLabel(index)} 30 minutes`, index * 30 * 60, (index + 1) * 30 * 60);
-  }
-
-  const hourCount = Math.floor(durationSeconds / (60 * 60));
-  for (let index = 0; index < hourCount; index += 1) {
-    addOption(`${getReviewRunOrdinalLabel(index)} hour`, index * 60 * 60, (index + 1) * 60 * 60);
-  }
-
-  if (durationSeconds > 45 * 60 && Math.round(durationSeconds) % (60 * 60) === 45 * 60) {
-    addOption("Last 45 minutes", durationSeconds - (45 * 60), durationSeconds);
-  }
-  if (durationSeconds > 30 * 60) addOption("Last 30 minutes", durationSeconds - (30 * 60), durationSeconds);
-  if (durationSeconds > 15 * 60) addOption("Last 15 minutes", durationSeconds - (15 * 60), durationSeconds);
+  addOption("First hour", 0, 60 * 60);
+  if (durationSeconds > 60 * 60) addOption("Second hour", 60 * 60, 2 * 60 * 60);
 
   return options;
 }
