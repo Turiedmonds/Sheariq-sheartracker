@@ -6531,6 +6531,7 @@ function buildCompletedRunSnapshot() {
     effectiveElapsedSeconds: getEffectiveElapsedSeconds(),
     targetSheep: Number(elements.targetSheepInput?.value ?? appState.target?.sheep ?? 0) || 0,
     runLengthSeconds: getCurrentRunDurationSeconds(),
+    trendBucketMinutes: Number(appState.trendBucketMinutes) || 15,
     currentStats: cloneSnapshotValue(appState.currentStats, {}),
     target: cloneSnapshotValue(appState.target, {}),
     targetPacePredictionSnapshot: cloneSnapshotValue(appState.targetPacePredictionSnapshot, null),
@@ -6613,14 +6614,104 @@ function getReviewRunNumberLabel(snapshot) {
   return "Run —";
 }
 
+function getReviewRunSectionBodyId(index) {
+  return `reviewRunSectionBody-${index}`;
+}
+
+function updateReviewRunSectionMoveButtons(container) {
+  const sections = Array.from(container.querySelectorAll(":scope > .review-run-section"));
+  sections.forEach((section, index) => {
+    const up = section.querySelector(".review-run-section-move-up");
+    const down = section.querySelector(".review-run-section-move-down");
+    if (up) up.disabled = index === 0;
+    if (down) down.disabled = index === sections.length - 1;
+  });
+}
+
 function appendReviewRunSection(parent, title) {
   const section = document.createElement("section");
   section.className = "review-run-section";
+  const sectionIndex = parent.querySelectorAll(":scope > .review-run-section").length;
+  const bodyId = getReviewRunSectionBodyId(sectionIndex);
+
+  const header = document.createElement("div");
+  header.className = "review-run-section-header";
+
   const heading = document.createElement("h4");
   heading.textContent = title;
-  section.appendChild(heading);
+
+  const actions = document.createElement("div");
+  actions.className = "review-run-section-actions";
+
+  const moveUp = document.createElement("button");
+  moveUp.className = "review-run-section-control review-run-section-move-up";
+  moveUp.type = "button";
+  moveUp.textContent = "Move Up";
+  moveUp.setAttribute("aria-label", `Move ${title} section up`);
+
+  const moveDown = document.createElement("button");
+  moveDown.className = "review-run-section-control review-run-section-move-down";
+  moveDown.type = "button";
+  moveDown.textContent = "Move Down";
+  moveDown.setAttribute("aria-label", `Move ${title} section down`);
+
+  const collapse = document.createElement("button");
+  collapse.className = "review-run-section-control review-run-section-collapse";
+  collapse.type = "button";
+  collapse.textContent = "Collapse";
+  collapse.setAttribute("aria-expanded", "true");
+  collapse.setAttribute("aria-controls", bodyId);
+  collapse.setAttribute("aria-label", `Collapse ${title} section`);
+
+  actions.append(moveUp, moveDown, collapse);
+  header.append(heading, actions);
+
+  const body = document.createElement("div");
+  body.className = "review-run-section-body";
+  body.id = bodyId;
+
+  collapse.addEventListener("click", () => {
+    const isCollapsed = section.classList.toggle("is-collapsed");
+    collapse.textContent = isCollapsed ? "Expand" : "Collapse";
+    collapse.setAttribute("aria-expanded", String(!isCollapsed));
+    collapse.setAttribute("aria-label", `${isCollapsed ? "Expand" : "Collapse"} ${title} section`);
+  });
+
+  moveUp.addEventListener("click", () => {
+    const previous = section.previousElementSibling;
+    if (previous && previous.classList.contains("review-run-section")) {
+      parent.insertBefore(section, previous);
+      updateReviewRunSectionMoveButtons(parent);
+    }
+  });
+
+  moveDown.addEventListener("click", () => {
+    const next = section.nextElementSibling;
+    if (next && next.classList.contains("review-run-section")) {
+      parent.insertBefore(next, section);
+      updateReviewRunSectionMoveButtons(parent);
+    }
+  });
+
+  section.append(header, body);
   parent.appendChild(section);
-  return section;
+  updateReviewRunSectionMoveButtons(parent);
+  return body;
+}
+
+function normalizeReviewRunCell(value) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return {
+      text: value.text === undefined || value.text === null || value.text === "" ? "—" : String(value.text),
+      className: value.className || "",
+      title: value.title || ""
+    };
+  }
+  return {
+    text: value === undefined || value === null || value === "" ? "—" : String(value),
+    className: "",
+    title: ""
+  };
 }
 
 function appendReviewRunKeyValueTable(parent, rows) {
@@ -6631,9 +6722,14 @@ function appendReviewRunKeyValueTable(parent, rows) {
     const tr = document.createElement("tr");
     const th = document.createElement("th");
     th.scope = "row";
-    th.textContent = String(label || "—").replace(/:\s*$/, "");
+    const labelCell = normalizeReviewRunCell(label);
+    th.textContent = labelCell.text.replace(/:\s*$/, "");
+    if (labelCell.className) th.className = labelCell.className;
     const td = document.createElement("td");
-    td.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+    const valueCell = normalizeReviewRunCell(value);
+    td.textContent = valueCell.text;
+    if (valueCell.className) td.className = valueCell.className;
+    if (valueCell.title) td.title = valueCell.title;
     tr.append(th, td);
     tbody.appendChild(tr);
   });
@@ -6667,7 +6763,10 @@ function appendReviewRunDataTable(parent, headers, rows, emptyText = "No data ca
     const tr = document.createElement("tr");
     row.forEach((value) => {
       const td = document.createElement("td");
-      td.textContent = value === undefined || value === null || value === "" ? "—" : String(value);
+      const cell = normalizeReviewRunCell(value);
+      td.textContent = cell.text;
+      if (cell.className) td.className = cell.className;
+      if (cell.title) td.title = cell.title;
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
@@ -6675,6 +6774,205 @@ function appendReviewRunDataTable(parent, headers, rows, emptyText = "No data ca
   table.append(thead, tbody);
   wrap.appendChild(table);
   parent.appendChild(wrap);
+}
+
+function getReviewRunRequiredCycle(snapshot) {
+  const targetRequired = Number(snapshot?.target?.requiredCycle);
+  if (Number.isFinite(targetRequired) && targetRequired > 0) return targetRequired;
+
+  const targetRows = Array.isArray(snapshot?.display?.targetPaceRows) ? snapshot.display.targetPaceRows : [];
+  const requiredAverageRow = targetRows.find(([label]) => String(label).toLowerCase().includes("required average total time per sheep"));
+  const requiredAverageFromDisplay = parseReviewRunSecondsText(requiredAverageRow?.[1]);
+  if (Number.isFinite(requiredAverageFromDisplay) && requiredAverageFromDisplay > 0) return requiredAverageFromDisplay;
+
+  const targetSheep = Number(snapshot?.targetSheep || snapshot?.target?.sheep);
+  const runLengthSeconds = Number(snapshot?.runLengthSeconds || snapshot?.target?.runLengthSeconds);
+  return Number.isFinite(targetSheep) && targetSheep > 0 && Number.isFinite(runLengthSeconds) && runLengthSeconds > 0
+    ? runLengthSeconds / targetSheep
+    : NaN;
+}
+
+function getReviewRunPaceClass(value, comparison) {
+  const numericValue = Number(value);
+  const numericComparison = Number(comparison);
+  if (!Number.isFinite(numericValue) || !Number.isFinite(numericComparison) || numericComparison <= 0) return "";
+  return numericValue <= numericComparison ? "review-run-good" : "review-run-bad";
+}
+
+function buildReviewRunPaceCell(text, value, comparison) {
+  return { text, className: getReviewRunPaceClass(value, comparison) };
+}
+
+function parseReviewRunSecondsText(value) {
+  const match = String(value ?? "").match(/-?\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : NaN;
+}
+
+function getReviewRunTrendBucketMinutes(snapshot) {
+  const explicitMinutes = Number(snapshot?.trendBucketMinutes);
+  if (Number.isFinite(explicitMinutes) && explicitMinutes > 0) return explicitMinutes;
+  const buckets = Array.isArray(snapshot?.trendBuckets) ? snapshot.trendBuckets : [];
+  const starts = buckets.map((bucket) => Number(bucket?.startElapsed)).filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
+  for (let index = 1; index < starts.length; index += 1) {
+    const diffSeconds = starts[index] - starts[index - 1];
+    if (diffSeconds > 0) return diffSeconds / 60;
+  }
+  return 15;
+}
+
+function getReviewRunTrendBucketLabel(snapshot) {
+  const minutes = getReviewRunTrendBucketMinutes(snapshot);
+  return Number.isInteger(minutes) ? `${minutes}-minute` : `${minutes.toFixed(1)}-minute`;
+}
+
+function getReviewRunBucketRange(snapshot, bucket) {
+  const bucketMinutes = getReviewRunTrendBucketMinutes(snapshot);
+  const startElapsed = Number(bucket?.startElapsed);
+  const endElapsed = startElapsed + (bucketMinutes * 60);
+  const runStartDayClockSeconds = Number(snapshot?.runStartDayClockSeconds);
+  if (Number.isFinite(startElapsed) && Number.isFinite(runStartDayClockSeconds)) {
+    return `${formatReviewRunDayClockSecondsShort(runStartDayClockSeconds + startElapsed)} – ${formatReviewRunDayClockSecondsShort(runStartDayClockSeconds + endElapsed)}`;
+  }
+  return Number.isFinite(startElapsed) ? `${formatCountdown(startElapsed)} – ${formatCountdown(endElapsed)}` : "—";
+}
+
+function formatReviewRunDayClockSecondsShort(secondsFromMidnight) {
+  const value = formatReviewRunDayClockSeconds(secondsFromMidnight);
+  return value.replace(/:(\d{2})\s([AP]M)$/i, " $2");
+}
+
+function getReviewRunEntriesInBucket(snapshot, bucket) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  const bucketMinutes = getReviewRunTrendBucketMinutes(snapshot);
+  const startElapsed = Number(bucket?.startElapsed);
+  const endElapsed = startElapsed + (bucketMinutes * 60);
+  if (!Number.isFinite(startElapsed) || !Number.isFinite(endElapsed)) return [];
+  return sheep.filter((entry) => {
+    const elapsed = Number(entry?.effectiveElapsedSeconds);
+    return Number.isFinite(elapsed) && elapsed >= startElapsed && elapsed < endElapsed;
+  });
+}
+
+function getReviewRunMarkerNoteContext(entries) {
+  const markerLabels = [];
+  const notes = [];
+  entries.forEach((entry) => {
+    getConfirmedManualMarkersForEntry(entry).forEach((marker) => {
+      const label = getTrendFlagMarkerLabel(marker) || getManualMarkersDisplayLabel([marker]);
+      if (label && !markerLabels.includes(label)) markerLabels.push(label);
+    });
+    const note = normalizeSheepNote(entry?.note);
+    if (note && !notes.includes(note)) notes.push(note);
+  });
+  const parts = [];
+  if (markerLabels.length) parts.push(`Confirmed markers: ${markerLabels.join(", ")}.`);
+  if (notes.length) parts.push(`Notes: ${notes.join("; ")}.`);
+  return parts.join(" ") || "No marker/note reason captured for this period.";
+}
+
+function buildReviewRunBestWorstValue(snapshot, bucket) {
+  if (!bucket) return "n/a";
+  const entries = getReviewRunEntriesInBucket(snapshot, bucket);
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  const avgCycle = Number(bucket.avgCycle);
+  const count = Number(bucket.count || entries.length || 0);
+  const range = getReviewRunBucketRange(snapshot, bucket);
+  const timingContext = Number.isFinite(avgCycle)
+    ? `${count} sheep, ${avgCycle.toFixed(1)}s average total time${Number.isFinite(requiredCycle) && requiredCycle > 0 ? `, ${Math.abs(avgCycle - requiredCycle).toFixed(1)}s ${avgCycle <= requiredCycle ? "under" : "over"} required average` : ""}.`
+    : `${count} sheep.`;
+  return `${range} — ${timingContext} ${getReviewRunMarkerNoteContext(entries)}`;
+}
+
+function buildReviewRunPeriodRows(snapshot) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  if (!sheep.length) return [];
+  const totalElapsed = Math.max(...sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0), 1);
+  const averageFor = (entries) => entries.length
+    ? entries.reduce((sum, entry) => sum + (Number(entry?.fullCycle) || 0), 0) / entries.length
+    : NaN;
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  const firstQuarterAvg = averageFor(sheep.filter((entry) => Number(entry?.effectiveElapsedSeconds) <= totalElapsed * 0.25));
+  const firstHalfAvg = averageFor(sheep.filter((entry) => Number(entry?.effectiveElapsedSeconds) <= totalElapsed * 0.5));
+  const buckets = Array.isArray(snapshot?.trendBuckets) ? snapshot.trendBuckets : [];
+  const best = buckets.reduce((winner, bucket) => (!winner || Number(bucket.avgCycle) < Number(winner.avgCycle) ? bucket : winner), null);
+  const worst = buckets.reduce((loser, bucket) => (!loser || Number(bucket.avgCycle) > Number(loser.avgCycle) ? bucket : loser), null);
+  const bucketLabel = getReviewRunTrendBucketLabel(snapshot);
+  return [
+    ["First quarter of run", buildReviewRunPaceCell(Number.isFinite(firstQuarterAvg) ? `${firstQuarterAvg.toFixed(3)}s Total Time Per Sheep` : "n/a", firstQuarterAvg, requiredCycle)],
+    ["First half of run", buildReviewRunPaceCell(Number.isFinite(firstHalfAvg) ? `${firstHalfAvg.toFixed(3)}s Total Time Per Sheep` : "n/a", firstHalfAvg, requiredCycle)],
+    [`Best ${bucketLabel} period`, buildReviewRunPaceCell(buildReviewRunBestWorstValue(snapshot, best), Number(best?.avgCycle), requiredCycle)],
+    [`Worst ${bucketLabel} period`, buildReviewRunPaceCell(buildReviewRunBestWorstValue(snapshot, worst), Number(worst?.avgCycle), requiredCycle)]
+  ];
+}
+
+function buildReviewRunPerformanceRows(snapshot) {
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  return (Array.isArray(snapshot?.display?.performanceRows) ? snapshot.display.performanceRows : []).map(([label, value]) => {
+    if (String(label).toLowerCase().includes("average total time per sheep")) {
+      return [label, buildReviewRunPaceCell(value, parseReviewRunSecondsText(value), requiredCycle)];
+    }
+    return [label, value];
+  });
+}
+
+function buildReviewRunReviewRows(snapshot) {
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  return (Array.isArray(snapshot?.display?.reviewRows) ? snapshot.display.reviewRows : []).map((row) => row.map((value, index) => (
+    index === 2 ? buildReviewRunPaceCell(value, parseReviewRunSecondsText(value), requiredCycle) : value
+  )));
+}
+
+function buildReviewRunTrendBucketRows(snapshot) {
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  return (Array.isArray(snapshot?.display?.trendBucketRows) ? snapshot.display.trendBucketRows : []).map((row) => row.map((value, index) => (
+    index === 3 ? buildReviewRunPaceCell(value, parseReviewRunSecondsText(value), requiredCycle) : value
+  )));
+}
+
+
+function formatReviewRunSnapshotEntryClock(snapshot, entry, field) {
+  const secondsKey = field === "start" ? "startDayClockSeconds" : "endDayClockSeconds";
+  const timestampKey = field === "start" ? "startTime" : "endTime";
+  const storedSeconds = Number(entry?.[secondsKey]);
+  if (Number.isFinite(storedSeconds)) return formatReviewRunDayClockSecondsShort(storedSeconds);
+  const fallbackSeconds = getReviewRunDayClockSecondsFromTimestamp(entry?.[timestampKey], snapshot?.runStartTime, snapshot?.runStartDayClockSeconds);
+  if (Number.isFinite(fallbackSeconds)) return formatReviewRunDayClockSecondsShort(fallbackSeconds);
+  return formatReviewRunDateTime(entry?.[timestampKey]);
+}
+
+function buildReviewRunSheepLogRows(snapshot) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  const requiredCycle = getReviewRunRequiredCycle(snapshot);
+  const avgCatch = Number(snapshot?.currentStats?.avgCatch);
+  const avgShear = Number(snapshot?.currentStats?.avgShear);
+  return sheep.map((entry) => {
+    const catchDuration = Number(entry?.catchDuration);
+    const shearDuration = Number(entry?.shearDuration);
+    const fullCycle = Number(entry?.fullCycle);
+    const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+    const markerLabel = getManualMarkersDisplayLabel(manualMarkers);
+    const noteText = normalizeSheepNote(entry?.note);
+    return [
+      entry?.number ?? "—",
+      formatReviewRunSnapshotEntryClock(snapshot, entry, "start"),
+      formatReviewRunSnapshotEntryClock(snapshot, entry, "end"),
+      buildReviewRunPaceCell(formatSeconds(catchDuration), catchDuration, avgCatch),
+      buildReviewRunPaceCell(formatSeconds(shearDuration), shearDuration, avgShear),
+      buildReviewRunPaceCell(formatSeconds(fullCycle), fullCycle, requiredCycle),
+      markerLabel || "—",
+      noteText || "—"
+    ];
+  });
+}
+
+function formatReviewRunTextForModal(text, snapshot) {
+  if (!text) return "";
+  const bucketLabel = getReviewRunTrendBucketLabel(snapshot);
+  return String(text)
+    .replace(/^First 25% of run:/gm, "First quarter of run:")
+    .replace(/^First 50% of run:/gm, "First half of run:")
+    .replace(/^Best:/gm, `Best ${bucketLabel} period:`)
+    .replace(/^Worst:/gm, `Worst ${bucketLabel} period:`);
 }
 
 function renderReviewRunModal(snapshot) {
@@ -6723,11 +7021,12 @@ function renderReviewRunModal(snapshot) {
   ]));
 
   const performance = appendReviewRunSection(elements.reviewRunModalContent, "Performance / Run Summary");
-  appendReviewRunKeyValueTable(performance, snapshot.display?.performanceRows || []);
+  appendReviewRunKeyValueTable(performance, buildReviewRunPerformanceRows(snapshot));
+  appendReviewRunKeyValueTable(performance, buildReviewRunPeriodRows(snapshot));
   if (snapshot.runReviewText) {
     const reviewText = document.createElement("pre");
     reviewText.className = "review-run-text";
-    reviewText.textContent = snapshot.runReviewText;
+    reviewText.textContent = formatReviewRunTextForModal(snapshot.runReviewText, snapshot);
     performance.appendChild(reviewText);
   }
 
@@ -6756,19 +7055,21 @@ function renderReviewRunModal(snapshot) {
   appendReviewRunDataTable(flags, ["Flag"], snapshot.display?.trendFlagRows || [], "No trend flags captured.");
 
   const reviews = appendReviewRunSection(elements.reviewRunModalContent, "15-Minute Reviews");
-  appendReviewRunDataTable(reviews, ["Range", "Sheep", "Avg cycle", "Delta", "Status"], snapshot.display?.reviewRows || [], "No 15-minute reviews captured.");
+  appendReviewRunDataTable(reviews, ["Range", "Sheep", "Avg cycle", "Delta", "Status"], buildReviewRunReviewRows(snapshot), "No 15-minute reviews captured.");
 
   const buckets = appendReviewRunSection(elements.reviewRunModalContent, "Trend Graph Bucket Data");
-  appendReviewRunDataTable(buckets, ["Bucket", "Start", "Sheep", "Avg cycle", "Avg catch"], snapshot.display?.trendBucketRows || [], "No trend bucket data captured.");
+  appendReviewRunDataTable(buckets, ["Bucket", "Start", "Sheep", "Avg cycle", "Avg catch"], buildReviewRunTrendBucketRows(snapshot), "No trend bucket data captured.");
 
   const sheepLog = appendReviewRunSection(elements.reviewRunModalContent, "Sheep Log");
-  appendReviewRunDataTable(sheepLog, ["Sheep", "Start", "End", "Catch", "Shear", "Total", "Markers", "Notes"], snapshot.display?.sheepLogRows || [], "No sheep captured for this run.");
+  appendReviewRunDataTable(sheepLog, ["Sheep", "Start", "End", "Catch", "Shear", "Total", "Markers", "Notes"], buildReviewRunSheepLogRows(snapshot), "No sheep captured for this run.");
 
   const qualityRows = snapshot.display?.qualityRows || [];
   if (qualityRows.length) {
     const quality = appendReviewRunSection(elements.reviewRunModalContent, "Quality Ratings");
     appendReviewRunDataTable(quality, ["Period", "Rating", "Official", "Physical", "Warning", "Notes"], qualityRows);
   }
+
+  updateReviewRunSectionMoveButtons(elements.reviewRunModalContent);
 }
 
 function openReviewRunModal() {
