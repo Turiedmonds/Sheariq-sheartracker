@@ -4640,6 +4640,19 @@ function getCurrentRunDurationSeconds() {
   return schedule[Math.max(index, 0)] || 0;
 }
 
+function hasRunTimingStarted() {
+  return appState.runStartTime !== null
+    || appState.runActive
+    || appState.effectiveElapsedBeforePauseMs > 0;
+}
+
+function getRunCountdownSeconds() {
+  if (!hasRunTimingStarted()) return 0;
+  const runDurationSeconds = Number(getCurrentRunDurationSeconds());
+  if (!Number.isFinite(runDurationSeconds) || runDurationSeconds <= 0) return 0;
+  return Math.max(runDurationSeconds - getEffectiveElapsedSeconds(), 0);
+}
+
 function getDefaultDayStartTime() {
   if (!elements.runType) return "07:00";
   if (elements.runType.value === "9") return "05:00";
@@ -10382,7 +10395,7 @@ function updateLivePanel() {
   const catchCurrent = !preparedForNextRunBreak && appState.runActive && !appState.currentCycle.motorOn && appState.currentCycle.catchStart
     ? (liveDisplayNowMs - appState.currentCycle.catchStart) / 1000
     : 0;
-  let countdownSeconds = appState.runEndTimeMs ? Math.max((appState.runEndTimeMs - liveDisplayNowMs) / 1000, 0) : 0;
+  let countdownSeconds = getRunCountdownSeconds();
   if (preparedForNextRunBreak) {
     const schedule = getScheduleForCurrentType();
     const nextRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
@@ -12653,6 +12666,7 @@ function restoreSessionPayload(raw, options = {}) {
   if (options.source === "manual") {
     setText(elements.motorState, appState.currentMotorDisplay);
     setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
+    setText(elements.runCountdown, formatCountdown(getRunCountdownSeconds()));
     setText(elements.totalSheep, String(appState.daySheep.length));
     updateRunBadge();
     updateDayClockDisplay();
