@@ -91,7 +91,8 @@ const PEN_FILL_EVENT_SOURCE = {
   RECOMMENDED: "recommended",
   MINUS_ONE: "minusOne",
   CUSTOM: "custom",
-  ASSUMED_FULL: "assumedFull"
+  ASSUMED_FULL: "assumedFull",
+  MANUAL_CURRENT_PEN_COUNT_CORRECTION: "manual-current-pen-count-correction"
 };
 
 function getPenRule(recordType) {
@@ -659,7 +660,10 @@ function forecastPenFillPointsFromEvents(options = {}) {
   const nextRefillAllowedInSheep = Number(penState.nextRefillAllowedInSheep);
   if (!Number.isFinite(defaultRefillAmount) || defaultRefillAmount <= 0 || !Number.isFinite(nextRefillAllowedInSheep)) return [];
 
-  const alreadyConfirmedAtCurrentPoint = events.some((event) => Number(event.physicalSheepTakenFromPen) === physicalSheepTakenFromPen);
+  const alreadyConfirmedAtCurrentPoint = events.some((event) => (
+    isPenFillAmountEvent(event)
+    && Number(event.physicalSheepTakenFromPen) === physicalSheepTakenFromPen
+  ));
   let nextRefillSheepNumber = null;
   if (penState.refillAllowedNow && !alreadyConfirmedAtCurrentPoint) {
     nextRefillSheepNumber = physicalSheepTakenFromPen;
@@ -880,18 +884,39 @@ function createPenFillEventId() {
   return `pen-fill-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function isActivePenFillEvent(event) {
+function isManualCurrentPenCountCorrectionEvent(event) {
+  return event?.source === PEN_FILL_EVENT_SOURCE.MANUAL_CURRENT_PEN_COUNT_CORRECTION;
+}
+
+function isPenFillAmountEvent(event) {
   return Boolean(
     event
     && typeof event === "object"
-    && !event.undone
-    && !event.undoneAt
-    && Number.isFinite(Number(event.runIndex))
-    && Number.isFinite(Number(event.physicalSheepTakenFromPen))
+    && !isManualCurrentPenCountCorrectionEvent(event)
     && Number.isFinite(Number(event.actualFillAmount))
     && Number(event.actualFillAmount) > 0
-    && Number.isFinite(Number(event.resultingPenCount))
   );
+}
+
+function isActivePenFillEvent(event) {
+  if (
+    !event
+    || typeof event !== "object"
+    || event.undone
+    || event.undoneAt
+    || !Number.isFinite(Number(event.runIndex))
+    || !Number.isFinite(Number(event.physicalSheepTakenFromPen))
+    || !Number.isFinite(Number(event.resultingPenCount))
+  ) {
+    return false;
+  }
+
+  if (isManualCurrentPenCountCorrectionEvent(event)) {
+    return Number.isInteger(Number(event.correctedCurrentPenCount))
+      && Number(event.correctedCurrentPenCount) >= 0;
+  }
+
+  return isPenFillAmountEvent(event);
 }
 
 
@@ -918,7 +943,7 @@ function getConfirmedPenFillIntervalEvents(refillEvents = []) {
   if (!Array.isArray(refillEvents)) return [];
 
   return refillEvents
-    .filter((event) => event && typeof event === "object" && !event.undone && !event.undoneAt)
+    .filter((event) => event && typeof event === "object" && !event.undone && !event.undoneAt && isPenFillAmountEvent(event))
     .map((event, originalIndex) => ({
       event,
       originalIndex,
@@ -1029,14 +1054,18 @@ function getCurrentPenStateFromEvents(options = {}) {
   const lastFillEvent = getLatestPenFillEvent(events);
 
   if (lastFillEvent) {
-    const lastFillSheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
-    const sheepTakenSinceLastFill = Math.max(physicalSheepTakenFromPen - lastFillSheepNumber, 0);
-    const currentPenCount = Number(lastFillEvent.resultingPenCount) - sheepTakenSinceLastFill;
+    const baselineSheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
+    const sheepTakenSinceLastFill = Math.max(physicalSheepTakenFromPen - baselineSheepNumber, 0);
+    const baselinePenCount = isManualCurrentPenCountCorrectionEvent(lastFillEvent)
+      ? Number(lastFillEvent.correctedCurrentPenCount)
+      : Number(lastFillEvent.resultingPenCount);
+    const currentPenCount = baselinePenCount - sheepTakenSinceLastFill;
     const nextRefillAllowedInSheep = Math.max(currentPenCount - Number(rule.refillTriggerLeft), 0);
+    const stateSource = isManualCurrentPenCountCorrectionEvent(lastFillEvent) ? "manualCorrection" : "confirmed";
     return {
       recordType,
       rule,
-      source: "confirmed",
+      source: stateSource,
       physicalSheepTakenFromPen,
       currentPenCount,
       sheepLeftInPen: currentPenCount,
@@ -1044,10 +1073,13 @@ function getCurrentPenStateFromEvents(options = {}) {
       nextRefillAllowedInSheep,
       refillAllowedNow: currentPenCount <= Number(rule.refillTriggerLeft),
       lastFillEvent,
-      lastFillAmount: Number(lastFillEvent.actualFillAmount),
-      lastFillSheepNumber,
+      lastFillAmount: isPenFillAmountEvent(lastFillEvent) ? Number(lastFillEvent.actualFillAmount) : null,
+      lastFillSheepNumber: baselineSheepNumber,
       lastFillTime: lastFillEvent.wallClockTime || lastFillEvent.createdAt || null,
-      assumption: "Using confirmed refills."
+      manualCurrentPenCountCorrection: isManualCurrentPenCountCorrectionEvent(lastFillEvent) ? lastFillEvent : null,
+      assumption: isManualCurrentPenCountCorrectionEvent(lastFillEvent)
+        ? "Using manual current pen count correction."
+        : "Using confirmed refills."
     };
   }
 
@@ -1129,6 +1161,92 @@ function validatePenFillAmount(amount, penState, rule) {
   }
 
   return { ...result, valid: true, reason: "" };
+}
+
+function validateCurrentPenCountCorrection(correctedCurrentPenCount, rule = getPenRule(appState.recordType)) {
+  const numericCount = Number(correctedCurrentPenCount);
+  const maxPen = Number(rule?.maxPen);
+  const result = {
+    valid: false,
+    correctedCurrentPenCount: numericCount,
+    reason: ""
+  };
+
+  if (!rule || !Number.isFinite(maxPen)) {
+    return { ...result, reason: "Missing pen rule." };
+  }
+  if (!Number.isInteger(numericCount)) {
+    return { ...result, reason: "Current pen count must be a whole number." };
+  }
+  if (numericCount < 0) {
+    return { ...result, reason: "Current pen count cannot be negative." };
+  }
+  if (numericCount > maxPen) {
+    return { ...result, reason: `Current pen count cannot exceed ${maxPen}.` };
+  }
+
+  return { ...result, valid: true, reason: "" };
+}
+
+function createCurrentPenCountCorrectionEventDraft(options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const validation = validateCurrentPenCountCorrection(options.correctedCurrentPenCount, rule);
+  if (!validation.valid) {
+    return { error: validation.reason, validation };
+  }
+
+  const physicalSheepTakenFromPen = Object.prototype.hasOwnProperty.call(options, "physicalSheepTakenFromPen")
+    ? Number(options.physicalSheepTakenFromPen)
+    : Number(getPhysicalSheepTakenFromPen());
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen < 0) {
+    return { error: "Missing current sheep count." };
+  }
+
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(options, "effectiveElapsedSeconds")
+    ? Number(options.effectiveElapsedSeconds)
+    : Number(getEffectiveElapsedSeconds());
+  const wallClockTime = Object.prototype.hasOwnProperty.call(options, "wallClockTime")
+    ? options.wallClockTime
+    : Date.now();
+  const createdAt = Date.now();
+  const sheepNumber = Number.isFinite(physicalSheepTakenFromPen) ? physicalSheepTakenFromPen : null;
+
+  return {
+    id: createPenFillEventId(),
+    recordType,
+    runIndex: appState.currentRunIndex,
+    sheepNumber,
+    sheepId: options.sheepId || appState.sheep.find((entry) => Number(entry?.number) === sheepNumber)?.id || null,
+    physicalSheepTakenFromPen,
+    correctedCurrentPenCount: validation.correctedCurrentPenCount,
+    actualFillAmount: null,
+    resultingPenCount: validation.correctedCurrentPenCount,
+    source: PEN_FILL_EVENT_SOURCE.MANUAL_CURRENT_PEN_COUNT_CORRECTION,
+    note: options.note || "Manual current pen count correction",
+    effectiveElapsedSeconds: Number.isFinite(effectiveElapsedSeconds) ? effectiveElapsedSeconds : null,
+    wallClockTime,
+    mode: appState.simulationMode ? "simulation" : "real",
+    simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
+    createdAt,
+    updatedAt: createdAt
+  };
+}
+
+function recordCurrentPenCountCorrection(correctedCurrentPenCount, options = {}) {
+  const draft = createCurrentPenCountCorrectionEventDraft({
+    ...options,
+    correctedCurrentPenCount
+  });
+
+  if (draft?.error) {
+    return { success: false, event: null, message: draft.error, error: draft.error, validation: draft.validation };
+  }
+
+  appState.penFillEvents.push(draft);
+  autosaveState();
+  refreshPenFillConfirmationDisplays(`Corrected current pen count — ${draft.correctedCurrentPenCount}.`);
+  return { success: true, event: draft, message: "Corrected current pen count.", error: null };
 }
 
 function createPenFillEventDraft(options = {}) {
@@ -1215,7 +1333,8 @@ function findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen = getPhy
   if (!Number.isFinite(currentRunIndex) || !Number.isFinite(currentPhysicalSheep)) return null;
 
   return getCurrentRunPenFillEvents().find((event) => (
-    Number(event.runIndex) === currentRunIndex
+    isPenFillAmountEvent(event)
+    && Number(event.runIndex) === currentRunIndex
     && Number(event.physicalSheepTakenFromPen) === currentPhysicalSheep
   )) || null;
 }
@@ -1301,6 +1420,7 @@ function refreshPenFillConfirmationDisplays(message = "") {
   updatePenFillEarlyReminderDisplay();
   updatePenFillConfirmationControls({ statusOverride: message });
   maybeShowPenFillConfirmationPrompt();
+  updatePenRefillAlertDisplay();
 }
 
 function getPenFillAmountErrorMessage(error) {
@@ -1395,7 +1515,7 @@ function recordPenFillEvent(options = {}) {
 }
 
 function getLatestActiveCurrentRunPenFillEvent() {
-  return getLatestPenFillEvent(getCurrentRunPenFillEvents());
+  return getLatestPenFillEvent(getCurrentRunPenFillEvents().filter(isPenFillAmountEvent));
 }
 
 async function undoLastPenFillEvent() {
@@ -1496,46 +1616,91 @@ function adjustLatestPenFillEventAmount(correctedAmount) {
 
 function updatePenFillAdjustButton(latestEvent = getLatestActiveCurrentRunPenFillEvent()) {
   if (!elements.penFillAdjustBtn) return;
+  const canCorrectPenCount = Boolean(appState.runActive && getPenRule(appState.recordType));
   const hasLatestEvent = Boolean(latestEvent);
-  elements.penFillAdjustBtn.disabled = !hasLatestEvent;
+  elements.penFillAdjustBtn.disabled = !hasLatestEvent && !canCorrectPenCount;
   elements.penFillAdjustBtn.title = hasLatestEvent
-    ? "Adjust the latest recorded refill amount"
-    : "No active refill to adjust";
+    ? "Adjust the latest recorded refill amount or current pen count"
+    : (canCorrectPenCount ? "Correct the current pen count" : "Start a run with a pen refill record type to adjust");
 }
 
 function setPenFillAdjustValidation(message = "") {
   setText(elements.penFillAdjustValidation, message);
 }
 
-function setPenFillAdjustAmount(value) {
-  if (!elements.penFillAdjustAmountInput) return;
-  const numericValue = Number(value);
-  elements.penFillAdjustAmountInput.value = Number.isFinite(numericValue) ? String(Math.max(Math.floor(numericValue), 0)) : "";
+function getPenFillAdjustModalValidation() {
   const latestEvent = getLatestActiveCurrentRunPenFillEvent();
-  if (!latestEvent) {
-    setPenFillAdjustValidation("No active refill event to adjust.");
-    return;
+  const latestAmountRaw = elements.penFillAdjustAmountInput?.value ?? "";
+  const currentCountRaw = elements.penFillAdjustCurrentCountInput?.value ?? "";
+  const currentCountChanged = String(currentCountRaw).trim() !== "";
+  let latestAmountValidation = { valid: true, reason: "" };
+  let latestAmountChanged = false;
+
+  if (latestEvent) {
+    latestAmountValidation = getPenFillAdjustmentValidation(latestAmountRaw, latestEvent);
+    if (!latestAmountValidation.valid) return latestAmountValidation;
+    const originalLatestAmount = Number(latestEvent.actualFillAmount);
+    latestAmountChanged = Number(latestAmountRaw) !== originalLatestAmount;
+  } else if (!currentCountChanged) {
+    return { valid: false, reason: "Enter a current pen count correction." };
   }
-  const validation = getPenFillAdjustmentValidation(elements.penFillAdjustAmountInput.value, latestEvent);
+  let currentCountValidation = { valid: true, reason: "" };
+  if (currentCountChanged) {
+    currentCountValidation = validateCurrentPenCountCorrection(currentCountRaw, getPenRule(appState.recordType));
+    if (!currentCountValidation.valid) return currentCountValidation;
+  }
+
+  return {
+    valid: latestAmountChanged || currentCountChanged,
+    reason: latestAmountChanged || currentCountChanged ? "" : "No correction entered.",
+    latestAmountChanged,
+    currentCountChanged,
+    latestAmountValidation,
+    currentCountValidation
+  };
+}
+
+function validatePenFillAdjustModal() {
+  const validation = getPenFillAdjustModalValidation();
   setPenFillAdjustValidation(validation.valid ? "" : validation.reason);
   if (elements.penFillAdjustSaveBtn) elements.penFillAdjustSaveBtn.disabled = !validation.valid;
+  return validation;
+}
+
+function setPenFillAdjustAmount(value) {
+  if (!elements.penFillAdjustAmountInput) return;
+  elements.penFillAdjustAmountInput.value = value === null || typeof value === "undefined" ? "" : String(value);
+  validatePenFillAdjustModal();
 }
 
 function openPenFillAdjustModal() {
   const latestEvent = getLatestActiveCurrentRunPenFillEvent();
-  if (!latestEvent || !elements.penFillAdjustModalOverlay) {
+  if (!elements.penFillAdjustModalOverlay) {
     updatePenFillAdjustButton(latestEvent);
     return;
   }
 
-  const sheepNumber = Number.isFinite(Number(latestEvent.sheepNumber))
-    ? Number(latestEvent.sheepNumber)
-    : Number(latestEvent.physicalSheepTakenFromPen);
-  const assumedAmount = getAssumedPenFillAmountForEvent(latestEvent);
-  setText(elements.penFillAdjustSheepNumber, Number.isFinite(sheepNumber) ? `Sheep ${sheepNumber}` : "—");
-  setText(elements.penFillAdjustCurrentAmount, Number.isFinite(Number(latestEvent.actualFillAmount)) ? String(Number(latestEvent.actualFillAmount)) : "—");
-  setText(elements.penFillAdjustAssumedAmount, Number.isFinite(assumedAmount) ? String(assumedAmount) : "—");
-  setPenFillAdjustAmount(latestEvent.actualFillAmount);
+  if (latestEvent) {
+    const sheepNumber = Number.isFinite(Number(latestEvent.sheepNumber))
+      ? Number(latestEvent.sheepNumber)
+      : Number(latestEvent.physicalSheepTakenFromPen);
+    const assumedAmount = getAssumedPenFillAmountForEvent(latestEvent);
+    setText(elements.penFillAdjustSheepNumber, Number.isFinite(sheepNumber) ? `Sheep ${sheepNumber}` : "—");
+    setText(elements.penFillAdjustCurrentAmount, Number.isFinite(Number(latestEvent.actualFillAmount)) ? String(Number(latestEvent.actualFillAmount)) : "—");
+    setText(elements.penFillAdjustAssumedAmount, Number.isFinite(assumedAmount) ? String(assumedAmount) : "—");
+    if (elements.penFillAdjustAmountInput) elements.penFillAdjustAmountInput.disabled = false;
+    setPenFillAdjustAmount(latestEvent.actualFillAmount);
+  } else {
+    setText(elements.penFillAdjustSheepNumber, "No refill recorded");
+    setText(elements.penFillAdjustCurrentAmount, "—");
+    setText(elements.penFillAdjustAssumedAmount, "—");
+    if (elements.penFillAdjustAmountInput) {
+      elements.penFillAdjustAmountInput.value = "";
+      elements.penFillAdjustAmountInput.disabled = true;
+    }
+  }
+  if (elements.penFillAdjustCurrentCountInput) elements.penFillAdjustCurrentCountInput.value = "";
+  validatePenFillAdjustModal();
 
   appState.penFillAdjustModalReturnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   appState.penFillAdjustModalOpen = true;
@@ -1569,11 +1734,37 @@ function resetPenFillAdjustModalAmountToAssumed() {
 
 function savePenFillAdjustModal(event) {
   event?.preventDefault();
-  const result = adjustLatestPenFillEventAmount(elements.penFillAdjustAmountInput?.value);
-  if (!result.success) {
-    setPenFillAdjustValidation(result.error || "Unable to adjust refill.");
+  const validation = getPenFillAdjustModalValidation();
+  if (!validation.valid) {
+    setPenFillAdjustValidation(validation.reason || "Unable to save correction.");
     if (elements.penFillAdjustSaveBtn) elements.penFillAdjustSaveBtn.disabled = true;
     return;
+  }
+
+  let latestResult = { success: true };
+  if (validation.latestAmountChanged) {
+    latestResult = adjustLatestPenFillEventAmount(elements.penFillAdjustAmountInput?.value);
+    if (!latestResult.success) {
+      setPenFillAdjustValidation(latestResult.error || "Unable to adjust refill.");
+      if (elements.penFillAdjustSaveBtn) elements.penFillAdjustSaveBtn.disabled = true;
+      return;
+    }
+  }
+
+  let currentCountResult = { success: true };
+  if (validation.currentCountChanged) {
+    currentCountResult = recordCurrentPenCountCorrection(elements.penFillAdjustCurrentCountInput?.value);
+    if (!currentCountResult.success) {
+      setPenFillAdjustValidation(currentCountResult.error || "Unable to correct current pen count.");
+      if (elements.penFillAdjustSaveBtn) elements.penFillAdjustSaveBtn.disabled = true;
+      return;
+    }
+  }
+
+  if (!validation.latestAmountChanged && validation.currentCountChanged) {
+    refreshPenFillConfirmationDisplays(currentCountResult.message || "Corrected current pen count.");
+  } else if (validation.latestAmountChanged && validation.currentCountChanged) {
+    refreshPenFillConfirmationDisplays("Adjusted last refill and corrected current pen count.");
   }
   closePenFillAdjustModal();
 }
@@ -2793,6 +2984,7 @@ const elements = {
   penFillAdjustCurrentAmount: document.getElementById("penFillAdjustCurrentAmount"),
   penFillAdjustAssumedAmount: document.getElementById("penFillAdjustAssumedAmount"),
   penFillAdjustAmountInput: document.getElementById("penFillAdjustAmountInput"),
+  penFillAdjustCurrentCountInput: document.getElementById("penFillAdjustCurrentCountInput"),
   penFillAdjustMinusOneBtn: document.getElementById("penFillAdjustMinusOneBtn"),
   penFillAdjustPlusOneBtn: document.getElementById("penFillAdjustPlusOneBtn"),
   penFillAdjustResetBtn: document.getElementById("penFillAdjustResetBtn"),
@@ -9788,18 +9980,22 @@ function updatePenRefillAlertDisplay() {
     return;
   }
 
-  const cycleSnapshot = getPenCycleSnapshot(appState.recordType);
-  if (!cycleSnapshot) {
+  const penState = getCurrentPenStateFromEvents({
+    recordType: appState.recordType,
+    rule,
+    physicalSheepTakenFromPen: sheepTakenFromPen
+  });
+  if (!penState) {
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
-  if (cycleSnapshot.refillAllowed) {
+  if (penState.refillAllowedNow) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
   }
 
-  const sheepUntilRefill = cycleSnapshot.sheepUntilRefill;
+  const sheepUntilRefill = Number(penState.nextRefillAllowedInSheep);
   if (sheepUntilRefill === 2 || sheepUntilRefill === 1) {
     setPenRefillAlertDisplay("soon", `${sheepUntilRefill} sheep until pen refill`);
     return;
@@ -9957,9 +10153,16 @@ function formatPenStateLastConfirmedFill(penState) {
   const lastFillEvent = penState?.lastFillEvent;
   if (!lastFillEvent) return "—";
   const sheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
+  if (!Number.isFinite(sheepNumber)) return "—";
+  if (isManualCurrentPenCountCorrectionEvent(lastFillEvent)) {
+    const correctedCount = Number(lastFillEvent.correctedCurrentPenCount);
+    return Number.isFinite(correctedCount)
+      ? `Sheep ${sheepNumber} — current pen count corrected to ${correctedCount}`
+      : "—";
+  }
   const fillAmount = Number(lastFillEvent.actualFillAmount);
   const adjustedText = lastFillEvent.manuallyAdjusted ? " · adjusted" : "";
-  if (!Number.isFinite(sheepNumber) || !Number.isFinite(fillAmount)) return "—";
+  if (!Number.isFinite(fillAmount)) return "—";
   return `Sheep ${sheepNumber} — added ${fillAmount}${adjustedText}`;
 }
 
@@ -9999,7 +10202,9 @@ function buildPenFillCountdownEventSignature(events = getCurrentRunPenFillEvents
       event.id || "",
       Number(event.runIndex),
       Number(event.physicalSheepTakenFromPen),
+      event.source || "",
       Number(event.actualFillAmount),
+      Number(event.correctedCurrentPenCount),
       Number(event.resultingPenCount),
       Number(event.effectiveElapsedSeconds),
       Number(event.wallClockTime),
@@ -13716,7 +13921,8 @@ function bindEvents() {
   if (elements.penFillAdjustBtn) elements.penFillAdjustBtn.addEventListener("click", openPenFillAdjustModal);
   if (elements.penFillAdjustForm) elements.penFillAdjustForm.addEventListener("submit", savePenFillAdjustModal);
   if (elements.penFillAdjustCancelBtn) elements.penFillAdjustCancelBtn.addEventListener("click", closePenFillAdjustModal);
-  if (elements.penFillAdjustAmountInput) elements.penFillAdjustAmountInput.addEventListener("input", () => setPenFillAdjustAmount(elements.penFillAdjustAmountInput.value));
+  if (elements.penFillAdjustAmountInput) elements.penFillAdjustAmountInput.addEventListener("input", () => validatePenFillAdjustModal());
+  if (elements.penFillAdjustCurrentCountInput) elements.penFillAdjustCurrentCountInput.addEventListener("input", () => validatePenFillAdjustModal());
   if (elements.penFillAdjustMinusOneBtn) elements.penFillAdjustMinusOneBtn.addEventListener("click", () => adjustPenFillModalAmountBy(-1));
   if (elements.penFillAdjustPlusOneBtn) elements.penFillAdjustPlusOneBtn.addEventListener("click", () => adjustPenFillModalAmountBy(1));
   if (elements.penFillAdjustResetBtn) elements.penFillAdjustResetBtn.addEventListener("click", resetPenFillAdjustModalAmountToAssumed);

@@ -1497,22 +1497,33 @@
 
   <div id="penFillAdjustModalOverlay" class="modal-overlay pen-fill-adjust-modal-overlay" hidden>
     <form id="penFillAdjustForm" class="modal-dialog pen-fill-adjust-modal" role="dialog" aria-modal="true" aria-labelledby="penFillAdjustModalTitle" aria-describedby="penFillAdjustModalDescription">
-      <h3 id="penFillAdjustModalTitle">Adjust last refill</h3>
-      <p id="penFillAdjustModalDescription">Correct the latest refill without moving it to the current sheep count.</p>
-      <div class="pen-fill-adjust-details">
-        <div><span>Recorded at:</span><strong id="penFillAdjustSheepNumber">—</strong></div>
-        <div><span>Current recorded amount:</span><strong id="penFillAdjustCurrentAmount">—</strong></div>
-        <div><span>Assumed/default amount:</span><strong id="penFillAdjustAssumedAmount">—</strong></div>
-      </div>
-      <label class="pen-fill-adjust-field" for="penFillAdjustAmountInput">
-        Corrected actual refill amount
-        <input id="penFillAdjustAmountInput" type="number" inputmode="numeric" min="1" step="1" required />
-      </label>
-      <div class="pen-fill-adjust-quick-actions" aria-label="Quick refill adjustment controls">
-        <button id="penFillAdjustMinusOneBtn" type="button">−1</button>
-        <button id="penFillAdjustPlusOneBtn" type="button">+1</button>
-        <button id="penFillAdjustResetBtn" type="button">Reset to assumed/default</button>
-      </div>
+      <h3 id="penFillAdjustModalTitle">Adjust pen refill</h3>
+      <p id="penFillAdjustModalDescription">Correct the latest refill amount or set the current pen count to match what is actually in the pen.</p>
+      <section class="pen-fill-adjust-section" aria-labelledby="penFillAdjustLatestHeading">
+        <h4 id="penFillAdjustLatestHeading">Latest refill amount correction</h4>
+        <div class="pen-fill-adjust-details">
+          <div><span>Recorded at:</span><strong id="penFillAdjustSheepNumber">—</strong></div>
+          <div><span>Current recorded amount:</span><strong id="penFillAdjustCurrentAmount">—</strong></div>
+          <div><span>Assumed/default amount:</span><strong id="penFillAdjustAssumedAmount">—</strong></div>
+        </div>
+        <label class="pen-fill-adjust-field" for="penFillAdjustAmountInput">
+          Corrected latest refill amount
+          <input id="penFillAdjustAmountInput" type="number" inputmode="numeric" min="1" step="1" required />
+        </label>
+        <div class="pen-fill-adjust-quick-actions" aria-label="Quick refill adjustment controls">
+          <button id="penFillAdjustMinusOneBtn" type="button">−1</button>
+          <button id="penFillAdjustPlusOneBtn" type="button">+1</button>
+          <button id="penFillAdjustResetBtn" type="button">Reset to assumed/default</button>
+        </div>
+      </section>
+      <section class="pen-fill-adjust-section" aria-labelledby="penFillAdjustCurrentCountHeading">
+        <h4 id="penFillAdjustCurrentCountHeading">Current pen count correction</h4>
+        <p class="pen-fill-adjust-help">Use this if the app’s current pen count does not match what is actually in the pen.</p>
+        <label class="pen-fill-adjust-field" for="penFillAdjustCurrentCountInput">
+          Correct current pen count
+          <input id="penFillAdjustCurrentCountInput" type="number" inputmode="numeric" min="0" step="1" />
+        </label>
+      </section>
       <p id="penFillAdjustValidation" class="pen-fill-adjust-validation" aria-live="polite"></p>
       <div class="modal-actions">
         <button id="penFillAdjustCancelBtn" type="button">Cancel</button>
