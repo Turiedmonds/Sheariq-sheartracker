@@ -6574,6 +6574,42 @@ function formatReviewRunDateTime(value) {
   return new Date(timestamp).toLocaleString();
 }
 
+function formatReviewRunSessionDate(sessionDate) {
+  if (typeof sessionDate !== "string") return "—";
+  const match = sessionDate.trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return sessionDate.trim() || "—";
+
+  const [, yearText, monthText, dayText] = match;
+  const year = Number(yearText);
+  const monthIndex = Number(monthText) - 1;
+  const day = Number(dayText);
+  const monthNames = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December"
+  ];
+
+  const parsedDate = new Date(Date.UTC(year, monthIndex, day));
+  const isValidDate = Number.isInteger(year)
+    && Number.isInteger(monthIndex)
+    && Number.isInteger(day)
+    && parsedDate.getUTCFullYear() === year
+    && parsedDate.getUTCMonth() === monthIndex
+    && parsedDate.getUTCDate() === day;
+  if (!isValidDate) return sessionDate.trim() || "—";
+
+  return `${day} ${monthNames[monthIndex]} ${year}`;
+}
+
 function getReviewRunDayClockSecondsFromTimestamp(timestamp, runStartTime, runStartDayClockSeconds) {
   const safeTimestamp = getFiniteClockNumber(timestamp);
   const safeRunStartTime = getFiniteClockNumber(runStartTime);
@@ -6947,7 +6983,6 @@ function createReviewRunCountButton(entries, direction) {
   button.type = "button";
   button.className = `review-run-count-link ${direction === "quicker" ? "review-run-count-link-good" : "review-run-count-link-bad"}`;
   button.textContent = `${count} ${count === 1 ? "sheep" : "sheep"}`;
-  button.disabled = count === 0;
   return button;
 }
 
@@ -6973,26 +7008,40 @@ function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, 
   parent.append(sentence, panel);
 }
 
-function appendReviewRunSubsetInsight(parent, entries, requiredCycle, direction, threshold) {
-  const count = entries.length;
+function appendReviewRunGainLossBreakdownItem(parent, entries, requiredCycle, direction, labelText, detailTitle) {
   const item = document.createElement("li");
-  item.append(`${threshold}s+ ${direction}: `);
+  item.append(`${labelText}: `);
 
   const button = createReviewRunCountButton(entries, direction);
   item.appendChild(button);
 
-  const panel = buildReviewRunDetailPanel(
-    `${count} ${count === 1 ? "sheep" : "sheep"} at least ${threshold}s ${direction} than required`,
-    entries,
-    requiredCycle,
-    direction
-  );
+  const panel = buildReviewRunDetailPanel(detailTitle, entries, requiredCycle, direction);
   button.addEventListener("click", () => {
     panel.hidden = !panel.hidden;
   });
 
   item.appendChild(panel);
   parent.appendChild(item);
+}
+
+function buildReviewRunGainLossBreakdown(entries, requiredCycle, direction) {
+  const differenceForEntry = (entry) => {
+    const fullCycle = Number(entry?.fullCycle);
+    if (!Number.isFinite(fullCycle)) return NaN;
+    return direction === "quicker" ? requiredCycle - fullCycle : fullCycle - requiredCycle;
+  };
+  const matchingEntries = entries.filter((entry) => {
+    const difference = differenceForEntry(entry);
+    return Number.isFinite(difference) && difference > 0;
+  });
+
+  return {
+    lessThanFive: matchingEntries.filter((entry) => {
+      const difference = differenceForEntry(entry);
+      return difference > 0 && difference < 5;
+    }),
+    fiveOrMore: matchingEntries.filter((entry) => differenceForEntry(entry) >= 5)
+  };
 }
 
 function getReviewRunBucketTimingGroups(entries, requiredCycle) {
@@ -7003,15 +7052,38 @@ function getReviewRunBucketTimingGroups(entries, requiredCycle) {
     total: safeEntries.length,
     quicker,
     slower,
-    quickerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
-      groups[threshold] = quicker.filter((entry) => requiredCycle - Number(entry.fullCycle) >= threshold);
-      return groups;
-    }, {}),
-    slowerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
-      groups[threshold] = slower.filter((entry) => Number(entry.fullCycle) - requiredCycle >= threshold);
-      return groups;
-    }, {})
+    quickerBreakdown: buildReviewRunGainLossBreakdown(quicker, requiredCycle, "quicker"),
+    slowerBreakdown: buildReviewRunGainLossBreakdown(slower, requiredCycle, "slower")
   };
+}
+
+function appendReviewRunGainLossBreakdown(wrapper, groups, requiredCycle, direction) {
+  const subsetIntro = document.createElement("p");
+  subsetIntro.className = "review-run-subset-intro";
+  subsetIntro.textContent = `${direction === "quicker" ? "Quicker" : "Slower"} sheep breakdown:`;
+  wrapper.appendChild(subsetIntro);
+
+  const list = document.createElement("ul");
+  list.className = "review-run-subset-list";
+  const breakdown = direction === "quicker" ? groups.quickerBreakdown : groups.slowerBreakdown;
+  const directionLabel = direction === "quicker" ? "quicker" : "slower";
+  appendReviewRunGainLossBreakdownItem(
+    list,
+    breakdown.lessThanFive || [],
+    requiredCycle,
+    direction,
+    `Less than 5s ${directionLabel}`,
+    `Sheep less than 5s ${directionLabel} than required`
+  );
+  appendReviewRunGainLossBreakdownItem(
+    list,
+    breakdown.fiveOrMore || [],
+    requiredCycle,
+    direction,
+    `5s or more ${directionLabel}`,
+    `Sheep 5s or more ${directionLabel} than required`
+  );
+  wrapper.appendChild(list);
 }
 
 function appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, direction) {
@@ -7027,18 +7099,7 @@ function appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, dir
     true
   );
 
-  const subsetIntro = document.createElement("p");
-  subsetIntro.className = "review-run-subset-intro";
-  subsetIntro.textContent = `${direction === "quicker" ? "Quicker" : "Slower"} sheep breakdown:`;
-  wrapper.appendChild(subsetIntro);
-
-  const list = document.createElement("ul");
-  list.className = "review-run-subset-list";
-  const thresholdGroups = direction === "quicker" ? groups.quickerAtLeast : groups.slowerAtLeast;
-  [1, 2, 3].forEach((threshold) => {
-    appendReviewRunSubsetInsight(list, thresholdGroups[threshold] || [], requiredCycle, direction, threshold);
-  });
-  wrapper.appendChild(list);
+  appendReviewRunGainLossBreakdown(wrapper, groups, requiredCycle, direction);
 }
 
 function getReviewRunCatchShearReasonInsight(snapshot, entries, direction) {
@@ -7345,10 +7406,11 @@ function renderReviewRunModal(snapshot) {
 
   const heading = document.createElement("div");
   heading.className = "review-run-heading status-box minimal-status";
+  const formattedSessionDate = formatReviewRunSessionDate(snapshot.sessionDate);
   const headingParts = [
     runLabel,
     snapshot.farm || "",
-    snapshot.sessionDate || ""
+    formattedSessionDate !== "—" ? formattedSessionDate : ""
   ].filter(Boolean);
   heading.textContent = headingParts.join(" — ");
   elements.reviewRunModalContent.appendChild(heading);
@@ -7361,7 +7423,7 @@ function renderReviewRunModal(snapshot) {
   const runInfo = appendReviewRunSection(elements.reviewRunModalContent, "Run Info");
   appendReviewRunKeyValueTable(runInfo, buildCompletedRunKeyValueRows([
     ["Farm", snapshot.farm || "—"],
-    ["Session date", snapshot.sessionDate || "—"],
+    ["Session date", formattedSessionDate],
     ["Record type", snapshot.recordTypeLabel || snapshot.recordType || "—"],
     ["Time system", snapshot.runTypeLabel || snapshot.runType || "—"],
     ["Run", runLabel],
