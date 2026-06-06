@@ -2894,6 +2894,7 @@ const elements = {
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   reviewRunBtn: document.getElementById("reviewRunBtn"),
+  reviewRunModalTitle: document.getElementById("reviewRunModalTitle"),
   reviewRunModalOverlay: document.getElementById("reviewRunModalOverlay"),
   reviewRunModalCloseBtn: document.getElementById("reviewRunModalCloseBtn"),
   reviewRunModalContent: document.getElementById("reviewRunModalContent"),
@@ -6498,6 +6499,14 @@ function buildCompletedRunSnapshot() {
   const lastSheep = sheep[sheep.length - 1] || null;
   const trendBucketSummaries = getSortedBucketSummaries();
   const currentRunPenFillEvents = getCurrentRunPenFillEvents();
+  const runStartTime = appState.runStartTime;
+  const officialScheduledRunEndTime = getOfficialScheduledRunEndTimeMs();
+  const actualLastSheepEndTime = Number.isFinite(Number(lastSheep?.endTime)) ? Number(lastSheep.endTime) : null;
+  const runStartDayClockSeconds = getFiniteClockNumber(appState.dayClockStartSecondsFromMidnight);
+  const officialScheduledRunEndDayClockSeconds = getReviewRunDayClockSecondsFromTimestamp(officialScheduledRunEndTime, runStartTime, runStartDayClockSeconds);
+  const actualLastSheepEndDayClockSeconds = Number.isFinite(getFiniteClockNumber(lastSheep?.endDayClockSeconds))
+    ? getFiniteClockNumber(lastSheep.endDayClockSeconds)
+    : getReviewRunDayClockSecondsFromTimestamp(actualLastSheepEndTime, runStartTime, runStartDayClockSeconds);
   return {
     schema: "sheariq.latestCompletedRunSnapshot",
     version: COMPLETED_RUN_SNAPSHOT_VERSION,
@@ -6510,9 +6519,15 @@ function buildCompletedRunSnapshot() {
     runTypeLabel: getTimeSystemLabel(elements.runType?.value || "8"),
     runIndex: Number(appState.currentRunIndex) || 0,
     runNumber: (Number(appState.currentRunIndex) || 0) + 1,
-    runStartTime: appState.runStartTime,
-    officialScheduledRunEndTime: getOfficialScheduledRunEndTimeMs(),
-    actualLastSheepEndTime: Number.isFinite(Number(lastSheep?.endTime)) ? Number(lastSheep.endTime) : null,
+    runStartTime,
+    officialScheduledRunEndTime,
+    actualLastSheepEndTime,
+    runStartDayClockSeconds: Number.isFinite(runStartDayClockSeconds) ? runStartDayClockSeconds : null,
+    officialScheduledRunEndDayClockSeconds: Number.isFinite(officialScheduledRunEndDayClockSeconds) ? officialScheduledRunEndDayClockSeconds : null,
+    actualLastSheepEndDayClockSeconds: Number.isFinite(actualLastSheepEndDayClockSeconds) ? actualLastSheepEndDayClockSeconds : null,
+    runStartDayClockDisplay: formatReviewRunDayClockSeconds(runStartDayClockSeconds),
+    officialScheduledRunEndDayClockDisplay: formatReviewRunDayClockSeconds(officialScheduledRunEndDayClockSeconds),
+    actualLastSheepEndDayClockDisplay: formatReviewRunDayClockSeconds(actualLastSheepEndDayClockSeconds),
     effectiveElapsedSeconds: getEffectiveElapsedSeconds(),
     targetSheep: Number(elements.targetSheepInput?.value ?? appState.target?.sheep ?? 0) || 0,
     runLengthSeconds: getCurrentRunDurationSeconds(),
@@ -6556,6 +6571,46 @@ function formatReviewRunDateTime(value) {
   const timestamp = Number(value);
   if (!Number.isFinite(timestamp)) return "—";
   return new Date(timestamp).toLocaleString();
+}
+
+function getReviewRunDayClockSecondsFromTimestamp(timestamp, runStartTime, runStartDayClockSeconds) {
+  const safeTimestamp = getFiniteClockNumber(timestamp);
+  const safeRunStartTime = getFiniteClockNumber(runStartTime);
+  const safeRunStartDayClockSeconds = getFiniteClockNumber(runStartDayClockSeconds);
+  if (!Number.isFinite(safeTimestamp) || !Number.isFinite(safeRunStartTime) || !Number.isFinite(safeRunStartDayClockSeconds)) return NaN;
+  return safeRunStartDayClockSeconds + ((safeTimestamp - safeRunStartTime) / 1000);
+}
+
+function formatReviewRunDayClockSeconds(secondsFromMidnight) {
+  const safeSeconds = getFiniteClockNumber(secondsFromMidnight);
+  return Number.isFinite(safeSeconds) ? formatSecondsFromMidnightClockAmPm(safeSeconds) : "—";
+}
+
+function formatReviewRunSnapshotDayClock(snapshot, displayKey, secondsKey, timestampKey) {
+  const storedDisplay = snapshot?.[displayKey];
+  if (typeof storedDisplay === "string" && storedDisplay.trim() !== "") return storedDisplay;
+
+  const storedSeconds = getFiniteClockNumber(snapshot?.[secondsKey]);
+  if (Number.isFinite(storedSeconds)) return formatReviewRunDayClockSeconds(storedSeconds);
+
+  const fallbackSeconds = getReviewRunDayClockSecondsFromTimestamp(
+    snapshot?.[timestampKey],
+    snapshot?.runStartTime,
+    snapshot?.runStartDayClockSeconds
+  );
+  if (Number.isFinite(fallbackSeconds)) return formatReviewRunDayClockSeconds(fallbackSeconds);
+
+  return formatReviewRunDateTime(snapshot?.[timestampKey]);
+}
+
+function getReviewRunNumberLabel(snapshot) {
+  const runNumber = getFiniteClockNumber(snapshot?.runNumber);
+  if (Number.isFinite(runNumber) && runNumber > 0) return `Run ${Math.floor(runNumber)}`;
+
+  const runIndex = getFiniteClockNumber(snapshot?.runIndex);
+  if (Number.isFinite(runIndex) && runIndex >= 0) return `Run ${Math.floor(runIndex) + 1}`;
+
+  return "Run —";
 }
 
 function appendReviewRunSection(parent, title) {
@@ -6633,6 +6688,19 @@ function renderReviewRunModal(snapshot) {
     return;
   }
 
+  const runLabel = getReviewRunNumberLabel(snapshot);
+  if (elements.reviewRunModalTitle) elements.reviewRunModalTitle.textContent = `Review Run — ${runLabel}`;
+
+  const heading = document.createElement("div");
+  heading.className = "review-run-heading status-box minimal-status";
+  const headingParts = [
+    runLabel,
+    snapshot.farm || "",
+    snapshot.sessionDate || ""
+  ].filter(Boolean);
+  heading.textContent = headingParts.join(" — ");
+  elements.reviewRunModalContent.appendChild(heading);
+
   const intro = document.createElement("div");
   intro.className = "review-run-intro status-box minimal-status";
   intro.textContent = `Frozen snapshot captured ${snapshot.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : "at run finish"}. Live panels continue to update separately.`;
@@ -6644,10 +6712,10 @@ function renderReviewRunModal(snapshot) {
     ["Session date", snapshot.sessionDate || "—"],
     ["Record type", snapshot.recordTypeLabel || snapshot.recordType || "—"],
     ["Time system", snapshot.runTypeLabel || snapshot.runType || "—"],
-    ["Run", snapshot.runNumber ? `Run ${snapshot.runNumber}` : "—"],
-    ["Run start", formatReviewRunDateTime(snapshot.runStartTime)],
-    ["Official scheduled run end", formatReviewRunDateTime(snapshot.officialScheduledRunEndTime)],
-    ["Actual last sheep end", formatReviewRunDateTime(snapshot.actualLastSheepEndTime)],
+    ["Run", runLabel],
+    ["Run start", formatReviewRunSnapshotDayClock(snapshot, "runStartDayClockDisplay", "runStartDayClockSeconds", "runStartTime")],
+    ["Official scheduled run end", formatReviewRunSnapshotDayClock(snapshot, "officialScheduledRunEndDayClockDisplay", "officialScheduledRunEndDayClockSeconds", "officialScheduledRunEndTime")],
+    ["Actual last sheep end", formatReviewRunSnapshotDayClock(snapshot, "actualLastSheepEndDayClockDisplay", "actualLastSheepEndDayClockSeconds", "actualLastSheepEndTime")],
     ["Elapsed at capture", Number.isFinite(Number(snapshot.effectiveElapsedSeconds)) ? formatCountdown(snapshot.effectiveElapsedSeconds) : "—"],
     ["Target sheep", snapshot.targetSheep ?? "—"],
     ["Run length", Number.isFinite(Number(snapshot.runLengthSeconds)) ? formatCountdown(snapshot.runLengthSeconds) : "—"],
@@ -6711,6 +6779,7 @@ function openReviewRunModal() {
 
 function closeReviewRunModal() {
   if (elements.reviewRunModalOverlay) elements.reviewRunModalOverlay.hidden = true;
+  if (elements.reviewRunModalTitle) elements.reviewRunModalTitle.textContent = "Review Run";
 }
 
 function formatDeltaPlain(delta) {
