@@ -2991,6 +2991,17 @@ td.pace-neutral {
   margin: 0;
 }
 
+.review-run-subset-intro {
+  font-weight: 800;
+}
+
+.review-run-subset-list {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.15rem;
+}
+
 .review-run-count-link {
   border: 0;
   border-bottom: 1px dotted currentColor;
