@@ -6901,7 +6901,7 @@ function getReviewRunMarkerNoteContext(entries) {
   const parts = [];
   if (markerLabels.length) parts.push(`Confirmed markers: ${markerLabels.join(", ")}.`);
   if (notes.length) parts.push(`Notes: ${notes.join("; ")}.`);
-  return parts.join(" ") || "No marker/note reason captured for this period.";
+  return parts.join(" ");
 }
 
 function getReviewRunSheepNumber(entry) {
@@ -6941,13 +6941,20 @@ function buildReviewRunDetailPanel(title, entries, requiredCycle, direction) {
   return panel;
 }
 
-function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, threshold, labelText) {
+function createReviewRunCountButton(entries, direction) {
   const count = entries.length;
   const button = document.createElement("button");
   button.type = "button";
   button.className = `review-run-count-link ${direction === "quicker" ? "review-run-count-link-good" : "review-run-count-link-bad"}`;
   button.textContent = `${count} ${count === 1 ? "sheep" : "sheep"}`;
   button.disabled = count === 0;
+  return button;
+}
+
+function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, labelText, countOnly = false) {
+  const count = entries.length;
+  const button = createReviewRunCountButton(entries, direction);
+  if (countOnly) button.textContent = String(count);
 
   const sentence = document.createElement("p");
   sentence.appendChild(button);
@@ -6966,25 +6973,75 @@ function appendReviewRunInsightCount(parent, entries, requiredCycle, direction, 
   parent.append(sentence, panel);
 }
 
+function appendReviewRunSubsetInsight(parent, entries, requiredCycle, direction, threshold, totalMatching) {
+  const count = entries.length;
+  const item = document.createElement("li");
+  const button = createReviewRunCountButton(entries, direction);
+  button.textContent = `${count}`;
+  item.appendChild(button);
+  item.append(` of those ${totalMatching} ${direction} ${totalMatching === 1 ? "sheep" : "sheep"} ${count === 1 ? "was" : "were"} at least ${threshold}s ${direction} than required`);
+
+  const panel = buildReviewRunDetailPanel(
+    `${count} ${count === 1 ? "sheep" : "sheep"} at least ${threshold}s ${direction} than required`,
+    entries,
+    requiredCycle,
+    direction
+  );
+  button.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+  });
+
+  item.appendChild(panel);
+  parent.appendChild(item);
+}
+
 function getReviewRunBucketTimingGroups(entries, requiredCycle) {
   const safeEntries = entries.filter((entry) => Number.isFinite(Number(entry?.fullCycle)));
   const quicker = safeEntries.filter((entry) => Number(entry.fullCycle) < requiredCycle);
   const slower = safeEntries.filter((entry) => Number(entry.fullCycle) > requiredCycle);
   return {
+    total: safeEntries.length,
     quicker,
     slower,
     quickerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
-      groups[threshold] = safeEntries.filter((entry) => requiredCycle - Number(entry.fullCycle) >= threshold);
+      groups[threshold] = quicker.filter((entry) => requiredCycle - Number(entry.fullCycle) >= threshold);
       return groups;
     }, {}),
     slowerAtLeast: [1, 2, 3].reduce((groups, threshold) => {
-      groups[threshold] = safeEntries.filter((entry) => Number(entry.fullCycle) - requiredCycle >= threshold);
+      groups[threshold] = slower.filter((entry) => Number(entry.fullCycle) - requiredCycle >= threshold);
       return groups;
     }, {})
   };
 }
 
-function buildReviewRunBestWorstValue(snapshot, bucket, periodType = "period") {
+function appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, direction) {
+  const mainEntries = groups[direction];
+  const mainCount = mainEntries.length;
+  const totalCount = groups.total;
+  appendReviewRunInsightCount(
+    wrapper,
+    mainEntries,
+    requiredCycle,
+    direction,
+    `of ${totalCount} ${totalCount === 1 ? "sheep" : "sheep"} ${mainCount === 1 ? "was" : "were"} ${direction} than required.`,
+    true
+  );
+
+  const subsetIntro = document.createElement("p");
+  subsetIntro.className = "review-run-subset-intro";
+  subsetIntro.textContent = `Of those ${mainCount} ${direction} ${mainCount === 1 ? "sheep" : "sheep"}:`;
+  wrapper.appendChild(subsetIntro);
+
+  const list = document.createElement("ul");
+  list.className = "review-run-subset-list";
+  const thresholdGroups = direction === "quicker" ? groups.quickerAtLeast : groups.slowerAtLeast;
+  [1, 2, 3].forEach((threshold) => {
+    appendReviewRunSubsetInsight(list, thresholdGroups[threshold] || [], requiredCycle, direction, threshold, mainCount);
+  });
+  wrapper.appendChild(list);
+}
+
+function buildReviewRunBestWorstValue(snapshot, bucket, blockType = "block") {
   if (!bucket) return "n/a";
   const entries = getReviewRunEntriesInBucket(snapshot, bucket);
   const requiredCycle = getReviewRunRequiredCycle(snapshot);
@@ -7003,45 +7060,95 @@ function buildReviewRunBestWorstValue(snapshot, bucket, periodType = "period") {
 
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
     const groups = getReviewRunBucketTimingGroups(entries, requiredCycle);
-    appendReviewRunInsightCount(wrapper, groups.quicker, requiredCycle, "quicker", 0, "were quicker than required.");
-    appendReviewRunInsightCount(wrapper, groups.slower, requiredCycle, "slower", 0, "were slower than required.");
-    [1, 2, 3].forEach((threshold) => {
-      appendReviewRunInsightCount(wrapper, groups.quickerAtLeast[threshold], requiredCycle, "quicker", threshold, `were at least ${threshold}s quicker.`);
-    });
-    [1, 2, 3].forEach((threshold) => {
-      appendReviewRunInsightCount(wrapper, groups.slowerAtLeast[threshold], requiredCycle, "slower", threshold, `were at least ${threshold}s slower.`);
-    });
-
-    const explanation = document.createElement("p");
-    const muchQuicker = groups.quickerAtLeast[2].length;
-    const muchSlower = groups.slowerAtLeast[3].length;
-    if (periodType === "best" && groups.quicker.length > groups.slower.length) {
-      explanation.textContent = "The period was strong because most sheep were consistently quicker than required.";
-    } else if (periodType === "worst" && muchSlower > 0) {
-      explanation.textContent = "The period lost time because several sheep were much slower than required.";
-    } else if (muchQuicker > muchSlower) {
-      explanation.textContent = "The period gained time because the quicker sheep outweighed the slower sheep.";
-    } else if (groups.slower.length > groups.quicker.length) {
-      explanation.textContent = "The period lost time because more sheep were slower than required.";
-    } else {
-      explanation.textContent = "The period stayed close to the required average overall.";
+    if (blockType === "best") {
+      appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, "quicker");
+      const explanation = document.createElement("p");
+      explanation.textContent = groups.quicker.length
+        ? "This block was strongest because its quicker sheep lowered the average Total Time Per Sheep."
+        : "This block was strongest because it had the lowest average Total Time Per Sheep.";
+      wrapper.appendChild(explanation);
+    } else if (blockType === "worst") {
+      appendReviewRunFocusedTimingInsight(wrapper, groups, requiredCycle, "slower");
+      const explanation = document.createElement("p");
+      explanation.textContent = groups.slower.length
+        ? "This block lost the most time because its slower sheep lifted the average Total Time Per Sheep."
+        : "This block was slowest because it had the highest average Total Time Per Sheep.";
+      wrapper.appendChild(explanation);
     }
-    wrapper.appendChild(explanation);
   }
 
-  const markerContext = document.createElement("p");
-  markerContext.textContent = getReviewRunMarkerNoteContext(entries);
-  wrapper.appendChild(markerContext);
+  const markerContext = getReviewRunMarkerNoteContext(entries);
+  if (markerContext) {
+    const markerContextNode = document.createElement("p");
+    markerContextNode.textContent = markerContext;
+    wrapper.appendChild(markerContextNode);
+  }
 
   return { node: wrapper, className: getReviewRunRequiredDeltaClass(avgCycle, requiredCycle) };
 }
 
-function getReviewRunPortionEntries(snapshot, parts, selectedIndex) {
+function getReviewRunCompletedDurationSeconds(snapshot) {
+  const explicitValues = [snapshot?.effectiveElapsedSeconds, snapshot?.runLengthSeconds, snapshot?.target?.runLengthSeconds]
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (explicitValues.length) return explicitValues[0];
+
   const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
-  if (!sheep.length || !Number.isFinite(selectedIndex)) return [];
-  const startIndex = Math.floor((sheep.length * selectedIndex) / parts);
-  const endIndex = Math.floor((sheep.length * (selectedIndex + 1)) / parts);
-  return sheep.slice(startIndex, endIndex);
+  const elapsedValues = sheep
+    .map((entry) => Number(entry?.effectiveElapsedSeconds))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return elapsedValues.length ? Math.max(...elapsedValues) : 0;
+}
+
+function getReviewRunBlockEntries(snapshot, block) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  const start = Number(block?.startSeconds);
+  const end = Number(block?.endSeconds);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  return sheep.filter((entry) => {
+    const elapsed = Number(entry?.effectiveElapsedSeconds);
+    return Number.isFinite(elapsed) && elapsed >= start && elapsed < end;
+  });
+}
+
+function getReviewRunOrdinalLabel(index) {
+  const labels = ["First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth"];
+  return labels[index] || `Block ${index + 1}`;
+}
+
+function getReviewRunTimingBlockOptions(snapshot) {
+  const durationSeconds = getReviewRunCompletedDurationSeconds(snapshot);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return [];
+
+  const options = [];
+  const addOption = (label, startSeconds, endSeconds) => {
+    if (endSeconds <= startSeconds || startSeconds >= durationSeconds) return;
+    const safeEndSeconds = Math.min(endSeconds, durationSeconds);
+    options.push({ label, startSeconds, endSeconds: safeEndSeconds });
+  };
+
+  const quarterCount = Math.min(8, Math.ceil(durationSeconds / (15 * 60)));
+  for (let index = 0; index < quarterCount; index += 1) {
+    addOption(`Quarter ${index + 1}`, index * 15 * 60, (index + 1) * 15 * 60);
+  }
+
+  const thirtyMinuteCount = Math.floor(durationSeconds / (30 * 60));
+  for (let index = 0; index < thirtyMinuteCount; index += 1) {
+    addOption(`${getReviewRunOrdinalLabel(index)} 30 minutes`, index * 30 * 60, (index + 1) * 30 * 60);
+  }
+
+  const hourCount = Math.floor(durationSeconds / (60 * 60));
+  for (let index = 0; index < hourCount; index += 1) {
+    addOption(`${getReviewRunOrdinalLabel(index)} hour`, index * 60 * 60, (index + 1) * 60 * 60);
+  }
+
+  if (durationSeconds > 45 * 60 && Math.round(durationSeconds) % (60 * 60) === 45 * 60) {
+    addOption("Last 45 minutes", durationSeconds - (45 * 60), durationSeconds);
+  }
+  if (durationSeconds > 30 * 60) addOption("Last 30 minutes", durationSeconds - (30 * 60), durationSeconds);
+  if (durationSeconds > 15 * 60) addOption("Last 15 minutes", durationSeconds - (15 * 60), durationSeconds);
+
+  return options;
 }
 
 function getReviewRunAverageFullCycle(entries) {
@@ -7049,7 +7156,7 @@ function getReviewRunAverageFullCycle(entries) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
 }
 
-function buildReviewRunPortionSummaryNode(entries, requiredCycle) {
+function buildReviewRunTimingBlockSummaryNode(entries, requiredCycle) {
   const avgCycle = getReviewRunAverageFullCycle(entries);
   const summary = document.createElement("div");
   summary.className = `review-run-portion-summary ${getReviewRunRequiredDeltaClass(avgCycle, requiredCycle)}`.trim();
@@ -7063,41 +7170,36 @@ function appendReviewRunPortionSelectors(parent, snapshot) {
   const controls = document.createElement("div");
   controls.className = "review-run-portion-controls";
 
-  const quarterSummary = document.createElement("div");
-  const halfSummary = document.createElement("div");
+  const summary = document.createElement("div");
+  const timingBlocks = getReviewRunTimingBlockOptions(snapshot);
 
-  const createSelectControl = (labelText, options, onChange) => {
-    const label = document.createElement("label");
-    label.className = "review-run-portion-control";
-    const span = document.createElement("span");
-    span.textContent = labelText;
-    const select = document.createElement("select");
-    options.forEach(([value, text]) => {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = text;
-      select.appendChild(option);
-    });
-    select.addEventListener("change", () => onChange(Number(select.value)));
-    label.append(span, select);
-    return { label, select };
+  const label = document.createElement("label");
+  label.className = "review-run-portion-control";
+  const span = document.createElement("span");
+  span.textContent = "Run Timing Block";
+  const select = document.createElement("select");
+  timingBlocks.forEach((block, index) => {
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = block.label;
+    select.appendChild(option);
+  });
+  label.append(span, select);
+
+  const renderTimingBlock = (index) => {
+    summary.innerHTML = "";
+    const block = timingBlocks[index];
+    if (!block) {
+      summary.appendChild(buildReviewRunTimingBlockSummaryNode([], requiredCycle));
+      return;
+    }
+    summary.appendChild(buildReviewRunTimingBlockSummaryNode(getReviewRunBlockEntries(snapshot, block), requiredCycle));
   };
 
-  const renderQuarter = (index) => {
-    quarterSummary.innerHTML = "";
-    quarterSummary.appendChild(buildReviewRunPortionSummaryNode(getReviewRunPortionEntries(snapshot, 4, index), requiredCycle));
-  };
-  const renderHalf = (index) => {
-    halfSummary.innerHTML = "";
-    halfSummary.appendChild(buildReviewRunPortionSummaryNode(getReviewRunPortionEntries(snapshot, 2, index), requiredCycle));
-  };
-
-  const quarter = createSelectControl("Run quarter", [[0, "1st quarter"], [1, "2nd quarter"], [2, "3rd quarter"], [3, "4th quarter"]], renderQuarter);
-  const half = createSelectControl("Run half", [[0, "1st half"], [1, "2nd half"]], renderHalf);
-  controls.append(quarter.label, quarterSummary, half.label, halfSummary);
+  select.addEventListener("change", () => renderTimingBlock(Number(select.value)));
+  controls.append(label, summary);
   parent.appendChild(controls);
-  renderQuarter(0);
-  renderHalf(0);
+  renderTimingBlock(0);
 }
 
 function buildReviewRunPeriodRows(snapshot) {
@@ -7109,8 +7211,8 @@ function buildReviewRunPeriodRows(snapshot) {
   const worst = buckets.reduce((loser, bucket) => (!loser || Number(bucket.avgCycle) > Number(loser.avgCycle) ? bucket : loser), null);
   const bucketLabel = getReviewRunTrendBucketLabel(snapshot);
   return [
-    [`Best ${bucketLabel} period`, buildReviewRunBestWorstValue(snapshot, best, "best")],
-    [`Worst ${bucketLabel} period`, buildReviewRunBestWorstValue(snapshot, worst, "worst")]
+    [`Best ${bucketLabel} block`, buildReviewRunBestWorstValue(snapshot, best, "best")],
+    [`Worst ${bucketLabel} block`, buildReviewRunBestWorstValue(snapshot, worst, "worst")]
   ];
 }
 
