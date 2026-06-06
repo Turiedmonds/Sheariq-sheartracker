@@ -6115,12 +6115,14 @@ function calculateTargetMetrics() {
     projectedFuturePhysicalSheep = Math.max(Math.floor(runRemainingSeconds / avgCycleSeconds), 0);
     projectedTotal = officialSheepDoneThisRun + projectedFuturePhysicalSheep;
     maxPossibleRunTotal = projectedTotal;
-    targetReachable = targetAlreadyReached || remainingToTarget <= projectedFuturePhysicalSheep;
-
     const targetCatchOffsetSeconds = targetAlreadyReached
       ? 0
       : Math.max(remainingToTarget - 1, 0) * avgCycleSeconds;
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
+
+    // Target reach is based on the catch/start moment: the target sheep only needs
+    // to be caught/started before the bell, not fully completed before run end.
+    targetReachable = targetAlreadyReached || targetCatchRunSeconds < runLengthSeconds;
 
     // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the run ends.
     // Keep this catch/start-based and in lockstep with projectedFuturePhysicalSheep; do not subtract an artificial end-of-run buffer.
@@ -6134,10 +6136,6 @@ function calculateTargetMetrics() {
       avgCycleSeconds,
       anchorRunSeconds: getCurrentFinalCatchPredictionAnchorRunSeconds(elapsedRunSeconds)
     });
-
-    if (targetReachable) {
-      targetCatchRunSeconds = Math.min(targetCatchRunSeconds, maxCatchRunSeconds);
-    }
 
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
