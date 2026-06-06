@@ -82,8 +82,14 @@ body {
   margin-bottom: 0;
 }
 
-.top-nav-help-btn {
+.top-nav-help-btn,
+.top-nav-review-run-btn {
   justify-self: auto;
+}
+
+.top-nav-review-run-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .settings-panel {
@@ -2829,9 +2835,53 @@ td.pace-neutral {
   background: #f8fafc;
 }
 
+.review-run-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
 .review-run-section h4 {
   margin: 0;
   color: #0f172a;
+}
+
+.review-run-section-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.35rem;
+}
+
+.review-run-section-control {
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.22rem 0.5rem;
+  cursor: pointer;
+}
+
+.review-run-section-control:hover:not(:disabled) {
+  border-color: #94a3b8;
+  background: #f1f5f9;
+}
+
+.review-run-section-control:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.review-run-section.is-collapsed .review-run-section-body {
+  display: none;
+}
+
+.review-run-section-body {
+  display: grid;
+  gap: 0.45rem;
 }
 
 .review-run-table-wrap {
@@ -2856,6 +2906,18 @@ td.pace-neutral {
 .review-run-table th {
   background: #eef2ff;
   color: #334155;
+}
+
+.review-run-table .review-run-good {
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 800;
+}
+
+.review-run-table .review-run-bad {
+  background: #fee2e2;
+  color: #991b1b;
+  font-weight: 800;
 }
 
 .review-run-key-value-table th {
