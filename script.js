@@ -2580,6 +2580,7 @@ const appState = {
   pendingBreakAfterCurrentSheep: false,
   pendingBreakStartedAtMs: null,
   runEndTimeMs: null,
+  officialRunEndTimeMs: null,
   currentRunIndex: 0,
   dayClockStartRealMs: null,
   dayClockStartSecondsFromMidnight: 0,
@@ -4832,6 +4833,7 @@ function resetRunState() {
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.runEndTimeMs = null;
+  appState.officialRunEndTimeMs = null;
   appState.currentRunIndex = 0;
   appState.dayClockStartRealMs = null;
   appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(getDefaultDayStartTime());
@@ -4889,14 +4891,21 @@ function updateFinishRunBreakButtonUI() {
   elements.finishRunBreakBtn.disabled = !canFinishBreak;
 }
 
+function getOfficialScheduledRunEndTimeMs() {
+  if (Number.isFinite(appState.officialRunEndTimeMs)) return appState.officialRunEndTimeMs;
+  if (Number.isFinite(appState.runEndTimeMs)) return appState.runEndTimeMs;
+  return null;
+}
+
 function getEarlyBreakConfirmationDetails(now = Date.now()) {
   if (!appState.runActive) return null;
-  if (!Number.isFinite(appState.runEndTimeMs)) return null;
-  if (now >= appState.runEndTimeMs) return null;
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  if (!Number.isFinite(officialScheduledRunEndTimeMs)) return null;
+  if (now >= officialScheduledRunEndTimeMs) return null;
 
-  const secondsUntilRunEnd = Math.max((appState.runEndTimeMs - now) / 1000, 0);
+  const secondsUntilRunEnd = Math.max((officialScheduledRunEndTimeMs - now) / 1000, 0);
   return {
-    scheduledEndLabel: formatClock(appState.runEndTimeMs),
+    scheduledEndLabel: formatClock(officialScheduledRunEndTimeMs),
     remainingLabel: formatCountdown(secondsUntilRunEnd)
   };
 }
@@ -4925,8 +4934,9 @@ async function handleFinishRunBreakClick() {
   }
 
   const now = Date.now();
-  const breakStartedAtMs = Number.isFinite(appState.runEndTimeMs) && now >= appState.runEndTimeMs
-    ? appState.runEndTimeMs
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  const breakStartedAtMs = Number.isFinite(officialScheduledRunEndTimeMs) && now >= officialScheduledRunEndTimeMs
+    ? officialScheduledRunEndTimeMs
     : now;
 
   if (appState.currentCycle.motorOn) {
@@ -4940,7 +4950,7 @@ async function handleFinishRunBreakClick() {
   finishRunAndEnterBreak("manual-finish-break", breakStartedAtMs);
 }
 
-function startRun() {
+function startRun(startedAtMs = Date.now()) {
   if (!elements.farmInput || !elements.targetSheepInput || !elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) {
     return;
   }
@@ -4952,7 +4962,7 @@ function startRun() {
     const schedule = getScheduleForCurrentType();
     appState.currentRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
   }
-  appState.runStartTime = Date.now();
+  appState.runStartTime = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
   appState.sheep = [];
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -4964,6 +4974,7 @@ function startRun() {
   appState.target.runLengthSeconds = getRunLengthSeconds();
   const runDurationSeconds = getCurrentRunDurationSeconds();
   appState.runEndTimeMs = appState.runStartTime + (runDurationSeconds * 1000);
+  appState.officialRunEndTimeMs = appState.runEndTimeMs;
 
   if (elements.dayStartTimeInput) {
     appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
@@ -5034,6 +5045,7 @@ function stopRun() {
   appState.pendingBreakAfterCurrentSheep = false;
   appState.pendingBreakStartedAtMs = null;
   appState.runEndTimeMs = null;
+  appState.officialRunEndTimeMs = null;
   resetPenFillForecastCountdownTarget();
 
   elements.startRunBtn.disabled = false;
@@ -5186,8 +5198,13 @@ function maybeAutoStartNextRunAfterBreak(now = Date.now()) {
 
   if (!isBreakComplete(now)) return false;
 
+  const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex);
+  const nextRunStartTimeMs = Number.isFinite(appState.breakStartedAtMs) && Number.isFinite(breakInfo?.durationSeconds)
+    ? appState.breakStartedAtMs + (breakInfo.durationSeconds * 1000)
+    : now;
+
   console.log("Break complete; starting next run automatically");
-  startRun();
+  startRun(nextRunStartTimeMs);
   return true;
 }
 
@@ -5789,19 +5806,20 @@ function resetCurrentSheepTiming() {
 
 function maybeHandleRunEndExpired(now = Date.now()) {
   if (!appState.runActive) return false;
-  if (!appState.runEndTimeMs) return false;
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  if (!Number.isFinite(officialScheduledRunEndTimeMs)) return false;
   if (appState.breakActive || appState.preparedForNextRunBreak) return false;
   if (appState.pendingBreakAfterCurrentSheep) return false;
-  if (now < appState.runEndTimeMs) return false;
+  if (now < officialScheduledRunEndTimeMs) return false;
 
   if (appState.currentCycle.motorOn) {
     appState.pendingBreakAfterCurrentSheep = true;
-    appState.pendingBreakStartedAtMs = appState.runEndTimeMs;
+    appState.pendingBreakStartedAtMs = officialScheduledRunEndTimeMs;
     console.log("Run expired; waiting for current sheep to finish before official break");
     return true;
   }
 
-  finishRunAndEnterBreak("record-day-break", appState.runEndTimeMs);
+  finishRunAndEnterBreak("record-day-break", officialScheduledRunEndTimeMs);
   return true;
 }
 
@@ -5809,7 +5827,8 @@ function handleMotorOn() {
   if (!appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
-  if (appState.runEndTimeMs && now >= appState.runEndTimeMs) {
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  if (Number.isFinite(officialScheduledRunEndTimeMs) && now >= officialScheduledRunEndTimeMs) {
     maybeHandleRunEndExpired(now);
     return;
   }
@@ -5886,7 +5905,9 @@ function handleMotorOff() {
   appState.currentMotorDisplay = "OFF";
 
   if (appState.pendingBreakAfterCurrentSheep) {
-    const scheduledBreakStartedAtMs = appState.pendingBreakStartedAtMs || appState.runEndTimeMs || Date.now();
+    const scheduledBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs)
+      ? appState.pendingBreakStartedAtMs
+      : (getOfficialScheduledRunEndTimeMs() ?? Date.now());
     refreshAfterSheepEntry();
     finishRunAndEnterBreak("record-day-break", scheduledBreakStartedAtMs);
     return;
@@ -5898,7 +5919,11 @@ function handleMotorOff() {
 
 function enterOfficialBreak(source = "official", breakStartedAtMs = Date.now()) {
   appState.breakActive = true;
-  appState.breakStartedAtMs = Number.isFinite(breakStartedAtMs) ? breakStartedAtMs : Date.now();
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  const officialBreakStartedAtMs = source === "record-day-break" && Number.isFinite(officialScheduledRunEndTimeMs)
+    ? officialScheduledRunEndTimeMs
+    : breakStartedAtMs;
+  appState.breakStartedAtMs = Number.isFinite(officialBreakStartedAtMs) ? officialBreakStartedAtMs : Date.now();
   appState.breakSource = source;
 
   // Neutralise any in-progress sheep cycle so a motor test during break
