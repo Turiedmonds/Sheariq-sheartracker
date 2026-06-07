@@ -5118,6 +5118,19 @@ function getOfficialScheduledRunEndTimeMs() {
   return null;
 }
 
+function resolveOfficialBreakStartedAtMs(source = "official", breakStartedAtMs = null) {
+  if (source !== "record-day-break") {
+    return Number.isFinite(breakStartedAtMs) ? breakStartedAtMs : Date.now();
+  }
+
+  if (Number.isFinite(breakStartedAtMs)) return breakStartedAtMs;
+
+  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
+  if (Number.isFinite(officialScheduledRunEndTimeMs)) return officialScheduledRunEndTimeMs;
+
+  return Date.now();
+}
+
 function getEarlyBreakConfirmationDetails(now = Date.now()) {
   if (!appState.runActive) return null;
   const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
@@ -5293,7 +5306,7 @@ function stopRun() {
   updateStatsPanel();
 }
 
-function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = Date.now()) {
+function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = null) {
   if (!appState.runActive && appState.sheep.length === 0) {
     return;
   }
@@ -6153,13 +6166,9 @@ function handleMotorOff() {
 }
 
 
-function enterOfficialBreak(source = "official", breakStartedAtMs = Date.now()) {
+function enterOfficialBreak(source = "official", breakStartedAtMs = null) {
   appState.breakActive = true;
-  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  const officialBreakStartedAtMs = source === "record-day-break" && Number.isFinite(officialScheduledRunEndTimeMs)
-    ? officialScheduledRunEndTimeMs
-    : breakStartedAtMs;
-  appState.breakStartedAtMs = Number.isFinite(officialBreakStartedAtMs) ? officialBreakStartedAtMs : Date.now();
+  appState.breakStartedAtMs = resolveOfficialBreakStartedAtMs(source, breakStartedAtMs);
   appState.breakSource = source;
 
   // Neutralise any in-progress sheep cycle so a motor test during break
@@ -11079,6 +11088,9 @@ function setPaused(paused) {
     if (appState.runEndTimeMs) {
       appState.runEndTimeMs += pauseDurationMs;
     }
+    if (appState.officialRunEndTimeMs) {
+      appState.officialRunEndTimeMs += pauseDurationMs;
+    }
     appState.pauseStartedAtMs = null;
   }
 
@@ -11619,9 +11631,11 @@ function getAutosavePayload() {
       breakBannerDismissedForCurrentBreak: appState.breakBannerDismissedForCurrentBreak,
       pendingBreakAfterCurrentSheep: appState.pendingBreakAfterCurrentSheep,
       pendingBreakStartedAtMs: appState.pendingBreakStartedAtMs,
+      pendingBreakSource: appState.pendingBreakSource,
       pendingPenFillPromptKey: appState.pendingPenFillPromptKey,
       dismissedPenFillPromptKey: appState.dismissedPenFillPromptKey,
       runEndTimeMs: appState.runEndTimeMs,
+      officialRunEndTimeMs: appState.officialRunEndTimeMs,
       currentRunIndex: appState.currentRunIndex,
       dayClockStartRealMs: appState.dayClockStartRealMs,
       dayClockStartSecondsFromMidnight: appState.dayClockStartSecondsFromMidnight,
@@ -12789,7 +12803,8 @@ function restoreSessionPayload(raw, options = {}) {
   appState.breakBannerDismissedForCurrentBreak = Boolean(appState.breakBannerDismissedForCurrentBreak);
   appState.pendingBreakAfterCurrentSheep = Boolean(appState.pendingBreakAfterCurrentSheep);
   appState.pendingBreakStartedAtMs = Number.isFinite(appState.pendingBreakStartedAtMs) ? appState.pendingBreakStartedAtMs : null;
-  appState.pendingBreakSource = null;
+  appState.pendingBreakSource = typeof appState.pendingBreakSource === "string" ? appState.pendingBreakSource : null;
+  appState.officialRunEndTimeMs = Number.isFinite(appState.officialRunEndTimeMs) ? appState.officialRunEndTimeMs : null;
   appState.daySheep = Array.isArray(appState.daySheep) ? appState.daySheep : [...appState.sheep];
   sanitizeManualMarkersOnSheepEntries(appState.sheep);
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
@@ -12809,6 +12824,7 @@ function restoreSessionPayload(raw, options = {}) {
       appState.currentCycle.catchStart = shiftTimestampByGap(appState.currentCycle.catchStart, restoreGapMs);
     }
     appState.runEndTimeMs = shiftTimestampByGap(appState.runEndTimeMs, restoreGapMs);
+    appState.officialRunEndTimeMs = shiftTimestampByGap(appState.officialRunEndTimeMs, restoreGapMs);
 
     appState.paused = true;
     appState.pauseStartedAtMs = restoreTimeMs;
