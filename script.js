@@ -5131,21 +5131,48 @@ function resolveOfficialBreakStartedAtMs(source = "official", breakStartedAtMs =
   return Date.now();
 }
 
-function getEarlyBreakConfirmationDetails(now = Date.now()) {
-  if (!appState.runActive) return null;
+function getScheduledRunEndStatus() {
+  const elapsedSeconds = Number(getEffectiveElapsedSeconds());
+  const runDurationSeconds = Number(getCurrentRunDurationSeconds());
   const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  if (!Number.isFinite(officialScheduledRunEndTimeMs)) return null;
-  if (now >= officialScheduledRunEndTimeMs) return null;
+  const scheduledRunEndTimeMs = Number.isFinite(appState.runStartTime)
+    && Number.isFinite(runDurationSeconds)
+    && runDurationSeconds > 0
+    ? appState.runStartTime + (runDurationSeconds * 1000)
+    : officialScheduledRunEndTimeMs;
+  const ended = Number.isFinite(elapsedSeconds)
+    && Number.isFinite(runDurationSeconds)
+    && runDurationSeconds > 0
+    && elapsedSeconds >= runDurationSeconds;
+  const remainingSeconds = Number.isFinite(elapsedSeconds)
+    && Number.isFinite(runDurationSeconds)
+    && runDurationSeconds > 0
+    ? Math.max(runDurationSeconds - elapsedSeconds, 0)
+    : null;
 
-  const secondsUntilRunEnd = Math.max((officialScheduledRunEndTimeMs - now) / 1000, 0);
   return {
-    scheduledEndLabel: formatClock(officialScheduledRunEndTimeMs),
-    remainingLabel: formatCountdown(secondsUntilRunEnd)
+    ended,
+    elapsedSeconds,
+    runDurationSeconds,
+    remainingSeconds,
+    scheduledRunEndTimeMs
   };
 }
 
-async function confirmEarlyFinishRunBreak(now = Date.now()) {
-  const details = getEarlyBreakConfirmationDetails(now);
+function getEarlyBreakConfirmationDetails() {
+  if (!appState.runActive) return null;
+  const status = getScheduledRunEndStatus();
+  if (status.ended) return null;
+  if (!Number.isFinite(status.scheduledRunEndTimeMs) || status.remainingSeconds === null) return null;
+
+  return {
+    scheduledEndLabel: formatClock(status.scheduledRunEndTimeMs),
+    remainingLabel: formatCountdown(status.remainingSeconds)
+  };
+}
+
+async function confirmEarlyFinishRunBreak() {
+  const details = getEarlyBreakConfirmationDetails();
   if (!details) return true;
 
   return confirmModal({
@@ -5160,19 +5187,18 @@ async function handleFinishRunBreakClick() {
   if (appState.breakActive || appState.preparedForNextRunBreak) return;
   if (!appState.runActive && appState.sheep.length === 0) return;
 
-  const requestedAtMs = Date.now();
-  const confirmed = await confirmEarlyFinishRunBreak(requestedAtMs);
+  const confirmed = await confirmEarlyFinishRunBreak();
   if (!confirmed) {
     clearPanelInteractionHighlights();
     return;
   }
 
+  const runEndStatus = getScheduledRunEndStatus();
   const appTimelineNowMs = getCurrentAppTimelineMs();
-  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  const breakStartedAtMs = Number.isFinite(officialScheduledRunEndTimeMs) && appTimelineNowMs >= officialScheduledRunEndTimeMs
-    ? officialScheduledRunEndTimeMs
+  const breakStartedAtMs = runEndStatus.ended && Number.isFinite(runEndStatus.scheduledRunEndTimeMs)
+    ? runEndStatus.scheduledRunEndTimeMs
     : appTimelineNowMs;
-  const breakSource = Number.isFinite(officialScheduledRunEndTimeMs) && appTimelineNowMs >= officialScheduledRunEndTimeMs
+  const breakSource = runEndStatus.ended
     ? "record-day-break"
     : "manual-finish-break";
 
@@ -6051,23 +6077,23 @@ function resetCurrentSheepTiming() {
 }
 
 
-function maybeHandleRunEndExpired(now = Date.now()) {
+function maybeHandleRunEndExpired() {
   if (!appState.runActive) return false;
-  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  if (!Number.isFinite(officialScheduledRunEndTimeMs)) return false;
+  const runEndStatus = getScheduledRunEndStatus();
+  if (!Number.isFinite(runEndStatus.scheduledRunEndTimeMs)) return false;
   if (appState.breakActive || appState.preparedForNextRunBreak) return false;
   if (appState.pendingBreakAfterCurrentSheep) return false;
-  if (now < officialScheduledRunEndTimeMs) return false;
+  if (!runEndStatus.ended) return false;
 
   if (appState.currentCycle.motorOn) {
     appState.pendingBreakAfterCurrentSheep = true;
-    appState.pendingBreakStartedAtMs = officialScheduledRunEndTimeMs;
+    appState.pendingBreakStartedAtMs = runEndStatus.scheduledRunEndTimeMs;
     appState.pendingBreakSource = "record-day-break";
     console.log("Run expired; waiting for current sheep to finish before official break");
     return true;
   }
 
-  finishRunAndEnterBreak("record-day-break", officialScheduledRunEndTimeMs);
+  finishRunAndEnterBreak("record-day-break", runEndStatus.scheduledRunEndTimeMs);
   return true;
 }
 
