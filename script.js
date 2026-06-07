@@ -4431,6 +4431,21 @@ function getDayClockSecondsFromEffectiveElapsed(effectiveElapsedSeconds) {
   return dayClockStartSeconds + elapsedSeconds;
 }
 
+function getDayClockSecondsForTimestamp(timestampMs) {
+  const timestamp = Number(timestampMs);
+  const runStartTime = Number(appState.runStartTime);
+  const dayClockStartSeconds = getFiniteClockNumber(appState.dayClockStartSecondsFromMidnight);
+  if (!Number.isFinite(timestamp) || !Number.isFinite(runStartTime) || !Number.isFinite(dayClockStartSeconds)) return null;
+  return dayClockStartSeconds + ((timestamp - runStartTime) / 1000);
+}
+
+function getBreakRemainingSecondsFromDayClock(breakEndMs) {
+  const nextRunStartDayClockSeconds = getDayClockSecondsForTimestamp(breakEndMs);
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  if (!Number.isFinite(nextRunStartDayClockSeconds) || !Number.isFinite(currentDayClockSeconds)) return null;
+  return Math.max(nextRunStartDayClockSeconds - currentDayClockSeconds, 0);
+}
+
 function formatTargetPaceCountdownDisplay(totalSeconds) {
   const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
   const hours = Math.floor(safeSeconds / 3600);
@@ -4902,7 +4917,9 @@ function getBreakDisplayDetails(now = Date.now()) {
   const breakEndMs = breakStartedAtMs !== null && hasKnownDuration
     ? breakStartedAtMs + (breakInfo.durationSeconds * 1000)
     : null;
-  const remainingSeconds = breakEndMs !== null ? Math.max((breakEndMs - now) / 1000, 0) : null;
+  const dayClockRemainingSeconds = getBreakRemainingSecondsFromDayClock(breakEndMs);
+  const timestampRemainingSeconds = breakEndMs !== null ? Math.max((breakEndMs - now) / 1000, 0) : null;
+  const remainingSeconds = Number.isFinite(dayClockRemainingSeconds) ? dayClockRemainingSeconds : timestampRemainingSeconds;
   const remaining = remainingSeconds !== null && !isEndOfDay ? formatCountdown(remainingSeconds) : "—";
   let warningText = "";
   if (remainingSeconds !== null && !isEndOfDay) {
@@ -5445,6 +5462,11 @@ function isBreakComplete(now = Date.now()) {
   if (!breakInfo || !Number.isFinite(breakInfo.durationSeconds)) return false;
   if (!Number.isFinite(appState.breakStartedAtMs)) return false;
   const breakEndMs = appState.breakStartedAtMs + (breakInfo.durationSeconds * 1000);
+  const nextRunStartDayClockSeconds = getDayClockSecondsForTimestamp(breakEndMs);
+  const currentDayClockSeconds = getCurrentDayClockSeconds();
+  if (Number.isFinite(nextRunStartDayClockSeconds) && Number.isFinite(currentDayClockSeconds)) {
+    return currentDayClockSeconds >= nextRunStartDayClockSeconds;
+  }
   return now >= breakEndMs;
 }
 
