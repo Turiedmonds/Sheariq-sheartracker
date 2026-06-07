@@ -5236,14 +5236,20 @@ function startRun(startedAtMs = Date.now()) {
     return;
   }
 
+  const resolvedStartedAtMs = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
+  const hasPreviousRunAnchor = appState.runStartTime !== null;
+  const startedAtDayClockSeconds = hasPreviousRunAnchor
+    ? getDayClockSecondsForTimestamp(resolvedStartedAtMs)
+    : null;
+
   saveFarmFromInput();
 
   appState.runActive = true;
-  if (appState.runStartTime !== null) {
+  if (hasPreviousRunAnchor) {
     const schedule = getScheduleForCurrentType();
     appState.currentRunIndex = Math.min(appState.currentRunIndex + 1, schedule.length - 1);
   }
-  appState.runStartTime = Number.isFinite(startedAtMs) ? startedAtMs : Date.now();
+  appState.runStartTime = resolvedStartedAtMs;
   appState.sheep = [];
   appState.currentCycle.motorOn = false;
   appState.currentCycle.shearStart = null;
@@ -5257,7 +5263,9 @@ function startRun(startedAtMs = Date.now()) {
   appState.runEndTimeMs = appState.runStartTime + (runDurationSeconds * 1000);
   appState.officialRunEndTimeMs = appState.runEndTimeMs;
 
-  if (elements.dayStartTimeInput) {
+  if (Number.isFinite(startedAtDayClockSeconds)) {
+    appState.dayClockStartSecondsFromMidnight = startedAtDayClockSeconds;
+  } else if (elements.dayStartTimeInput) {
     appState.dayClockStartSecondsFromMidnight = parseTimeToSecondsFromMidnight(elements.dayStartTimeInput.value);
   }
   appState.dayClockStartRealMs = appState.runStartTime;
