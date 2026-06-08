@@ -1418,6 +1418,33 @@ button:disabled {
   margin: 0;
 }
 
+#panel-log .sheep-log-pen-fill-status {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid rgba(14, 165, 233, 0.28);
+  border-radius: 0.45rem;
+  background: rgba(14, 165, 233, 0.08);
+}
+
+#panel-log .sheep-log-pen-fill-status-label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+#panel-log .sheep-log-pen-fill-status-message {
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+#panel-log .sheep-log-pen-fill-status-detail {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
 #panel-log .sheep-log-marker-custom-input,
 #panel-log .sheep-log-marker-note-input {
   width: 100%;

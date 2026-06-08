@@ -1408,6 +1408,128 @@ function createPenFillDisplayMarker(event) {
   };
 }
 
+function getSheepEntryPhysicalSheepCount(entry) {
+  const sheepNumber = Number(entry?.number);
+  return Number.isFinite(sheepNumber) ? sheepNumber : null;
+}
+
+function findPenFillAmountEventForSheepEntry(entry, events, predicate = () => true) {
+  if (!entry || typeof entry !== "object" || !Array.isArray(events)) return null;
+  const sheepId = typeof entry.id === "string" ? entry.id : "";
+  const physicalSheepCount = getSheepEntryPhysicalSheepCount(entry);
+  const candidateEvents = events.filter((event) => isPenFillAmountEvent(event) && predicate(event));
+
+  if (sheepId) {
+    const sheepIdMatch = candidateEvents.find((event) => event?.sheepId === sheepId);
+    if (sheepIdMatch) return sheepIdMatch;
+  }
+
+  if (Number.isFinite(physicalSheepCount)) {
+    const physicalSheepMatch = candidateEvents.find((event) => Number(event?.physicalSheepTakenFromPen) === physicalSheepCount);
+    if (physicalSheepMatch) return physicalSheepMatch;
+
+    const sheepNumberMatch = candidateEvents.find((event) => Number(event?.sheepNumber) === physicalSheepCount);
+    if (sheepNumberMatch) return sheepNumberMatch;
+  }
+
+  return null;
+}
+
+function getActivePenFillAmountEventForSheepEntry(entry, options = {}) {
+  const sourceEvents = Object.prototype.hasOwnProperty.call(options, "events") ? options.events : appState.penFillEvents;
+  const events = getCurrentRunPenFillEvents(sourceEvents);
+  return findPenFillAmountEventForSheepEntry(entry, events, (event) => event.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL);
+}
+
+function getActiveAssumedPenFillEventForSheepEntry(entry, options = {}) {
+  const sourceEvents = Object.prototype.hasOwnProperty.call(options, "events") ? options.events : appState.penFillEvents;
+  const events = getCurrentRunPenFillEvents(sourceEvents);
+  return findPenFillAmountEventForSheepEntry(entry, events, (event) => event.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL);
+}
+
+function getHistoricalPenStateForSheepEntry(entry, options = {}) {
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const rule = options.rule || getPenRule(recordType);
+  const physicalSheepTakenFromPen = getSheepEntryPhysicalSheepCount(entry);
+  if (!rule || !Number.isFinite(physicalSheepTakenFromPen)) return null;
+
+  const sourceEvents = Object.prototype.hasOwnProperty.call(options, "events") ? options.events : appState.penFillEvents;
+  const events = getCurrentRunPenFillEvents(sourceEvents)
+    .filter((event) => Number(event?.physicalSheepTakenFromPen) < physicalSheepTakenFromPen);
+
+  return getCurrentPenStateFromEvents({
+    recordType,
+    rule,
+    physicalSheepTakenFromPen,
+    events
+  });
+}
+
+function getPenFillEventStatusForSheepEntry(entry) {
+  const linkedEvent = getActivePenFillAmountEventForSheepEntry(entry);
+  const assumedEvent = linkedEvent ? null : getActiveAssumedPenFillEventForSheepEntry(entry);
+  const historicalPenState = getHistoricalPenStateForSheepEntry(entry);
+
+  if (linkedEvent) {
+    return {
+      status: "linked",
+      message: "Linked Pen refill event found",
+      event: linkedEvent,
+      historicalPenState
+    };
+  }
+
+  if (assumedEvent) {
+    return {
+      status: "assumed",
+      message: "Assumed refill exists here",
+      event: assumedEvent,
+      historicalPenState
+    };
+  }
+
+  return {
+    status: "none",
+    message: "No Pen refill event on this row",
+    event: null,
+    historicalPenState
+  };
+}
+
+function createSheepLogPenFillEventStatusBlock(entry) {
+  const status = getPenFillEventStatusForSheepEntry(entry);
+  const block = document.createElement("div");
+  block.className = `sheep-log-pen-fill-status sheep-log-pen-fill-status-${status.status}`;
+
+  const label = document.createElement("div");
+  label.className = "sheep-log-pen-fill-status-label";
+  label.textContent = "Pen refill event";
+  block.appendChild(label);
+
+  const message = document.createElement("div");
+  message.className = "sheep-log-pen-fill-status-message";
+  message.textContent = status.message;
+  block.appendChild(message);
+
+  const detailParts = [];
+  const eventSource = status.event?.source;
+  const actualFillAmount = Number(status.event?.actualFillAmount);
+  const sheepLeftBeforeFill = Number(status.historicalPenState?.currentPenCount);
+  if (eventSource) detailParts.push(`source: ${eventSource}`);
+  if (Number.isFinite(actualFillAmount)) detailParts.push(`amount: ${actualFillAmount}`);
+  if (Number.isFinite(sheepLeftBeforeFill)) detailParts.push(`estimated before fill: ${sheepLeftBeforeFill}`);
+
+  if (detailParts.length) {
+    const detail = document.createElement("div");
+    detail.className = "sheep-log-pen-fill-status-detail";
+    detail.textContent = detailParts.join(" • ");
+    block.appendChild(detail);
+  }
+
+  return block;
+}
+
+
 function getPenFillMarkerEventsBySheepRow(entries = appState.sheep, events = appState.penFillEvents) {
   const markerEvents = getActivePenFillMarkerEventsForCurrentRun(events);
   const eventsByRowId = new Map();
@@ -9270,6 +9392,7 @@ function createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText) {
   });
 
   editor.appendChild(markerGroup);
+  editor.appendChild(createSheepLogPenFillEventStatusBlock(entry));
 
   const customInput = document.createElement("input");
   customInput.type = "text";
