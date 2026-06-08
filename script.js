@@ -1496,6 +1496,198 @@ function getPenFillEventStatusForSheepEntry(entry) {
   };
 }
 
+function getDefaultPenFillAmountForSheepEntry(entry, penState = getHistoricalPenStateForSheepEntry(entry), rule = getPenRule(appState.recordType)) {
+  if (!penState || !rule) return null;
+  const defaultRefillAmount = Number(rule.defaultRefillAmount);
+  const defaultValidation = validatePenFillAmount(defaultRefillAmount, penState, rule);
+  if (defaultValidation.valid) return defaultValidation.amount;
+
+  const maxAllowed = Number(defaultValidation.maxAllowed);
+  if (Number.isInteger(maxAllowed) && maxAllowed > 0) return maxAllowed;
+  return null;
+}
+
+function getSheepEntryWallClockTime(entry) {
+  const endTime = Number(entry?.endTime);
+  if (Number.isFinite(endTime) && endTime > 0) return endTime;
+  const startTime = Number(entry?.startTime);
+  if (Number.isFinite(startTime) && startTime > 0) return startTime;
+  return Date.now();
+}
+
+function refreshAfterSheepLogPenFillEvent(message = "") {
+  autosaveState();
+  renderLogTable();
+  updatePenStateDisplay();
+  updatePenFillForecastDisplay();
+  updatePenFillEarlyReminderDisplay();
+  updatePenRefillAlertDisplay();
+  updatePenFillConfirmationControls({ statusOverride: message });
+  if (typeof updateStatsPanel === "function") updateStatsPanel();
+}
+
+function recordPenFillEventForSheepEntry(entry, options = {}) {
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  const sheepId = typeof entry?.id === "string" ? entry.id : "";
+  const physicalSheepTakenFromPen = getSheepEntryPhysicalSheepCount(entry);
+  const fail = (message, error = message) => ({ success: false, event: null, message, error });
+
+  if (!entry || typeof entry !== "object") return fail("Could not find this sheep row. Refresh and try again.");
+  if (!recordType || recordType === "none" || !rule) return fail("Select a pen refill record type first.", "Missing pen rule.");
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return fail("Missing sheep count for this row.");
+
+  const linkedEvent = getActivePenFillAmountEventForSheepEntry(entry);
+  if (linkedEvent) return fail("Pen refill is already confirmed on this row.", "Duplicate row Pen refill event.");
+
+  const existingAtSheepCount = findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+  const assumedEvent = existingAtSheepCount?.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL
+    ? existingAtSheepCount
+    : getActiveAssumedPenFillEventForSheepEntry(entry);
+  const shouldOverrideAssumedFill = Boolean(assumedEvent);
+  if (existingAtSheepCount && !shouldOverrideAssumedFill) {
+    return fail("Pen refill is already confirmed at this sheep count.", "Duplicate sheep-count Pen refill event.");
+  }
+
+  const penStateEvents = shouldOverrideAssumedFill
+    ? getCurrentRunPenFillEvents().filter((event) => event.id !== assumedEvent.id)
+    : undefined;
+  const penState = getHistoricalPenStateForSheepEntry(entry, {
+    recordType,
+    rule,
+    ...(penStateEvents ? { events: penStateEvents } : {})
+  });
+
+  if (!penState) return fail("Could not calculate historical pen state for this row.");
+  if (!penState.refillAllowedNow) return fail("Pen refill is not allowed at this sheep count yet.");
+
+  const actualFillAmount = Number(options.actualFillAmount);
+  const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+  if (!validation.valid) {
+    return fail(getPenFillAmountErrorMessage(validation.reason), validation.reason);
+  }
+
+  const effectiveElapsedSeconds = Object.prototype.hasOwnProperty.call(entry, "effectiveElapsedSeconds")
+    ? Number(entry.effectiveElapsedSeconds)
+    : null;
+  const draft = createPenFillEventDraft({
+    recordType,
+    rule,
+    penState,
+    physicalSheepTakenFromPen,
+    sheepNumber: Number(entry.number),
+    sheepId: sheepId || null,
+    actualFillAmount: validation.amount,
+    recommendedFillAmount: options.recommendedFillAmount,
+    source: PEN_FILL_EVENT_SOURCE.CUSTOM,
+    effectiveElapsedSeconds: Number.isFinite(effectiveElapsedSeconds) ? effectiveElapsedSeconds : undefined,
+    wallClockTime: getSheepEntryWallClockTime(entry)
+  });
+
+  if (draft?.error) {
+    const message = getPenFillAmountErrorMessage(draft.error);
+    return fail(message, draft.error);
+  }
+
+  if (shouldOverrideAssumedFill) {
+    const now = Date.now();
+    assumedEvent.undone = true;
+    assumedEvent.undoneAt = now;
+    assumedEvent.overriddenAt = now;
+    assumedEvent.updatedAt = now;
+  }
+
+  appState.penFillEvents.push(draft);
+  const message = `Pen refill event added — added ${draft.actualFillAmount}.`;
+  refreshAfterSheepLogPenFillEvent(message);
+  return { success: true, event: draft, message, error: null };
+}
+
+function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
+  const entry = getSheepLogEntryById(sheepId);
+  const setValidation = (message) => {
+    if (validationEl instanceof HTMLElement) validationEl.textContent = message;
+  };
+
+  if (!entry) {
+    const message = "Could not find this sheep row. Refresh and try again.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const linkedEvent = getActivePenFillAmountEventForSheepEntry(entry);
+  if (linkedEvent) {
+    const message = "Pen refill is already confirmed on this row.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const recordType = appState.recordType;
+  const rule = getPenRule(recordType);
+  if (!recordType || recordType === "none" || !rule) {
+    const message = "Select a pen refill record type first.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const physicalSheepTakenFromPen = getSheepEntryPhysicalSheepCount(entry);
+  const existingAtSheepCount = findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+  if (existingAtSheepCount && existingAtSheepCount.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL) {
+    const message = "Pen refill is already confirmed at this sheep count.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const assumedEvent = getActiveAssumedPenFillEventForSheepEntry(entry);
+  const penState = getHistoricalPenStateForSheepEntry(entry, {
+    recordType,
+    rule,
+    ...(assumedEvent ? { events: getCurrentRunPenFillEvents().filter((event) => event.id !== assumedEvent.id) } : {})
+  });
+  if (!penState?.refillAllowedNow) {
+    const message = "Pen refill is not allowed at this sheep count yet.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const defaultAmount = getDefaultPenFillAmountForSheepEntry(entry, penState, rule);
+  const rawAmount = window.prompt(
+    `Actual refill amount for sheep ${entry.number}?`,
+    Number.isInteger(defaultAmount) && defaultAmount > 0 ? String(defaultAmount) : ""
+  );
+  if (rawAmount === null) {
+    setValidation("Pen refill add cancelled.");
+    return { success: false, error: "Pen refill add cancelled." };
+  }
+  if (!/^\d+$/.test(rawAmount.trim())) {
+    const message = "Refill amount must be a whole number.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const actualFillAmount = Number(rawAmount.trim());
+  const result = recordPenFillEventForSheepEntry(entry, {
+    actualFillAmount,
+    recommendedFillAmount: Number.isInteger(defaultAmount) && defaultAmount > 0 ? defaultAmount : actualFillAmount
+  });
+
+  if (!result.success) {
+    const message = result.message || "Unable to add Pen refill event.";
+    setValidation(message);
+    window.alert(message);
+    return result;
+  }
+
+  setValidation(result.message);
+  return result;
+}
+
 function createSheepLogPenFillEventStatusBlock(entry) {
   const status = getPenFillEventStatusForSheepEntry(entry);
   const block = document.createElement("div");
@@ -1524,6 +1716,16 @@ function createSheepLogPenFillEventStatusBlock(entry) {
     detail.className = "sheep-log-pen-fill-status-detail";
     detail.textContent = detailParts.join(" • ");
     block.appendChild(detail);
+  }
+
+  if (status.status !== "linked") {
+    const addButton = document.createElement("button");
+    addButton.type = "button";
+    addButton.className = "sheep-log-pen-fill-add-btn";
+    addButton.dataset.action = "add-pen-fill-event";
+    addButton.dataset.sheepId = entry.id || "";
+    addButton.textContent = status.status === "assumed" ? "Confirm Pen refill here" : "Add Pen refill event";
+    block.appendChild(addButton);
   }
 
   return block;
@@ -14567,6 +14769,10 @@ function bindEvents() {
       } else if (action === "save-marker-note") {
         const editor = actionTarget.closest(".sheep-log-marker-note-editor");
         if (editor instanceof HTMLElement) saveSheepLogMarkerNoteFromEditor(editor);
+      } else if (action === "add-pen-fill-event") {
+        const editor = actionTarget.closest(".sheep-log-marker-note-editor");
+        const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
+        promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
       }
     });
     elements.sheepLogBody.addEventListener("change", (event) => {
