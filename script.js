@@ -12541,16 +12541,23 @@ function persistPanelLayout() {
   }));
 }
 
+function getAppZoomScale() {
+  const zoomPercent = sanitizeAppZoomPercent(appState.appZoomPercent);
+  const zoomScale = zoomPercent / 100;
+  return Number.isFinite(zoomScale) && zoomScale > 0 ? zoomScale : 1;
+}
+
 function getDashboardRect() {
+  const zoom = getAppZoomScale();
   if (!elements.dashboardPanels) {
-    return { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+    return { left: 0, top: 0, width: window.innerWidth / zoom, height: window.innerHeight / zoom };
   }
   const rect = elements.dashboardPanels.getBoundingClientRect();
   return {
-    left: rect.left,
-    top: rect.top,
-    width: Math.max(rect.width, window.innerWidth - rect.left),
-    height: Math.max(rect.height, window.innerHeight - rect.top)
+    left: rect.left / zoom,
+    top: rect.top / zoom,
+    width: Math.max(rect.width / zoom, (window.innerWidth - rect.left) / zoom),
+    height: Math.max(rect.height / zoom, (window.innerHeight - rect.top) / zoom)
   };
 }
 
@@ -12585,11 +12592,12 @@ function ensureInitialPanelLayout() {
       return;
     }
     const rect = panel.getBoundingClientRect();
+    const zoom = getAppZoomScale();
     const item = normalizePanelLayoutItem({
-      x: rect.left - dashboardRect.left,
-      y: rect.top - dashboardRect.top,
-      width: rect.width || panel.offsetWidth,
-      height: rect.height || panel.offsetHeight,
+      x: rect.left / zoom - dashboardRect.left,
+      y: rect.top / zoom - dashboardRect.top,
+      width: rect.width ? rect.width / zoom : panel.offsetWidth,
+      height: rect.height ? rect.height / zoom : panel.offsetHeight,
       z: nextZ + index
     });
     clampLayoutItem(item);
@@ -12610,8 +12618,11 @@ function updateDashboardCanvasSize() {
     maxRight = Math.max(maxRight, layout.x + layout.width);
     maxBottom = Math.max(maxBottom, layout.y + layout.height);
   });
-  elements.dashboardPanels.style.minHeight = `${Math.max(window.innerHeight, maxBottom + 20)}px`;
-  elements.dashboardPanels.style.minWidth = `${Math.max(window.innerWidth - 16, maxRight + 20)}px`;
+  const zoom = getAppZoomScale();
+  const viewportHeight = (window.innerHeight - 120) / zoom;
+  const viewportWidth = (window.innerWidth - 16) / zoom;
+  elements.dashboardPanels.style.minHeight = `${Math.max(viewportHeight, maxBottom + 20)}px`;
+  elements.dashboardPanels.style.minWidth = `${Math.max(viewportWidth, maxRight + 20)}px`;
 }
 
 // Scale panel text in layout edit mode based on current absolute panel size.
@@ -12717,8 +12728,9 @@ function moveAbsolutePanelDrag(moveEvent) {
   const panelLayout = appState.panelLayout.panels[drag.panel.id];
   if (!panelLayout) return;
 
-  panelLayout.x = drag.startLeft + (moveEvent.clientX - drag.startX);
-  panelLayout.y = drag.startTop + (moveEvent.clientY - drag.startY);
+  const zoom = getAppZoomScale();
+  panelLayout.x = drag.startLeft + (moveEvent.clientX - drag.startX) / zoom;
+  panelLayout.y = drag.startTop + (moveEvent.clientY - drag.startY) / zoom;
   const snappedPosition = snapLayoutItem({ x: panelLayout.x, y: panelLayout.y });
   panelLayout.x = snappedPosition.x;
   panelLayout.y = snappedPosition.y;
@@ -12776,8 +12788,9 @@ function movePanelResize(moveEvent) {
   const item = appState.panelLayout.panels[resize.panel.id];
   if (!item) return;
 
-  const dx = moveEvent.clientX - resize.startX;
-  const dy = moveEvent.clientY - resize.startY;
+  const zoom = getAppZoomScale();
+  const dx = (moveEvent.clientX - resize.startX) / zoom;
+  const dy = (moveEvent.clientY - resize.startY) / zoom;
 
   let x = resize.startLeft;
   let y = resize.startTop;
@@ -14334,11 +14347,12 @@ function startControlsDockDrag(startEvent) {
   const captureEl = startEvent.currentTarget instanceof HTMLElement ? startEvent.currentTarget : null;
   captureEl?.setPointerCapture?.(startEvent.pointerId);
 
+  const zoom = getAppZoomScale();
   const panelRect = elements.panelSim.getBoundingClientRect();
   appState.controlsDockDrag = {
     pointerId: startEvent.pointerId,
-    offsetX: startEvent.clientX - panelRect.left,
-    offsetY: startEvent.clientY - panelRect.top,
+    offsetX: (startEvent.clientX - panelRect.left) / zoom,
+    offsetY: (startEvent.clientY - panelRect.top) / zoom,
     captureEl
   };
   elements.panelSim.classList.add("panel-docked-dragging");
@@ -14348,11 +14362,12 @@ function startControlsDockDrag(startEvent) {
 function moveControlsDockDrag(moveEvent) {
   if (!appState.controlsDockDrag || moveEvent.pointerId !== appState.controlsDockDrag.pointerId || !elements.panelSim) return;
   moveEvent.preventDefault();
-  const maxX = Math.max(window.innerWidth - elements.panelSim.offsetWidth - 8, 8);
-  const maxY = Math.max(window.innerHeight - elements.panelSim.offsetHeight - 8, 8);
+  const zoom = getAppZoomScale();
+  const maxX = Math.max(window.innerWidth / zoom - elements.panelSim.offsetWidth - 8, 8);
+  const maxY = Math.max(window.innerHeight / zoom - elements.panelSim.offsetHeight - 8, 8);
   appState.controlsDockPos = {
-    x: Math.min(Math.max(moveEvent.clientX - appState.controlsDockDrag.offsetX, 8), maxX),
-    y: Math.min(Math.max(moveEvent.clientY - appState.controlsDockDrag.offsetY, 8), maxY)
+    x: Math.min(Math.max(moveEvent.clientX / zoom - appState.controlsDockDrag.offsetX, 8), maxX),
+    y: Math.min(Math.max(moveEvent.clientY / zoom - appState.controlsDockDrag.offsetY, 8), maxY)
   };
   applyControlsDockPosition();
 }
@@ -14714,6 +14729,7 @@ function setAppZoomPercent(value, options = {}) {
   applyAppZoomPercent(zoomPercent);
   saveAppZoomPercent(zoomPercent);
   if (!options.preserveActiveInput) syncAppZoomControls();
+  if (appState.layoutEditMode) updateDashboardCanvasSize();
 }
 
 function initializeAppZoom() {
@@ -15580,8 +15596,9 @@ function bindEvents() {
 
   window.addEventListener("resize", () => {
     if (appState.controlsDockEnabled) {
-      const maxX = Math.max(window.innerWidth - (elements.panelSim?.offsetWidth || 0) - 8, 8);
-      const maxY = Math.max(window.innerHeight - (elements.panelSim?.offsetHeight || 0) - 8, 8);
+      const zoom = getAppZoomScale();
+      const maxX = Math.max(window.innerWidth / zoom - (elements.panelSim?.offsetWidth || 0) - 8, 8);
+      const maxY = Math.max(window.innerHeight / zoom - (elements.panelSim?.offsetHeight || 0) - 8, 8);
       appState.controlsDockPos = {
         x: Math.min(appState.controlsDockPos.x, maxX),
         y: Math.min(appState.controlsDockPos.y, maxY)
@@ -15591,7 +15608,6 @@ function bindEvents() {
     }
     if (appState.layoutEditMode) {
       updateDashboardCanvasSize();
-      persistPanelLayout();
     }
   });
 }
