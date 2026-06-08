@@ -3948,6 +3948,15 @@ const elements = {
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
+  penFullnessCatchSummary: document.getElementById("penFullnessCatchSummary"),
+  penFullnessCatchConfirmedCount: document.getElementById("penFullnessCatchConfirmedCount"),
+  penFullnessCatchBeforeAvg: document.getElementById("penFullnessCatchBeforeAvg"),
+  penFullnessCatchAfterAvg: document.getElementById("penFullnessCatchAfterAvg"),
+  penFullnessCatchDifference: document.getElementById("penFullnessCatchDifference"),
+  penFullnessCatchFullEarlyAvg: document.getElementById("penFullnessCatchFullEarlyAvg"),
+  penFullnessCatchMidAvg: document.getElementById("penFullnessCatchMidAvg"),
+  penFullnessCatchLowLateAvg: document.getElementById("penFullnessCatchLowLateAvg"),
+  penFullnessCatchSampleNote: document.getElementById("penFullnessCatchSampleNote"),
   penFillFinalRefillTargetSelect: document.getElementById("penFillFinalRefillTargetSelect"),
   penFillFinalRefillTargetWindow: document.getElementById("penFillFinalRefillTargetWindow"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
@@ -11360,6 +11369,108 @@ function updatePenFillIntervalDisplay(refillEvents = getCurrentRunPenFillEvents(
   );
 }
 
+function formatPenFullnessCatchSeconds(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds >= 0 ? formatDurationValue(seconds) : "—";
+}
+
+function formatPenFullnessCatchDifference(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "—";
+  if (Math.abs(seconds) < 0.0005) return "0.000s";
+  return `${seconds > 0 ? "+" : ""}${seconds.toFixed(3)}s`;
+}
+
+function formatPenFullnessSampleCount(sampleSize) {
+  const count = Number(sampleSize);
+  if (!Number.isFinite(count) || count <= 0) return "";
+  return ` (${count} sheep)`;
+}
+
+function getPenFullnessConfounderDisplayName(type) {
+  if (type === MANUAL_MARKER_CUSTOM_TYPE) return "Custom";
+  return MANUAL_MARKER_TYPES[type] || String(type || "Unknown");
+}
+
+function formatPenFullnessConfounderList(types = []) {
+  const labels = [...new Set(types.map(getPenFullnessConfounderDisplayName).filter(Boolean))];
+  if (labels.length <= 1) return labels[0] || "markers";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
+function getPenFullnessCatchPrimaryComparison(analysis) {
+  const usableComparisons = (analysis?.refillComparisons || []).filter((comparison) => (
+    Number.isFinite(Number(comparison?.before?.last2?.averageCatchDuration))
+    && Number.isFinite(Number(comparison?.after?.first2?.averageCatchDuration))
+  ));
+  if (!usableComparisons.length) return null;
+
+  const beforeAverage = averageNumericValues(usableComparisons.map((comparison) => comparison.before.last2.averageCatchDuration));
+  const afterAverage = averageNumericValues(usableComparisons.map((comparison) => comparison.after.first2.averageCatchDuration));
+  return Number.isFinite(beforeAverage) && Number.isFinite(afterAverage)
+    ? { beforeAverage, afterAverage, difference: afterAverage - beforeAverage, comparisonCount: usableComparisons.length }
+    : null;
+}
+
+function getPenFullnessCatchSampleNote(analysis, primaryComparison) {
+  if (!analysis?.available || !primaryComparison) return "Not enough clean data yet.";
+
+  const comparedTypes = (analysis.refillComparisons || []).flatMap((comparison) => {
+    const hasPrimaryValues = Number.isFinite(Number(comparison?.before?.last2?.averageCatchDuration))
+      && Number.isFinite(Number(comparison?.after?.first2?.averageCatchDuration));
+    return hasPrimaryValues ? (comparison?.confounderSummary?.confounderTypes || []) : [];
+  });
+
+  if (comparedTypes.length) {
+    return `Mixed sample — affected by ${formatPenFullnessConfounderList(comparedTypes)}.`;
+  }
+
+  return "Clean sample.";
+}
+
+function updatePenFullnessCatchAnalysisDisplay() {
+  const hasDisplay = elements.penFullnessCatchSummary
+    || elements.penFullnessCatchConfirmedCount
+    || elements.penFullnessCatchBeforeAvg
+    || elements.penFullnessCatchAfterAvg
+    || elements.penFullnessCatchDifference
+    || elements.penFullnessCatchFullEarlyAvg
+    || elements.penFullnessCatchMidAvg
+    || elements.penFullnessCatchLowLateAvg
+    || elements.penFullnessCatchSampleNote;
+  if (!hasDisplay || typeof buildPenFullnessCatchAnalysis !== "function") return;
+
+  const analysis = buildPenFullnessCatchAnalysis();
+  const summary = analysis?.summary || analysis?.reason || "Not enough confirmed refill data yet.";
+  const confirmedCount = Number(analysis?.confirmedRefillCount);
+  const primaryComparison = getPenFullnessCatchPrimaryComparison(analysis);
+  const bucketByKey = (analysis?.fullnessBuckets || []).reduce((buckets, bucket) => {
+    if (bucket?.bucket) buckets[bucket.bucket] = bucket;
+    return buckets;
+  }, {});
+  const formatBucket = (bucket) => (Number.isFinite(Number(bucket?.averageCatchDuration))
+    ? `${formatPenFullnessCatchSeconds(Number(bucket.averageCatchDuration))}${formatPenFullnessSampleCount(bucket.sampleSize)}`
+    : "Not enough data yet.");
+
+  setText(elements.penFullnessCatchSummary, summary);
+  setText(elements.penFullnessCatchConfirmedCount, Number.isFinite(confirmedCount) ? String(confirmedCount) : "0");
+
+  if (primaryComparison) {
+    setText(elements.penFullnessCatchBeforeAvg, `${formatPenFullnessCatchSeconds(primaryComparison.beforeAverage)} — last 2 before refill`);
+    setText(elements.penFullnessCatchAfterAvg, `${formatPenFullnessCatchSeconds(primaryComparison.afterAverage)} — first 2 after refill`);
+    setText(elements.penFullnessCatchDifference, `${formatPenFullnessCatchDifference(primaryComparison.difference)} after vs before`);
+  } else {
+    setText(elements.penFullnessCatchBeforeAvg, "Not enough recorded catch time before confirmed refills yet.");
+    setText(elements.penFullnessCatchAfterAvg, "Not enough recorded catch time after confirmed refills yet.");
+    setText(elements.penFullnessCatchDifference, "Not enough data yet.");
+  }
+
+  setText(elements.penFullnessCatchFullEarlyAvg, formatBucket(bucketByKey.fullEarly));
+  setText(elements.penFullnessCatchMidAvg, formatBucket(bucketByKey.midCycle));
+  setText(elements.penFullnessCatchLowLateAvg, formatBucket(bucketByKey.lowLate));
+  setText(elements.penFullnessCatchSampleNote, getPenFullnessCatchSampleNote(analysis, primaryComparison));
+}
+
 let penFillForecastCountdownTarget = null;
 
 function resetPenFillForecastCountdownTarget() {
@@ -11525,6 +11636,7 @@ function updatePenStateDisplay() {
 }
 
 function updatePenFillForecastDisplay() {
+  updatePenFullnessCatchAnalysisDisplay();
   const statusClassNames = [
     "pen-fill-status-on-target",
     "pen-fill-status-too-early",
