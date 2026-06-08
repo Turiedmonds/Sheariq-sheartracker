@@ -7263,6 +7263,7 @@ function formatReviewRunDayClockSecondsShort(secondsFromMidnight) {
 }
 
 function getReviewRunEntriesInBucket(snapshot, bucket) {
+  if (Array.isArray(bucket?.reviewRunBestWorstEntries)) return bucket.reviewRunBestWorstEntries;
   const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
   const bucketMinutes = getReviewRunTrendBucketMinutes(snapshot);
   const startElapsed = Number(bucket?.startElapsed);
@@ -7272,6 +7273,64 @@ function getReviewRunEntriesInBucket(snapshot, bucket) {
     const elapsed = Number(entry?.effectiveElapsedSeconds);
     return Number.isFinite(elapsed) && elapsed >= startElapsed && elapsed < endElapsed;
   });
+}
+
+function getReviewRunBestWorstRunLengthSeconds(snapshot) {
+  const runLengthSeconds = Number(snapshot?.runLengthSeconds);
+  return Number.isFinite(runLengthSeconds) && runLengthSeconds > 0 ? runLengthSeconds : NaN;
+}
+
+function getReviewRunBestWorstBucketElapsed(entry, snapshot) {
+  const elapsed = Number(entry?.effectiveElapsedSeconds);
+  if (!Number.isFinite(elapsed)) return NaN;
+
+  const runLengthSeconds = getReviewRunBestWorstRunLengthSeconds(snapshot);
+  if (!Number.isFinite(runLengthSeconds)) return Math.max(elapsed, 0);
+
+  return Math.min(Math.max(elapsed, 0), Math.max(runLengthSeconds - 0.001, 0));
+}
+
+function buildReviewRunBestWorstBuckets(snapshot) {
+  const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
+  const bucketMinutes = getReviewRunTrendBucketMinutes(snapshot);
+  const bucketSeconds = Math.max(bucketMinutes, 1) * 60;
+  const runLengthSeconds = getReviewRunBestWorstRunLengthSeconds(snapshot);
+  const buckets = {};
+
+  sheep.forEach((entry) => {
+    const elapsed = getReviewRunBestWorstBucketElapsed(entry, snapshot);
+    const fullCycle = Number(entry?.fullCycle);
+    if (!Number.isFinite(elapsed) || !Number.isFinite(fullCycle)) return;
+
+    const key = Math.floor(elapsed / bucketSeconds);
+    const startElapsed = key * bucketSeconds;
+    if (Number.isFinite(runLengthSeconds) && startElapsed >= runLengthSeconds) return;
+
+    if (!buckets[key]) {
+      buckets[key] = {
+        key,
+        startElapsed,
+        count: 0,
+        cycleTotal: 0,
+        catchTotal: 0,
+        reviewRunBestWorstEntries: []
+      };
+    }
+
+    buckets[key].count += 1;
+    buckets[key].cycleTotal += fullCycle;
+    buckets[key].catchTotal += Number(entry?.catchDuration) || 0;
+    buckets[key].reviewRunBestWorstEntries.push(entry);
+  });
+
+  return Object.values(buckets).map((bucket) => ({
+    key: bucket.key,
+    startElapsed: bucket.startElapsed,
+    avgCycle: bucket.count ? bucket.cycleTotal / bucket.count : 0,
+    avgCatch: bucket.count ? bucket.catchTotal / bucket.count : 0,
+    count: bucket.count,
+    reviewRunBestWorstEntries: bucket.reviewRunBestWorstEntries
+  })).sort((a, b) => a.key - b.key);
 }
 
 function getReviewRunMarkerNoteContext(entries) {
@@ -7660,8 +7719,7 @@ function appendReviewRunPortionSelectors(parent, snapshot) {
 function buildReviewRunPeriodRows(snapshot) {
   const sheep = Array.isArray(snapshot?.sheep) ? snapshot.sheep : [];
   if (!sheep.length) return [];
-  const requiredCycle = getReviewRunRequiredCycle(snapshot);
-  const buckets = Array.isArray(snapshot?.trendBuckets) ? snapshot.trendBuckets : [];
+  const buckets = buildReviewRunBestWorstBuckets(snapshot);
   const best = buckets.reduce((winner, bucket) => (!winner || Number(bucket.avgCycle) < Number(winner.avgCycle) ? bucket : winner), null);
   const worst = buckets.reduce((loser, bucket) => (!loser || Number(bucket.avgCycle) > Number(loser.avgCycle) ? bucket : loser), null);
   const bucketLabel = getReviewRunTrendBucketLabel(snapshot);
