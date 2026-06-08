@@ -1752,6 +1752,7 @@ function recordCurrentPenCountCorrection(correctedCurrentPenCount, options = {})
   }
 
   appState.penFillEvents.push(draft);
+  clearPenRefillAlertLatch();
   autosaveState();
   refreshPenFillConfirmationDisplays(`Corrected current pen count — ${draft.correctedCurrentPenCount}.`);
   return { success: true, event: draft, message: "Corrected current pen count.", error: null };
@@ -2399,6 +2400,7 @@ function maybeRecordAssumedPenFillEvent(context = {}) {
   });
   if (draft?.error) return null;
 
+  armPenRefillAlertLatch(penStateAtFillPoint);
   appState.penFillEvents.push(draft);
   autosaveState();
   return draft;
@@ -2490,6 +2492,7 @@ function recordPenFillEvent(options = {}) {
     existingFillEvent.updatedAt = now;
   }
   appState.penFillEvents.push(draft);
+  clearPenRefillAlertLatch();
   autosaveState();
 
   const sourceMessages = {
@@ -3117,6 +3120,7 @@ async function maybeShowPenFillConfirmationPrompt() {
     }
 
     appState.dismissedPenFillPromptKey = promptKey;
+    clearPenRefillAlertLatch();
     updatePenFillConfirmationControls({ statusOverride: "Refill not confirmed." });
   } finally {
     if (appState.pendingPenFillPromptKey === promptKey) {
@@ -3131,6 +3135,7 @@ async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey)
     const rawAmount = promptForCustomPenFillAmount(promptMessage);
     if (rawAmount === null) {
       appState.dismissedPenFillPromptKey = promptKey;
+      clearPenRefillAlertLatch();
       updatePenFillConfirmationControls({ statusOverride: "Refill not confirmed." });
       return { success: false, message: "Refill not confirmed." };
     }
@@ -3809,6 +3814,8 @@ const appState = {
   },
   pendingPenFillPromptKey: null,
   dismissedPenFillPromptKey: null,
+  penRefillAlertLatch: null,
+  timingCadenceAlertLatches: {},
   effectiveElapsedBeforePauseMs: 0,
   effectiveResumeRealMs: null,
   discardedResetElapsedMs: 0,
@@ -6101,6 +6108,8 @@ function resetRunState() {
   appState.targetPacePredictionSnapshot = null;
   appState.pendingPenFillPromptKey = null;
   appState.dismissedPenFillPromptKey = null;
+  clearPenRefillAlertLatch();
+  clearTimingCadenceAlertLatches();
   resetPenFillForecastCountdownTarget();
   calculateAverages();
 }
@@ -6306,6 +6315,8 @@ function startRun(startedAtMs = Date.now()) {
   appState.targetPacePredictionSnapshot = null;
   appState.pendingPenFillPromptKey = null;
   appState.dismissedPenFillPromptKey = null;
+  clearPenRefillAlertLatch();
+  clearTimingCadenceAlertLatches();
   resetPenFillForecastCountdownTarget();
 
   elements.startRunBtn.disabled = true;
@@ -6981,7 +6992,7 @@ function applyUndoLastSheepRestorePoint(restorePoint) {
     ? Math.max(currentElapsedSeconds - restoredElapsedSeconds, 0)
     : 0;
 
-  appState.effectiveElapsedBeforePauseMs = Math.max(restoredElapsedSeconds * 1000, 0);
+  appState.effectiveElapsedBeforePauseMs = Math.max((restoredElapsedSeconds * 1000) + getDiscardedResetElapsedMs(), 0);
   appState.effectiveResumeRealMs = null;
 
   if (Number.isFinite(appState.runEndTimeMs)) {
@@ -7070,6 +7081,7 @@ async function undoLastSheep() {
   markFuturePenFillEventsUndone(newPhysicalSheepCount, now);
   clearPenFillPromptKeyBeyondSheepCount("pendingPenFillPromptKey", newPhysicalSheepCount);
   clearPenFillPromptKeyBeyondSheepCount("dismissedPenFillPromptKey", newPhysicalSheepCount);
+  clearPenRefillAlertLatchBeyondSheepCount(newPhysicalSheepCount);
 
   setPaused(true);
   rewindSimulationTimingForUndoLastSheep(getUndoLastSheepRewindSeconds(latestRunSheep), previousRunSheep);
@@ -10991,6 +11003,79 @@ function updateQuarterDisplay() {
 
 const TIMING_ALERT_GRACE_SECONDS = 10;
 
+const TIMING_CADENCE_ALERT_TYPES = ["comb", "cutter", "drink"];
+
+function normalizeTimingCadenceAlertLatches(latches = appState.timingCadenceAlertLatches) {
+  if (!latches || typeof latches !== "object") return {};
+  return TIMING_CADENCE_ALERT_TYPES.reduce((normalized, alertType) => {
+    const latch = latches[alertType];
+    const eventTime = Number(latch?.eventTime);
+    const expiresAtMs = Number(latch?.expiresAtMs);
+    if (Number.isFinite(eventTime) && eventTime > 0) {
+      normalized[alertType] = {
+        eventTime,
+        expiresAtMs: Number.isFinite(expiresAtMs) && expiresAtMs > 0 ? expiresAtMs : null
+      };
+    }
+    return normalized;
+  }, {});
+}
+
+function clearTimingCadenceAlertLatches() {
+  appState.timingCadenceAlertLatches = {};
+}
+
+function getTimingCadenceAlertLatch(alertType) {
+  appState.timingCadenceAlertLatches = normalizeTimingCadenceAlertLatches(appState.timingCadenceAlertLatches);
+  return appState.timingCadenceAlertLatches[alertType] || null;
+}
+
+function clearTimingCadenceAlertLatch(alertType) {
+  if (!appState.timingCadenceAlertLatches || typeof appState.timingCadenceAlertLatches !== "object") return;
+  delete appState.timingCadenceAlertLatches[alertType];
+}
+
+function armTimingCadenceAlertLatch(alertType, eventTime) {
+  const safeEventTime = Number(eventTime);
+  if (!TIMING_CADENCE_ALERT_TYPES.includes(alertType) || !Number.isFinite(safeEventTime) || safeEventTime <= 0) return null;
+  appState.timingCadenceAlertLatches = normalizeTimingCadenceAlertLatches(appState.timingCadenceAlertLatches);
+  const existingLatch = appState.timingCadenceAlertLatches[alertType];
+  if (Number(existingLatch?.eventTime) === safeEventTime) return existingLatch;
+  appState.timingCadenceAlertLatches[alertType] = { eventTime: safeEventTime, expiresAtMs: null };
+  return appState.timingCadenceAlertLatches[alertType];
+}
+
+function getLatchedTimingCadenceNowAlert(alertType, eventTime, elapsedSeconds, graceSeconds, runDurationSeconds) {
+  const safeEventTime = Number(eventTime);
+  const safeElapsedSeconds = Number(elapsedSeconds);
+  const safeGraceSeconds = Number(graceSeconds);
+  const safeRunDurationSeconds = Number(runDurationSeconds);
+  if (!Number.isFinite(safeEventTime) || safeEventTime <= 0) return null;
+  if (Number.isFinite(safeRunDurationSeconds) && safeRunDurationSeconds > 0 && safeEventTime >= safeRunDurationSeconds) {
+    clearTimingCadenceAlertLatch(alertType);
+    return null;
+  }
+  if (!Number.isFinite(safeElapsedSeconds) || safeElapsedSeconds < safeEventTime) return null;
+
+  const existingLatch = armTimingCadenceAlertLatch(alertType, safeEventTime);
+  const nowMs = Date.now();
+  const existingExpiresAtMs = Number(existingLatch?.expiresAtMs);
+  if (Number.isFinite(existingExpiresAtMs) && existingExpiresAtMs <= nowMs) {
+    clearTimingCadenceAlertLatch(alertType);
+    return null;
+  }
+
+  const secondsSinceEvent = safeElapsedSeconds - safeEventTime;
+  const naturalGraceRemainingMs = Math.max(safeGraceSeconds - Math.max(secondsSinceEvent, 0), 0) * 1000;
+  const expiresAtMs = Number.isFinite(existingExpiresAtMs) && existingExpiresAtMs > nowMs
+    ? existingExpiresAtMs
+    : nowMs + (naturalGraceRemainingMs > 0 ? naturalGraceRemainingMs : safeGraceSeconds * 1000);
+
+  appState.timingCadenceAlertLatches[alertType] = { eventTime: safeEventTime, expiresAtMs };
+  return { mode: "now", eventTime: safeEventTime };
+}
+
+
 function getNextPlannedDrinkCountdownState() {
   const plannedTimingMinutes = Number(appState.markerSettings?.drink?.plannedTimingMinutes);
   const drinkIntervalSeconds = plannedTimingMinutes * 60;
@@ -11063,6 +11148,7 @@ function updateTimingAlertDisplay() {
   };
 
   if (!hasRunStarted) {
+    clearTimingCadenceAlertLatches();
     setTimingAlertDisplay("none", "—");
     return;
   }
@@ -11072,6 +11158,7 @@ function updateTimingAlertDisplay() {
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const runComplete = runDurationSeconds > 0 && elapsedSeconds >= runDurationSeconds;
   if (runComplete) {
+    clearTimingCadenceAlertLatches();
     setTimingAlertDisplay("none", "—");
     return;
   }
@@ -11089,7 +11176,7 @@ function updateTimingAlertDisplay() {
   const ALERT_GRACE_SECONDS = TIMING_ALERT_GRACE_SECONDS;
   const LAST_QUARTER_SECONDS = 900;
 
-  const getCadenceAlertState = (intervalSeconds) => {
+  const getCadenceAlertState = (alertType, intervalSeconds) => {
     if (!Number.isFinite(intervalSeconds) || intervalSeconds <= 0) return null;
     const previousEventMultiple = Math.floor(elapsedSeconds / intervalSeconds);
     const previousEventTime = previousEventMultiple * intervalSeconds;
@@ -11104,10 +11191,16 @@ function updateTimingAlertDisplay() {
       && secondsSincePreviousEvent <= ALERT_GRACE_SECONDS;
 
     if (canShowPreEventWarning) {
+      armTimingCadenceAlertLatch(alertType, nextEventTime);
       return { mode: "countdown", seconds: Math.ceil(secondsUntilNextEvent), eventTime: nextEventTime };
     }
     if (canShowPostEventGrace) {
-      return { mode: "now" };
+      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, ALERT_GRACE_SECONDS, runDurationSeconds);
+    }
+
+    const latch = getTimingCadenceAlertLatch(alertType);
+    if (Number(latch?.eventTime) === previousEventTime) {
+      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, ALERT_GRACE_SECONDS, runDurationSeconds);
     }
     return null;
   };
@@ -11116,14 +11209,14 @@ function updateTimingAlertDisplay() {
   const inLastQuarter = runDurationSeconds > 0 && remainingSeconds <= LAST_QUARTER_SECONDS;
 
   const suppressEndOfRunCadenceCountdown = (alert) => {
-    if (alert?.mode !== "countdown") return alert;
+    if (!alert) return alert;
     if (!Number.isFinite(alert.eventTime) || runDurationSeconds <= 0) return alert;
     return alert.eventTime >= runDurationSeconds ? null : alert;
   };
 
-  const combAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(COMB_INTERVAL_SECONDS));
-  const cutterAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(CUTTER_INTERVAL_SECONDS));
-  const drinkAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(DRINK_INTERVAL_SECONDS));
+  const combAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState("comb", COMB_INTERVAL_SECONDS));
+  const cutterAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState("cutter", CUTTER_INTERVAL_SECONDS));
+  const drinkAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState("drink", DRINK_INTERVAL_SECONDS));
   const drinkRefillClashAdvisory = getNextDrinkRefillClashAdvisory({ effectiveElapsedSeconds });
 
   if (combAlert) {
@@ -11150,6 +11243,91 @@ function updateTimingAlertDisplay() {
   }
 }
 
+
+function normalizePenRefillAlertLatch(latch = appState.penRefillAlertLatch) {
+  if (!latch || typeof latch !== "object") return null;
+  const physicalSheepTakenFromPen = Number(latch.physicalSheepTakenFromPen);
+  const runIndex = Number(latch.runIndex);
+  const recordType = typeof latch.recordType === "string" ? latch.recordType : appState.recordType;
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return null;
+  return {
+    recordType,
+    runIndex: Number.isFinite(runIndex) ? runIndex : Number(appState.currentRunIndex),
+    physicalSheepTakenFromPen,
+    promptKey: typeof latch.promptKey === "string" ? latch.promptKey : getPenFillPromptKey(physicalSheepTakenFromPen),
+    createdAtMs: Number.isFinite(Number(latch.createdAtMs)) ? Number(latch.createdAtMs) : Date.now()
+  };
+}
+
+function clearPenRefillAlertLatch() {
+  appState.penRefillAlertLatch = null;
+}
+
+function clearPenRefillAlertLatchBeyondSheepCount(newPhysicalSheepCount) {
+  const latch = normalizePenRefillAlertLatch(appState.penRefillAlertLatch);
+  if (!latch) {
+    clearPenRefillAlertLatch();
+    return;
+  }
+  const safeSheepCount = Number(newPhysicalSheepCount);
+  if (
+    Number.isFinite(safeSheepCount)
+    && latch.runIndex === Number(appState.currentRunIndex)
+    && latch.physicalSheepTakenFromPen > safeSheepCount
+  ) {
+    clearPenRefillAlertLatch();
+  } else {
+    appState.penRefillAlertLatch = latch;
+  }
+}
+
+function armPenRefillAlertLatch(penState) {
+  const physicalSheepTakenFromPen = Number(penState?.physicalSheepTakenFromPen);
+  if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return null;
+  const latch = {
+    recordType: appState.recordType,
+    runIndex: Number(appState.currentRunIndex),
+    physicalSheepTakenFromPen,
+    promptKey: getPenFillPromptKey(physicalSheepTakenFromPen),
+    createdAtMs: Date.now()
+  };
+  appState.penRefillAlertLatch = latch;
+  return latch;
+}
+
+function hasActivePenFillEventAtOrAfterSheepCount(physicalSheepTakenFromPen) {
+  const targetSheepCount = Number(physicalSheepTakenFromPen);
+  if (!Number.isFinite(targetSheepCount)) return false;
+  return getCurrentRunPenFillEvents().some((event) => {
+    if (!isActivePenFillEvent(event) || event.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL) return false;
+    const eventSheepCount = Number(event.physicalSheepTakenFromPen);
+    return Number.isFinite(eventSheepCount) && eventSheepCount >= targetSheepCount;
+  });
+}
+
+function getActivePenRefillAlertLatch(sheepTakenFromPen) {
+  const latch = normalizePenRefillAlertLatch(appState.penRefillAlertLatch);
+  if (!latch) {
+    clearPenRefillAlertLatch();
+    return null;
+  }
+
+  const currentSheepTakenFromPen = Number(sheepTakenFromPen);
+  if (
+    latch.recordType !== appState.recordType
+    || latch.runIndex !== Number(appState.currentRunIndex)
+    || (Number.isFinite(currentSheepTakenFromPen) && currentSheepTakenFromPen < latch.physicalSheepTakenFromPen)
+    || appState.dismissedPenFillPromptKey === latch.promptKey
+    || hasActivePenFillEventAtOrAfterSheepCount(latch.physicalSheepTakenFromPen)
+  ) {
+    clearPenRefillAlertLatch();
+    return null;
+  }
+
+  appState.penRefillAlertLatch = latch;
+  return latch;
+}
+
 function updatePenRefillAlertDisplay() {
   const penRefillAlertRow = elements.penRefillAlert ? elements.penRefillAlert.closest(".pen-refill-alert-row") : null;
   const alertClassNames = [
@@ -11170,12 +11348,14 @@ function updatePenRefillAlertDisplay() {
 
   const rule = getPenRule(appState.recordType);
   if (!rule) {
+    clearPenRefillAlertLatch();
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
   const sheepTakenFromPen = getPhysicalSheepTakenFromPen();
   if (!Number.isFinite(sheepTakenFromPen) || sheepTakenFromPen <= 0) {
+    clearPenRefillAlertLatch();
     setPenRefillAlertDisplay("none", "—");
     return;
   }
@@ -11186,11 +11366,18 @@ function updatePenRefillAlertDisplay() {
     physicalSheepTakenFromPen: sheepTakenFromPen
   });
   if (!penState) {
+    clearPenRefillAlertLatch();
     setPenRefillAlertDisplay("none", "—");
     return;
   }
 
   if (penState.refillAllowedNow) {
+    armPenRefillAlertLatch(penState);
+    setPenRefillAlertDisplay("now", "Pen refill allowed");
+    return;
+  }
+
+  if (getActivePenRefillAlertLatch(sheepTakenFromPen)) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
   }
@@ -12920,6 +13107,8 @@ function getAutosavePayload() {
       pendingBreakSource: appState.pendingBreakSource,
       pendingPenFillPromptKey: appState.pendingPenFillPromptKey,
       dismissedPenFillPromptKey: appState.dismissedPenFillPromptKey,
+      penRefillAlertLatch: appState.penRefillAlertLatch,
+      timingCadenceAlertLatches: appState.timingCadenceAlertLatches,
       runEndTimeMs: appState.runEndTimeMs,
       officialRunEndTimeMs: appState.officialRunEndTimeMs,
       currentRunIndex: appState.currentRunIndex,
@@ -14065,6 +14254,8 @@ function restoreSessionPayload(raw, options = {}) {
     elements.customHours.disabled = elements.runType.value !== "custom";
   }
   appState.retryCatchOnResume = Boolean(appState.retryCatchOnResume);
+  appState.penRefillAlertLatch = normalizePenRefillAlertLatch(appState.penRefillAlertLatch);
+  appState.timingCadenceAlertLatches = normalizeTimingCadenceAlertLatches(appState.timingCadenceAlertLatches);
   appState.discardedResetElapsedMs = Object.prototype.hasOwnProperty.call(raw.state, "discardedResetElapsedMs")
     ? getDiscardedResetElapsedMs()
     : 0;
@@ -15149,6 +15340,7 @@ function bindEvents() {
     elements.recordType.addEventListener("change", () => {
       const nextRecordType = elements.recordType.value;
       appState.recordType = nextRecordType === "strongWoolLambs" || nextRecordType === "strongWoolEwes" ? nextRecordType : "none";
+      clearPenRefillAlertLatch();
       syncFinalFillTargetControls();
       updateStatsPanel();
       autosaveState();
