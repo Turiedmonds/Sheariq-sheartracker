@@ -29,6 +29,7 @@ const SHEEP_LOG_SORT_STORAGE_KEY = "sheariq.sheepLogSort";
 const SHEEP_LOG_FILL_DIRECTION_STORAGE_KEY = "sheariq.sheepLogFillDirection";
 const SHEEP_LOG_MARKERS_VISIBLE_STORAGE_KEY = "sheariq.sheepLogMarkersVisible";
 const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
+const PEN_FILL_FINAL_TARGET_STORAGE_KEY = "sheariq.penFillFinalTargetByRecordType";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
 const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
@@ -66,9 +67,12 @@ const DAY_SCHEDULES = {
   "8": [7200, 7200, 7200, 7200]
 };
 
-const FINAL_FILL_IDEAL_BEFORE_END_SECONDS = 180;
-const FINAL_FILL_MIN_BEFORE_END_SECONDS = 120;
-const FINAL_FILL_MAX_BEFORE_END_SECONDS = 240;
+const DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS = 180;
+const FINAL_FILL_TARGET_OPTIONS_SECONDS = Object.freeze([60, 120, 180, 240, 300]);
+const DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS = 20;
+const FINAL_FILL_IDEAL_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS;
+const FINAL_FILL_MIN_BEFORE_END_SECONDS = Math.max(DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS - DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS, 0);
+const FINAL_FILL_MAX_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS + DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS;
 const FINAL_FILL_ANALYSIS_START_SECONDS = 1800;
 
 const PEN_RULES_BY_RECORD_TYPE = {
@@ -97,6 +101,51 @@ const PEN_FILL_EVENT_SOURCE = {
 
 function getPenRule(recordType) {
   return PEN_RULES_BY_RECORD_TYPE[recordType] || null;
+}
+
+function sanitizeFinalFillTargetBeforeEndSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS;
+  const roundedSeconds = Math.round(seconds);
+  return FINAL_FILL_TARGET_OPTIONS_SECONDS.includes(roundedSeconds)
+    ? roundedSeconds
+    : DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS;
+}
+
+function getDefaultFinalFillTargetByRecordType() {
+  return Object.keys(PEN_RULES_BY_RECORD_TYPE).reduce((targets, recordType) => {
+    targets[recordType] = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS;
+    return targets;
+  }, {});
+}
+
+function sanitizeFinalFillTargetByRecordType(rawTargets = {}) {
+  const defaults = getDefaultFinalFillTargetByRecordType();
+  return Object.keys(defaults).reduce((targets, recordType) => {
+    targets[recordType] = sanitizeFinalFillTargetBeforeEndSeconds(rawTargets?.[recordType]);
+    return targets;
+  }, defaults);
+}
+
+function getFinalFillTargetBeforeEndSeconds(recordType = appState.recordType) {
+  const targetByRecordType = sanitizeFinalFillTargetByRecordType(appState.finalFillTargetByRecordType);
+  return sanitizeFinalFillTargetBeforeEndSeconds(targetByRecordType[recordType]);
+}
+
+function getFinalFillTimingWindow(recordType = appState.recordType) {
+  const idealBeforeEndSeconds = getFinalFillTargetBeforeEndSeconds(recordType);
+  const toleranceSeconds = DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS;
+  return {
+    idealBeforeEndSeconds,
+    minBeforeEndSeconds: Math.max(idealBeforeEndSeconds - toleranceSeconds, 0),
+    maxBeforeEndSeconds: idealBeforeEndSeconds + toleranceSeconds,
+    toleranceSeconds
+  };
+}
+
+function formatFinalFillTargetOption(seconds) {
+  const minutes = Math.round(sanitizeFinalFillTargetBeforeEndSeconds(seconds) / 60);
+  return `${minutes} min before end`;
 }
 
 const SHEEP_STATUS = {
@@ -1859,11 +1908,12 @@ function getPenFillInstructionModel(options = {}) {
     status: planner?.status,
     hasReductionPlan: selectedPlan.some((fill) => Number(fill?.reduction) > 0)
   });
-  const finalThreeMinutePrediction = getFinalThreeMinutePrediction();
-  const finalThreeMinuteMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
-    && projectedFinalFillSecondsBeforeEnd < FINAL_FILL_MIN_BEFORE_END_SECONDS
+  const finalTargetPrediction = getFinalTargetPrediction(appState.currentStats.avgCycle, recordType);
+  const finalFillTimingWindow = getFinalFillTimingWindow(recordType);
+  const finalTargetMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
+    && projectedFinalFillSecondsBeforeEnd < finalFillTimingWindow.minBeforeEndSeconds
       ? "Final refill too late"
-      : finalThreeMinutePrediction.message;
+      : finalTargetPrediction.message;
   let lastFullFillMessage = "Not yet";
   if (!canUseFullFill || !recordType || recordType === "none" || !appState.runActive) {
     lastFullFillMessage = "—";
@@ -1885,8 +1935,8 @@ function getPenFillInstructionModel(options = {}) {
     lastFullFillMessage,
     remainingFillPlan,
     remainingFillsMessage,
-    finalThreeMinutePrediction,
-    finalThreeMinuteMessage,
+    finalTargetPrediction,
+    finalTargetMessage,
     canConfirmNow,
     reason,
     planner,
@@ -1914,7 +1964,7 @@ function updatePenFillPlannerStrategyDetails(options = {}) {
   setText(elements.penFillPlannerReason, instructionModel.reason || "—");
   setText(elements.penFillPlannerLastFullFill, instructionModel.lastFullFillMessage || "—");
   setText(elements.penFillPlannerRemainingFills, instructionModel.remainingFillsMessage || "—");
-  setText(elements.penFillPlannerFinalThreeMinutes, instructionModel.finalThreeMinuteMessage || "—");
+  setText(elements.penFillPlannerProjectedAfterTarget, instructionModel.finalTargetMessage || "—");
 }
 
 function updatePenFillEarlyReminderDisplay() {
@@ -2244,15 +2294,16 @@ function scoreFinalFillPlanCandidate(candidate, options = {}) {
   const finalSecondsBeforeEnd = Number(candidate?.finalFill?.secondsBeforeRunEnd);
   if (!Number.isFinite(finalSecondsBeforeEnd)) return Number.POSITIVE_INFINITY;
 
+  const timingWindow = getFinalFillTimingWindow(options.recordType);
   const idealBeforeEndSeconds = Number.isFinite(options.idealBeforeEndSeconds)
     ? options.idealBeforeEndSeconds
-    : FINAL_FILL_IDEAL_BEFORE_END_SECONDS;
+    : timingWindow.idealBeforeEndSeconds;
   const minBeforeEndSeconds = Number.isFinite(options.minBeforeEndSeconds)
     ? options.minBeforeEndSeconds
-    : FINAL_FILL_MIN_BEFORE_END_SECONDS;
+    : timingWindow.minBeforeEndSeconds;
   const maxBeforeEndSeconds = Number.isFinite(options.maxBeforeEndSeconds)
     ? options.maxBeforeEndSeconds
-    : FINAL_FILL_MAX_BEFORE_END_SECONDS;
+    : timingWindow.maxBeforeEndSeconds;
 
   const totalReduction = Number.isFinite(candidate.totalReduction) ? candidate.totalReduction : 0;
   const maxSingleReduction = Number.isFinite(candidate.maxSingleReduction) ? candidate.maxSingleReduction : 0;
@@ -2443,7 +2494,7 @@ function formatRemainingFillsMessage(remainingFillPlan, options = {}) {
   return amounts.length > 5 ? `${visibleAmounts}, …` : visibleAmounts;
 }
 
-function getFinalThreeMinutePrediction(avgCycleSeconds = appState.currentStats.avgCycle) {
+function getFinalTargetPrediction(avgCycleSeconds = appState.currentStats.avgCycle, recordType = appState.recordType) {
   const cycleSecondsUsed = Number(avgCycleSeconds);
   if (!Number.isFinite(cycleSecondsUsed) || cycleSecondsUsed <= 0) {
     return {
@@ -2453,7 +2504,7 @@ function getFinalThreeMinutePrediction(avgCycleSeconds = appState.currentStats.a
     };
   }
 
-  const predictedSheep = Math.max(Math.floor(180 / cycleSecondsUsed), 0);
+  const predictedSheep = Math.max(Math.floor(getFinalFillTargetBeforeEndSeconds(recordType) / cycleSecondsUsed), 0);
   return {
     predictedSheep,
     cycleSecondsUsed,
@@ -2513,6 +2564,7 @@ function planFinalFillStrategy(options = {}) {
   );
   const runActive = Object.prototype.hasOwnProperty.call(options, "runActive") ? Boolean(options.runActive) : Boolean(appState.runActive);
   const includeCandidates = Boolean(options.includeCandidates);
+  const finalFillTimingWindow = getFinalFillTimingWindow(recordType);
 
   if (!recordType || recordType === "none" || !rule) {
     return buildFinalFillPlannerResult({
@@ -2573,7 +2625,11 @@ function planFinalFillStrategy(options = {}) {
       reductions: [],
       maxForecastPoints: runEndForecastCap
     });
-  const finalRefillAnalysis = analyzeFinalFillWindow(forecastPoints, { remainingRunSeconds });
+  const finalRefillAnalysis = analyzeFinalFillWindow(forecastPoints, {
+    recordType,
+    remainingRunSeconds,
+    ...finalFillTimingWindow
+  });
   const currentFinalFill = finalRefillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
   const currentFullFillFinalSecondsBeforeEnd = Number.isFinite(currentFinalFill?.secondsBeforeRunEnd)
     ? currentFinalFill.secondsBeforeRunEnd
@@ -2656,12 +2712,14 @@ function planFinalFillStrategy(options = {}) {
   }
 
   const candidates = generateFinalFillPlanCandidates({
+    recordType,
     rule,
     physicalSheepTakenFromPen,
     avgCycleSeconds,
     effectiveElapsedSeconds,
     runDurationSeconds,
-    maxForecastPoints: runEndForecastCap
+    maxForecastPoints: runEndForecastCap,
+    ...finalFillTimingWindow
   });
   const viableCandidates = candidates
     .filter((candidate) => !candidate.rejectionReason && candidate.changedFillCount > 0 && Number.isFinite(candidate.score))
@@ -2672,13 +2730,13 @@ function planFinalFillStrategy(options = {}) {
     totalReduction: 0,
     maxSingleReduction: 0,
     changedFillCount: 0
-  });
+  }, { recordType, ...finalFillTimingWindow });
   const bestSecondsBeforeEnd = Number(bestCandidate?.finalFill?.secondsBeforeRunEnd);
   const improvesTiming = bestCandidate
     && Number.isFinite(bestSecondsBeforeEnd)
-    && Math.abs(bestSecondsBeforeEnd - FINAL_FILL_IDEAL_BEFORE_END_SECONDS) + 5 < Math.abs(currentFullFillFinalSecondsBeforeEnd - FINAL_FILL_IDEAL_BEFORE_END_SECONDS)
+    && Math.abs(bestSecondsBeforeEnd - finalFillTimingWindow.idealBeforeEndSeconds) + 5 < Math.abs(currentFullFillFinalSecondsBeforeEnd - finalFillTimingWindow.idealBeforeEndSeconds)
     && bestCandidate.score + 5 < currentScore
-    && bestSecondsBeforeEnd >= FINAL_FILL_MIN_BEFORE_END_SECONDS;
+    && bestSecondsBeforeEnd >= finalFillTimingWindow.minBeforeEndSeconds;
 
   if (improvesTiming) {
     const firstPlannedFill = bestCandidate.plan[0] || bestCandidate.plan.find((fill) => fill.reduction > 0);
@@ -2698,7 +2756,7 @@ function planFinalFillStrategy(options = {}) {
       remainingFillPlan: bestRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(bestRemainingFillPlan, { status: "recommendReduction", hasReductionPlan: true }),
       reason: "Full refills place the final refill too early.",
-      confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= FINAL_FILL_MAX_BEFORE_END_SECONDS ? "high" : "medium",
+      confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= finalFillTimingWindow.maxBeforeEndSeconds ? "high" : "medium",
       candidates: includeCandidates ? candidates : []
     });
   }
@@ -2739,6 +2797,7 @@ const appState = {
   targetPacePredictionSnapshot: null,
   farm: "",
   recordType: "none",
+  finalFillTargetByRecordType: getDefaultFinalFillTargetByRecordType(),
   lastMotorState: null,
   currentStats: {
     avgShear: 0,
@@ -2966,11 +3025,13 @@ const elements = {
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
+  penFillFinalRefillTargetSelect: document.getElementById("penFillFinalRefillTargetSelect"),
+  penFillFinalRefillTargetWindow: document.getElementById("penFillFinalRefillTargetWindow"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
   penFillPlannerReason: document.getElementById("penFillPlannerReason"),
   penFillPlannerLastFullFill: document.getElementById("penFillPlannerLastFullFill"),
   penFillPlannerRemainingFills: document.getElementById("penFillPlannerRemainingFills"),
-  penFillPlannerFinalThreeMinutes: document.getElementById("penFillPlannerFinalThreeMinutes"),
+  penFillPlannerProjectedAfterTarget: document.getElementById("penFillPlannerProjectedAfterTarget"),
   penFillEarlyReminder: document.getElementById("penFillEarlyReminder"),
   penFillAverageInterval: document.getElementById("penFillAverageInterval"),
   penFillRecentIntervals: document.getElementById("penFillRecentIntervals"),
@@ -9384,6 +9445,60 @@ function sanitizeMarkerSettings(rawSettings) {
   };
 }
 
+
+function syncFinalFillTargetControls() {
+  const selectedTargetSeconds = getFinalFillTargetBeforeEndSeconds(appState.recordType);
+  if (elements.penFillFinalRefillTargetSelect) {
+    if (elements.penFillFinalRefillTargetSelect.options.length === 0) {
+      FINAL_FILL_TARGET_OPTIONS_SECONDS.forEach((seconds) => {
+        const option = document.createElement("option");
+        option.value = String(seconds);
+        option.textContent = formatFinalFillTargetOption(seconds);
+        elements.penFillFinalRefillTargetSelect.appendChild(option);
+      });
+    }
+    elements.penFillFinalRefillTargetSelect.value = String(selectedTargetSeconds);
+    elements.penFillFinalRefillTargetSelect.disabled = !getPenRule(appState.recordType);
+  }
+
+  const timingWindow = getFinalFillTimingWindow(appState.recordType);
+  setText(
+    elements.penFillFinalRefillTargetWindow,
+    `${formatPenFillCountdownDisplay(timingWindow.minBeforeEndSeconds)}–${formatPenFillCountdownDisplay(timingWindow.maxBeforeEndSeconds)} before end (±${timingWindow.toleranceSeconds}s)`
+  );
+}
+
+function saveFinalFillTargetSettings() {
+  localStorage.setItem(PEN_FILL_FINAL_TARGET_STORAGE_KEY, JSON.stringify(appState.finalFillTargetByRecordType));
+}
+
+function loadFinalFillTargetSettings() {
+  let parsed = getDefaultFinalFillTargetByRecordType();
+  try {
+    const raw = localStorage.getItem(PEN_FILL_FINAL_TARGET_STORAGE_KEY);
+    if (raw) parsed = sanitizeFinalFillTargetByRecordType(JSON.parse(raw));
+  } catch (error) {
+    parsed = getDefaultFinalFillTargetByRecordType();
+  }
+  appState.finalFillTargetByRecordType = parsed;
+  syncFinalFillTargetControls();
+}
+
+function setFinalFillTargetForCurrentRecordType(value) {
+  const recordType = appState.recordType;
+  if (!getPenRule(recordType)) {
+    syncFinalFillTargetControls();
+    return;
+  }
+  appState.finalFillTargetByRecordType = sanitizeFinalFillTargetByRecordType({
+    ...appState.finalFillTargetByRecordType,
+    [recordType]: sanitizeFinalFillTargetBeforeEndSeconds(value)
+  });
+  syncFinalFillTargetControls();
+  saveFinalFillTargetSettings();
+  updatePenFillForecastDisplay();
+}
+
 function syncMarkerSettingsInputs() {
   const { drink, cutter, comb } = appState.markerSettings;
   if (elements.drinkTimingMinutes) elements.drinkTimingMinutes.value = String(drink.plannedTimingMinutes);
@@ -10194,12 +10309,13 @@ function formatFinalPenFillForecastPoint(point) {
 }
 
 function analyzeFinalFillWindow(forecastPoints, options = {}) {
+  const timingWindow = getFinalFillTimingWindow(options.recordType);
   const minBeforeEndSeconds = Number.isFinite(options.minBeforeEndSeconds)
     ? options.minBeforeEndSeconds
-    : FINAL_FILL_MIN_BEFORE_END_SECONDS;
+    : timingWindow.minBeforeEndSeconds;
   const maxBeforeEndSeconds = Number.isFinite(options.maxBeforeEndSeconds)
     ? options.maxBeforeEndSeconds
-    : FINAL_FILL_MAX_BEFORE_END_SECONDS;
+    : timingWindow.maxBeforeEndSeconds;
   const analysisStartSeconds = Number.isFinite(options.analysisStartSeconds)
     ? options.analysisStartSeconds
     : FINAL_FILL_ANALYSIS_START_SECONDS;
@@ -10473,6 +10589,7 @@ function updatePenStateDisplay() {
   setText(elements.penStateLastConfirmedFill, formatPenStateLastConfirmedFill(displayPenState));
   updatePenFillAdjustButton(displayPenState.lastFillEvent);
   updatePenFillIntervalDisplay();
+  syncFinalFillTargetControls();
   setModel(
     formatPenStateModel(displayPenState),
     displayPenState.source === "confirmed"
@@ -10496,6 +10613,7 @@ function updatePenFillForecastDisplay() {
   ];
 
   updatePenFillIntervalDisplay();
+  syncFinalFillTargetControls();
 
   const setForecastStatus = (analysis) => {
     if (elements.penFillForecastStatus) {
@@ -13910,10 +14028,17 @@ function bindEvents() {
     elements.recordType.addEventListener("change", () => {
       const nextRecordType = elements.recordType.value;
       appState.recordType = nextRecordType === "strongWoolLambs" || nextRecordType === "strongWoolEwes" ? nextRecordType : "none";
+      syncFinalFillTargetControls();
       updateStatsPanel();
       autosaveState();
     });
   }
+  if (elements.penFillFinalRefillTargetSelect) {
+    elements.penFillFinalRefillTargetSelect.addEventListener("change", () => {
+      setFinalFillTargetForCurrentRecordType(elements.penFillFinalRefillTargetSelect.value);
+    });
+  }
+
   if (elements.dayStartTimeInput) {
     elements.dayStartTimeInput.addEventListener("input", () => {
       appState.dayStartTimeTouched = true;
@@ -14413,6 +14538,7 @@ function initialize() {
   loadSheepLogFillDirectionSettings();
   loadPlannedDelayMarkerVisibility();
   loadMarkerSettings();
+  loadFinalFillTargetSettings();
   loadKeyboardShortcuts();
   initializeSessionDate();
   loadControlsDockSettings();
@@ -14442,6 +14568,7 @@ function initialize() {
   if (elements.recordType) {
     elements.recordType.value = appState.recordType;
   }
+  syncFinalFillTargetControls();
 
   setSimulationMode(false);
   updateSimulationRunLengthControls();

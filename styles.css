@@ -1941,12 +1941,26 @@ td {
   white-space: nowrap;
 }
 
+#panel-pen-fill-planner .pen-fill-target-select {
+  justify-self: end;
+  max-width: 12rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  padding: 0.35rem 0.55rem;
+  background: #ffffff;
+  color: #111827;
+  font: inherit;
+  font-weight: 700;
+}
+
 #panel-cycle .timing-alert-row .panel-metric-value,
 #panel-cycle .pen-refill-alert-row .panel-metric-value,
 #panel-pen-fill-planner #penStateModel,
 #panel-pen-fill-planner #penStateRefillStatus,
 #panel-pen-fill-planner #penFillEarlyReminder,
 #panel-pen-fill-planner #penFillForecastStatus,
+#panel-pen-fill-planner #penFillFinalRefillTargetWindow,
+#panel-pen-fill-planner #penFillPlannerProjectedAfterTarget,
 #panel-pen-fill-planner #penFillStrategyRecommendation,
 #panel-pen-fill-planner #penFillPlannerReason,
 #panel-pen-fill-planner #penFillConfirmStatus,
@@ -1980,6 +1994,8 @@ td {
 #panel-pen-fill-planner .metric-row:has(#penStateRefillStatus),
 #panel-pen-fill-planner .metric-row:has(#penFillEarlyReminder),
 #panel-pen-fill-planner .metric-row:has(#penFillForecastStatus),
+#panel-pen-fill-planner .metric-row:has(#penFillFinalRefillTargetWindow),
+#panel-pen-fill-planner .metric-row:has(#penFillPlannerProjectedAfterTarget),
 #panel-pen-fill-planner .metric-row:has(#penFillStrategyRecommendation),
 #panel-pen-fill-planner .metric-row:has(#penFillPlannerReason),
 #panel-pen-fill-planner .metric-row:has(#penFillConfirmStatus) {
@@ -2145,6 +2161,7 @@ td {
 
   #panel-cycle .metric-row strong,
   #panel-pen-fill-planner .metric-row strong,
+  #panel-pen-fill-planner .pen-fill-target-select,
   #panel-cycle .run-countdown-value-wrap {
     justify-self: start;
     justify-content: flex-start;
