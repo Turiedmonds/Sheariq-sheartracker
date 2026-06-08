@@ -33,6 +33,10 @@ const PEN_FILL_FINAL_TARGET_STORAGE_KEY = "sheariq.penFillFinalTargetByRecordTyp
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
 const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
+const APP_ZOOM_STORAGE_KEY = "sheariq.appZoomPercent";
+const APP_ZOOM_MIN_PERCENT = 50;
+const APP_ZOOM_MAX_PERCENT = 125;
+const APP_ZOOM_DEFAULT_PERCENT = 100;
 const SW_CACHE_NAME = "sheariq-shear-tracker-v7";
 const SHEEP_NOTE_MAX_LENGTH = 200;
 const DEFAULT_AUTOSAVE_INTERVAL_SECONDS = 60;
@@ -3862,7 +3866,8 @@ const appState = {
     motorOff: "ENTER",
     toggleSimulationMode: "M",
     resetCurrentSheep: "ARROWUP"
-  }
+  },
+  appZoomPercent: APP_ZOOM_DEFAULT_PERCENT
 };
 
 const elements = {
@@ -4093,6 +4098,9 @@ const elements = {
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   reviewRunBtn: document.getElementById("reviewRunBtn"),
+  appZoomMinusBtn: document.getElementById("appZoomMinusBtn"),
+  appZoomInput: document.getElementById("appZoomInput"),
+  appZoomPlusBtn: document.getElementById("appZoomPlusBtn"),
   reviewRunModalTitle: document.getElementById("reviewRunModalTitle"),
   reviewRunModalOverlay: document.getElementById("reviewRunModalOverlay"),
   reviewRunModalCloseBtn: document.getElementById("reviewRunModalCloseBtn"),
@@ -14659,6 +14667,59 @@ function renderBlock(minutes) {
 }
 
 
+function sanitizeAppZoomPercent(value) {
+  if (value === null || value === undefined || value === "") return APP_ZOOM_DEFAULT_PERCENT;
+  const percent = Number(value);
+  if (!Number.isFinite(percent)) return APP_ZOOM_DEFAULT_PERCENT;
+  const roundedPercent = Math.round(percent);
+  return Math.min(APP_ZOOM_MAX_PERCENT, Math.max(APP_ZOOM_MIN_PERCENT, roundedPercent));
+}
+
+function loadAppZoomPercent() {
+  try {
+    return sanitizeAppZoomPercent(localStorage.getItem(APP_ZOOM_STORAGE_KEY));
+  } catch (error) {
+    return APP_ZOOM_DEFAULT_PERCENT;
+  }
+}
+
+function saveAppZoomPercent(value) {
+  try {
+    localStorage.setItem(APP_ZOOM_STORAGE_KEY, String(sanitizeAppZoomPercent(value)));
+  } catch (error) {
+    // App zoom is still applied for this page load if storage is unavailable.
+  }
+}
+
+function applyAppZoomPercent(value) {
+  const zoomPercent = sanitizeAppZoomPercent(value);
+  document.documentElement.style.setProperty("--app-zoom", String(zoomPercent / 100));
+}
+
+function syncAppZoomControls(options = {}) {
+  if (elements.appZoomInput && !options.preserveActiveInput) {
+    elements.appZoomInput.value = String(appState.appZoomPercent);
+  }
+  if (elements.appZoomMinusBtn) {
+    elements.appZoomMinusBtn.disabled = appState.appZoomPercent <= APP_ZOOM_MIN_PERCENT;
+  }
+  if (elements.appZoomPlusBtn) {
+    elements.appZoomPlusBtn.disabled = appState.appZoomPercent >= APP_ZOOM_MAX_PERCENT;
+  }
+}
+
+function setAppZoomPercent(value, options = {}) {
+  const zoomPercent = sanitizeAppZoomPercent(value);
+  appState.appZoomPercent = zoomPercent;
+  applyAppZoomPercent(zoomPercent);
+  saveAppZoomPercent(zoomPercent);
+  if (!options.preserveActiveInput) syncAppZoomControls();
+}
+
+function initializeAppZoom() {
+  setAppZoomPercent(loadAppZoomPercent());
+}
+
 function setActiveTopTab(tabName) {
   const showSettings = tabName === "settings";
   if (elements.dashboardPanels) elements.dashboardPanels.hidden = showSettings;
@@ -14935,6 +14996,23 @@ function bindEvents() {
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
   if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
   if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
+  if (elements.appZoomMinusBtn) elements.appZoomMinusBtn.addEventListener("click", () => setAppZoomPercent(appState.appZoomPercent - 1));
+  if (elements.appZoomPlusBtn) elements.appZoomPlusBtn.addEventListener("click", () => setAppZoomPercent(appState.appZoomPercent + 1));
+  if (elements.appZoomInput) {
+    elements.appZoomInput.addEventListener("input", () => {
+      if (elements.appZoomInput.value === "") return;
+      setAppZoomPercent(elements.appZoomInput.value, { preserveActiveInput: true });
+      syncAppZoomControls({ preserveActiveInput: true });
+    });
+    elements.appZoomInput.addEventListener("change", () => setAppZoomPercent(elements.appZoomInput.value));
+    elements.appZoomInput.addEventListener("blur", () => setAppZoomPercent(elements.appZoomInput.value));
+    elements.appZoomInput.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      setAppZoomPercent(elements.appZoomInput.value);
+      elements.appZoomInput.blur();
+    });
+  }
   if (elements.reviewRunBtn) elements.reviewRunBtn.addEventListener("click", openReviewRunModal);
   if (elements.reviewRunModalCloseBtn) elements.reviewRunModalCloseBtn.addEventListener("click", closeReviewRunModal);
   if (elements.reviewRunModalOverlay) {
@@ -15561,6 +15639,7 @@ function initializeOfflineStatusPanel() {
 }
 
 function initialize() {
+  initializeAppZoom();
   loadConnectionSettings();
   loadSavedFarms();
   loadPanelState();

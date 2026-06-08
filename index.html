@@ -21,6 +21,15 @@
       <button id="dashboardTab" class="app-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="dashboardPanels">Dashboard</button>
       <button id="settingsTab" class="app-tab" type="button" role="tab" aria-selected="false" aria-controls="settingsPanel">Settings</button>
       <button id="dashboardConnectionHelpBtn" class="app-tab connection-help-open-btn top-nav-help-btn" type="button">Connection Help</button>
+      <div class="app-zoom-control" aria-label="App zoom controls">
+        <button id="appZoomMinusBtn" class="app-tab app-zoom-step-btn" type="button" aria-label="Decrease app zoom by 1 percent">−</button>
+        <label class="app-zoom-input-wrap" for="appZoomInput">
+          <span class="sr-only">App zoom percent</span>
+          <input id="appZoomInput" class="app-zoom-input" type="number" inputmode="numeric" min="50" max="125" step="1" value="100" aria-label="App zoom percent" />
+          <span class="app-zoom-percent" aria-hidden="true">%</span>
+        </label>
+        <button id="appZoomPlusBtn" class="app-tab app-zoom-step-btn" type="button" aria-label="Increase app zoom by 1 percent">+</button>
+      </div>
       <button id="reviewRunBtn" class="app-tab top-nav-review-run-btn" type="button" disabled>Review Run</button>
     </div>
   </header>
