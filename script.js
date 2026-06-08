@@ -1157,6 +1157,447 @@ function getCurrentPenStateFromEvents(options = {}) {
   };
 }
 
+
+function getPenFillAnalysisEventSheepNumber(event) {
+  const physicalSheepTakenFromPen = Number(event?.physicalSheepTakenFromPen);
+  if (Number.isFinite(physicalSheepTakenFromPen)) return physicalSheepTakenFromPen;
+  const sheepNumber = Number(event?.sheepNumber);
+  return Number.isFinite(sheepNumber) ? sheepNumber : null;
+}
+
+function getConfirmedPenFillAnalysisEvents(events = appState.penFillEvents, options = {}) {
+  if (!Array.isArray(events)) return [];
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const includeAssumed = Boolean(options.includeAssumed);
+  const runIndex = Object.prototype.hasOwnProperty.call(options, "runIndex") ? Number(options.runIndex) : Number(appState.currentRunIndex);
+
+  return events
+    .filter((event) => {
+      if (!isActivePenFillEvent(event) || !isPenFillAmountEvent(event)) return false;
+      if (!includeAssumed && event.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL) return false;
+      if (recordType && recordType !== "none" && event.recordType && event.recordType !== recordType) return false;
+      return !Number.isFinite(runIndex) || Number(event.runIndex) === runIndex;
+    })
+    .sort((a, b) => {
+      const sheepDiff = Number(getPenFillAnalysisEventSheepNumber(a)) - Number(getPenFillAnalysisEventSheepNumber(b));
+      if (sheepDiff !== 0) return sheepDiff;
+      return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+    });
+}
+
+function getPenStateBaselineEventsForAnalysis(events = appState.penFillEvents, options = {}) {
+  if (!Array.isArray(events)) return [];
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const includeAssumed = Boolean(options.includeAssumed);
+  const runIndex = Object.prototype.hasOwnProperty.call(options, "runIndex") ? Number(options.runIndex) : Number(appState.currentRunIndex);
+
+  return events
+    .filter((event) => {
+      if (!isActivePenFillEvent(event)) return false;
+      if (recordType && recordType !== "none" && event.recordType && event.recordType !== recordType) return false;
+      if (Number.isFinite(runIndex) && Number(event.runIndex) !== runIndex) return false;
+      if (isManualCurrentPenCountCorrectionEvent(event)) return true;
+      return isPenFillAmountEvent(event) && (includeAssumed || event.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL);
+    })
+    .sort((a, b) => {
+      const sheepDiff = Number(getPenFillAnalysisEventSheepNumber(a)) - Number(getPenFillAnalysisEventSheepNumber(b));
+      if (sheepDiff !== 0) return sheepDiff;
+      return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+    });
+}
+
+function getSheepEntryAnalysisTiming(entry) {
+  const sheepNumber = Number(entry?.number);
+  const catchDuration = Number(entry?.catchDuration);
+  const fullCycle = Number(entry?.fullCycle);
+  const shearDuration = Number(entry?.shearDuration);
+  const effectiveElapsedSeconds = Number(entry?.effectiveElapsedSeconds);
+  return {
+    sheepNumber: Number.isFinite(sheepNumber) ? sheepNumber : null,
+    catchDuration: Number.isFinite(catchDuration) && catchDuration >= 0 ? catchDuration : null,
+    fullCycle: Number.isFinite(fullCycle) && fullCycle >= 0 ? fullCycle : null,
+    shearDuration: Number.isFinite(shearDuration) && shearDuration >= 0 ? shearDuration : null,
+    effectiveElapsedSeconds: Number.isFinite(effectiveElapsedSeconds) ? effectiveElapsedSeconds : null,
+    startTime: entry?.startTime || null,
+    endTime: entry?.endTime || null
+  };
+}
+
+function getManualMarkerConfoundersForSheepEntry(entry) {
+  return getConfirmedManualMarkersForEntry(entry)
+    .filter((marker) => marker && ["drink", "cutter", "comb", MANUAL_MARKER_CUSTOM_TYPE].includes(marker.type))
+    .map((marker) => ({
+      type: marker.type,
+      label: marker.type === MANUAL_MARKER_CUSTOM_TYPE
+        ? (marker.customLabel || marker.label || "Custom")
+        : MANUAL_MARKER_TYPES[marker.type]
+    }));
+}
+
+function summarizeConfoundersForSample(sampleEntries = [], expectedSize = sampleEntries.length) {
+  const confounderTypeCounts = {};
+  const sheepNumbers = [];
+  let cleanCount = 0;
+  let confoundedCount = 0;
+
+  sampleEntries.forEach((entry) => {
+    if (!entry) return;
+    if (Number.isFinite(Number(entry.sheepNumber))) sheepNumbers.push(Number(entry.sheepNumber));
+    const confounders = Array.isArray(entry.manualMarkerConfounders) ? entry.manualMarkerConfounders : [];
+    if (confounders.length) {
+      confoundedCount += 1;
+      confounders.forEach((confounder) => {
+        const type = confounder?.type || "unknown";
+        confounderTypeCounts[type] = (confounderTypeCounts[type] || 0) + 1;
+      });
+    } else {
+      cleanCount += 1;
+    }
+  });
+
+  const sampleSize = sampleEntries.length;
+  const confounderTypes = Object.keys(confounderTypeCounts);
+  let label = "clean";
+  if (sampleSize < expectedSize || sampleSize === 0) {
+    label = "insufficient";
+  } else if (confoundedCount === sampleSize) {
+    label = "confounded";
+  } else if (confoundedCount > 0) {
+    label = "mixed";
+  }
+
+  return {
+    sampleSize,
+    expectedSize,
+    sheepNumbers,
+    cleanCount,
+    confoundedCount,
+    confounderTypes,
+    confounderTypeCounts,
+    label
+  };
+}
+
+function averageNumericValues(values = []) {
+  const numericValues = values.map(Number).filter((value) => Number.isFinite(value));
+  if (!numericValues.length) return null;
+  return numericValues.reduce((total, value) => total + value, 0) / numericValues.length;
+}
+
+function summarizeCatchSample(sampleEntries = [], expectedSize = sampleEntries.length) {
+  const timingEntries = sampleEntries.filter((entry) => Number.isFinite(Number(entry?.catchDuration)));
+  return {
+    ...summarizeConfoundersForSample(timingEntries, expectedSize),
+    averageCatchDuration: averageNumericValues(timingEntries.map((entry) => entry.catchDuration)),
+    averageFullCycle: averageNumericValues(timingEntries.map((entry) => entry.fullCycle)),
+    averageShearDuration: averageNumericValues(timingEntries.map((entry) => entry.shearDuration))
+  };
+}
+
+function combineSampleLabels(samples = []) {
+  const sampleSize = samples.reduce((total, sample) => total + Number(sample?.sampleSize || 0), 0);
+  const expectedSize = samples.reduce((total, sample) => total + Number(sample?.expectedSize || 0), 0);
+  const cleanCount = samples.reduce((total, sample) => total + Number(sample?.cleanCount || 0), 0);
+  const confoundedCount = samples.reduce((total, sample) => total + Number(sample?.confoundedCount || 0), 0);
+  const confounderTypeCounts = samples.reduce((counts, sample) => {
+    Object.entries(sample?.confounderTypeCounts || {}).forEach(([type, count]) => {
+      counts[type] = (counts[type] || 0) + count;
+    });
+    return counts;
+  }, {});
+  let label = "clean";
+  if (sampleSize < expectedSize || sampleSize === 0) {
+    label = "insufficient";
+  } else if (confoundedCount === sampleSize) {
+    label = "confounded";
+  } else if (confoundedCount > 0) {
+    label = "mixed";
+  }
+  return {
+    sampleSize,
+    expectedSize,
+    cleanCount,
+    confoundedCount,
+    confounderTypes: Object.keys(confounderTypeCounts),
+    confounderTypeCounts,
+    label
+  };
+}
+
+function getEstimatedPenCountBeforeCatch(sheepNumber, baselineEvents = [], rule = getPenRule(appState.recordType)) {
+  const numericSheepNumber = Number(sheepNumber);
+  const maxPen = Number(rule?.maxPen);
+  if (!Number.isFinite(numericSheepNumber) || numericSheepNumber <= 0 || !Number.isFinite(maxPen)) {
+    return { penCountBeforeCatch: null, source: "unavailable", baselineEvent: null, sheepSinceBaseline: null };
+  }
+
+  const previousBaseline = baselineEvents
+    .filter((event) => Number(getPenFillAnalysisEventSheepNumber(event)) < numericSheepNumber)
+    .slice(-1)[0] || null;
+
+  if (previousBaseline) {
+    const baselineSheepNumber = Number(getPenFillAnalysisEventSheepNumber(previousBaseline));
+    const sheepSinceBaseline = numericSheepNumber - baselineSheepNumber;
+    const baselinePenCount = isManualCurrentPenCountCorrectionEvent(previousBaseline)
+      ? Number(previousBaseline.correctedCurrentPenCount)
+      : Number(previousBaseline.resultingPenCount);
+    const estimatedCount = baselinePenCount - Math.max(sheepSinceBaseline - 1, 0);
+    return {
+      penCountBeforeCatch: Math.max(0, Math.min(maxPen, estimatedCount)),
+      source: isManualCurrentPenCountCorrectionEvent(previousBaseline) ? "manualCorrection" : "confirmedRefill",
+      baselineEvent: previousBaseline,
+      baselineSheepNumber,
+      baselinePenCount,
+      sheepSinceBaseline
+    };
+  }
+
+  const openingAssumptionCount = maxPen - Math.max(numericSheepNumber - 1, 0);
+  return {
+    penCountBeforeCatch: Math.max(0, Math.min(maxPen, openingAssumptionCount)),
+    source: "assumedOpeningFull",
+    baselineEvent: null,
+    baselineSheepNumber: 0,
+    baselinePenCount: maxPen,
+    sheepSinceBaseline: numericSheepNumber
+  };
+}
+
+function getPenFullnessBucketForSheep(analysisEntry, rule = getPenRule(appState.recordType)) {
+  const defaultCycleSize = Number(rule?.defaultRefillAmount);
+  const maxPen = Number(rule?.maxPen);
+  const cycleSize = Number.isFinite(Number(analysisEntry?.lastRefillAmount)) && Number(analysisEntry.lastRefillAmount) > 0
+    ? Number(analysisEntry.lastRefillAmount)
+    : defaultCycleSize;
+  const sheepSinceLastRefill = Number(analysisEntry?.sheepSinceLastRefill);
+
+  let ratio = null;
+  let basis = "none";
+  if (Number.isFinite(sheepSinceLastRefill) && Number.isFinite(cycleSize) && cycleSize > 0) {
+    ratio = Math.max(0, (sheepSinceLastRefill - 1) / cycleSize);
+    basis = "cyclePosition";
+  } else if (Number.isFinite(Number(analysisEntry?.penCountBeforeCatch)) && Number.isFinite(maxPen) && maxPen > 0) {
+    ratio = 1 - Math.max(0, Math.min(maxPen, Number(analysisEntry.penCountBeforeCatch))) / maxPen;
+    basis = "estimatedPenCount";
+  }
+
+  if (!Number.isFinite(ratio)) {
+    return { key: "unknown", label: "Unknown pen fullness", basis, cycleSize: Number.isFinite(cycleSize) ? cycleSize : null };
+  }
+  if (ratio <= 1 / 3) return { key: "fullEarly", label: "Full / early cycle", basis, cycleSize };
+  if (ratio <= 2 / 3) return { key: "midCycle", label: "Mid cycle", basis, cycleSize };
+  return { key: "lowLate", label: "Low / late cycle", basis, cycleSize };
+}
+
+function buildRefillCatchComparison(refillEvent, sheepAnalysisByNumber = new Map()) {
+  const refillSheepNumber = getPenFillAnalysisEventSheepNumber(refillEvent);
+  const getSample = (offsets) => offsets
+    .map((offset) => sheepAnalysisByNumber.get(refillSheepNumber + offset))
+    .filter(Boolean);
+  const beforeOne = summarizeCatchSample(getSample([0]), 1);
+  const beforeTwo = summarizeCatchSample(getSample([-1, 0]), 2);
+  const afterOne = summarizeCatchSample(getSample([1]), 1);
+  const afterTwo = summarizeCatchSample(getSample([1, 2]), 2);
+  const primaryBeforeAverage = beforeTwo.averageCatchDuration ?? beforeOne.averageCatchDuration;
+  const primaryAfterAverage = afterTwo.averageCatchDuration ?? afterOne.averageCatchDuration;
+  const averageCatchDeltaAfterMinusBefore = Number.isFinite(primaryBeforeAverage) && Number.isFinite(primaryAfterAverage)
+    ? primaryAfterAverage - primaryBeforeAverage
+    : null;
+  const confounderSummary = combineSampleLabels([beforeTwo, afterTwo]);
+
+  return {
+    refillEventId: refillEvent?.id || null,
+    refillSheepNumber,
+    refillSource: refillEvent?.source || null,
+    actualFillAmount: Number.isFinite(Number(refillEvent?.actualFillAmount)) ? Number(refillEvent.actualFillAmount) : null,
+    resultingPenCount: Number.isFinite(Number(refillEvent?.resultingPenCount)) ? Number(refillEvent.resultingPenCount) : null,
+    before: {
+      last1: beforeOne,
+      last2: beforeTwo
+    },
+    after: {
+      first1: afterOne,
+      first2: afterTwo
+    },
+    primaryBeforeAverageCatchDuration: primaryBeforeAverage,
+    primaryAfterAverageCatchDuration: primaryAfterAverage,
+    averageCatchDeltaAfterMinusBefore,
+    confounderSummary,
+    label: confounderSummary.label
+  };
+}
+
+function buildPenFullnessBucketSummary(sheepAnalysisEntries = []) {
+  const bucketOrder = ["fullEarly", "midCycle", "lowLate", "unknown"];
+  const grouped = sheepAnalysisEntries.reduce((groups, entry) => {
+    const key = entry?.fullnessBucket?.key || "unknown";
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(entry);
+    return groups;
+  }, {});
+
+  return bucketOrder
+    .filter((key) => grouped[key]?.length)
+    .map((key) => {
+      const entries = grouped[key];
+      const sampleSummary = summarizeCatchSample(entries, entries.length);
+      return {
+        bucket: key,
+        label: entries[0]?.fullnessBucket?.label || "Unknown pen fullness",
+        basis: entries[0]?.fullnessBucket?.basis || "none",
+        sampleSize: sampleSummary.sampleSize,
+        cleanCount: sampleSummary.cleanCount,
+        confoundedCount: sampleSummary.confoundedCount,
+        confounderTypes: sampleSummary.confounderTypes,
+        labelQuality: sampleSummary.label,
+        averageCatchDuration: sampleSummary.averageCatchDuration,
+        averageFullCycle: sampleSummary.averageFullCycle,
+        averageShearDuration: sampleSummary.averageShearDuration
+      };
+    });
+}
+
+function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [], fullnessBuckets = [] } = {}) {
+  if (!available) return reason || "Not enough confirmed refill data yet.";
+
+  const usableComparisons = refillComparisons.filter((comparison) => (
+    Number.isFinite(Number(comparison.primaryBeforeAverageCatchDuration))
+    && Number.isFinite(Number(comparison.primaryAfterAverageCatchDuration))
+  ));
+  if (!usableComparisons.length) return "Not enough recorded catch time around confirmed refills yet.";
+
+  const averageDelta = averageNumericValues(usableComparisons.map((comparison) => comparison.averageCatchDeltaAfterMinusBefore));
+  const hasMixedSamples = usableComparisons.some((comparison) => comparison.label !== "clean");
+  const fullBucket = fullnessBuckets.find((bucket) => bucket.bucket === "fullEarly");
+  const lowBucket = fullnessBuckets.find((bucket) => bucket.bucket === "lowLate");
+  if (
+    fullBucket?.sampleSize >= 2
+    && lowBucket?.sampleSize >= 2
+    && Number.isFinite(Number(fullBucket.averageCatchDuration))
+    && Number.isFinite(Number(lowBucket.averageCatchDuration))
+    && Number(lowBucket.averageCatchDuration) > Number(fullBucket.averageCatchDuration) + 0.25
+  ) {
+    return "Low-pen recorded catch times averaged slower than full-pen recorded catch times.";
+  }
+  if (Number.isFinite(averageDelta) && averageDelta < -0.25) {
+    return hasMixedSamples
+      ? "Recorded catch time improved after confirmed refills, but sample is mixed."
+      : "Recorded catch time was lower after confirmed refills in the clean sample.";
+  }
+  if (Number.isFinite(averageDelta) && averageDelta > 0.25) {
+    return hasMixedSamples
+      ? "Recorded catch time was higher after confirmed refills, but sample is mixed."
+      : "Recorded catch time was higher after confirmed refills in the clean sample.";
+  }
+  return hasMixedSamples
+    ? "Recorded catch time around confirmed refills was mixed."
+    : "Recorded catch time around confirmed refills was similar in the clean sample.";
+}
+
+function buildPenFullnessCatchAnalysis(options = {}) {
+  const sheep = Object.prototype.hasOwnProperty.call(options, "sheep") ? options.sheep : appState.sheep;
+  const penFillEvents = Object.prototype.hasOwnProperty.call(options, "penFillEvents") ? options.penFillEvents : appState.penFillEvents;
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const includeAssumed = Boolean(options.includeAssumed);
+  const rule = options.rule || getPenRule(recordType);
+  const emptyResult = (reason, extras = {}) => ({
+    available: false,
+    reason,
+    recordType,
+    confirmedRefillCount: 0,
+    eligibleRefillCount: 0,
+    refillComparisons: [],
+    fullnessBuckets: [],
+    sheepAnalysis: [],
+    summary: reason,
+    ...extras
+  });
+
+  if (!recordType || recordType === "none" || !rule) {
+    return emptyResult("Select a pen refill record type before catch-time analysis is available.");
+  }
+  if (!Array.isArray(sheep) || !sheep.length) {
+    return emptyResult("Not enough sheep timing data yet.");
+  }
+
+  const eventOptions = { recordType, includeAssumed };
+  if (Object.prototype.hasOwnProperty.call(options, "runIndex")) eventOptions.runIndex = options.runIndex;
+  const confirmedRefillEvents = getConfirmedPenFillAnalysisEvents(penFillEvents, eventOptions);
+  const baselineEvents = getPenStateBaselineEventsForAnalysis(penFillEvents, eventOptions);
+  const confirmedRefillSheepNumbers = confirmedRefillEvents
+    .map(getPenFillAnalysisEventSheepNumber)
+    .filter((sheepNumber) => Number.isFinite(sheepNumber));
+
+  const sheepAnalysis = sheep
+    .map((entry) => {
+      const timing = getSheepEntryAnalysisTiming(entry);
+      if (!Number.isFinite(Number(timing.sheepNumber))) return null;
+      const sheepNumber = Number(timing.sheepNumber);
+      const previousRefill = confirmedRefillEvents
+        .filter((event) => Number(getPenFillAnalysisEventSheepNumber(event)) < sheepNumber)
+        .slice(-1)[0] || null;
+      const nextRefill = confirmedRefillEvents
+        .find((event) => Number(getPenFillAnalysisEventSheepNumber(event)) >= sheepNumber) || null;
+      const previousRefillSheepNumber = previousRefill ? getPenFillAnalysisEventSheepNumber(previousRefill) : null;
+      const nextRefillSheepNumber = nextRefill ? getPenFillAnalysisEventSheepNumber(nextRefill) : null;
+      const penCountEstimate = getEstimatedPenCountBeforeCatch(sheepNumber, baselineEvents, rule);
+      const manualMarkerConfounders = getManualMarkerConfoundersForSheepEntry(entry);
+      const analysisEntry = {
+        entry,
+        sheepNumber,
+        catchDuration: timing.catchDuration,
+        fullCycle: timing.fullCycle,
+        shearDuration: timing.shearDuration,
+        effectiveElapsedSeconds: timing.effectiveElapsedSeconds,
+        startTime: timing.startTime,
+        endTime: timing.endTime,
+        sheepSinceLastRefill: Number.isFinite(previousRefillSheepNumber) ? sheepNumber - previousRefillSheepNumber : null,
+        sheepUntilNextRefill: Number.isFinite(nextRefillSheepNumber) ? nextRefillSheepNumber - sheepNumber : null,
+        penCountBeforeCatch: penCountEstimate.penCountBeforeCatch,
+        penCountEstimateSource: penCountEstimate.source,
+        penStateBaselineSheepNumber: penCountEstimate.baselineSheepNumber,
+        lastRefillAmount: previousRefill ? Number(previousRefill.actualFillAmount) : null,
+        manualMarkerConfounders,
+        confounded: manualMarkerConfounders.length > 0
+      };
+      analysisEntry.fullnessBucket = getPenFullnessBucketForSheep(analysisEntry, rule);
+      return analysisEntry;
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.sheepNumber - b.sheepNumber);
+
+  const sheepAnalysisByNumber = new Map(sheepAnalysis.map((entry) => [entry.sheepNumber, entry]));
+  const refillComparisons = confirmedRefillEvents.map((event) => buildRefillCatchComparison(event, sheepAnalysisByNumber));
+  const eligibleRefillCount = refillComparisons.filter((comparison) => (
+    comparison.before.last1.sampleSize > 0 && comparison.after.first1.sampleSize > 0
+  )).length;
+  const fullnessBuckets = buildPenFullnessBucketSummary(sheepAnalysis);
+  const reason = confirmedRefillEvents.length
+    ? (eligibleRefillCount ? "" : "Not enough recorded catch time around confirmed refills yet.")
+    : "Not enough confirmed refill data yet.";
+  const available = confirmedRefillEvents.length > 0 && eligibleRefillCount > 0;
+  const result = {
+    available,
+    reason,
+    recordType,
+    rule: {
+      maxPen: Number(rule.maxPen),
+      defaultRefillAmount: Number(rule.defaultRefillAmount),
+      refillTriggerLeft: Number(rule.refillTriggerLeft)
+    },
+    includeAssumed,
+    confirmedRefillCount: confirmedRefillEvents.length,
+    eligibleRefillCount,
+    confirmedRefillSheepNumbers,
+    refillComparisons,
+    fullnessBuckets,
+    sheepAnalysis,
+    summary: ""
+  };
+  result.summary = buildPenFullnessCatchSummary(result);
+  return result;
+}
+
 function validatePenFillAmount(amount, penState, rule) {
   const numericAmount = Number(amount);
   const currentRule = rule || penState?.rule || null;
