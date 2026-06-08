@@ -1526,6 +1526,32 @@ function refreshAfterSheepLogPenFillEvent(message = "") {
   if (typeof updateStatsPanel === "function") updateStatsPanel();
 }
 
+function undoPenFillEventById(eventId, options = {}) {
+  const penFillEventId = typeof eventId === "string" ? eventId.trim() : "";
+  const fail = (message, error = message) => ({ success: false, event: null, message, error });
+  if (!penFillEventId) return fail("Missing linked Pen refill event id.");
+  if (!Array.isArray(appState.penFillEvents)) return fail("No Pen refill events are available.");
+
+  const event = appState.penFillEvents.find((candidate) => candidate?.id === penFillEventId);
+  if (!event) return fail("Could not find the linked Pen refill event. Refresh and try again.");
+  if (event.undone || event.undoneAt) return fail("This Pen refill event is already removed.");
+  if (!isActivePenFillEvent(event) || !isPenFillAmountEvent(event) || event.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL) {
+    return fail("This linked event cannot be removed from the Sheep Log marker editor.");
+  }
+
+  const now = Date.now();
+  event.undone = true;
+  event.undoneAt = now;
+  event.updatedAt = now;
+  event.undoReason = typeof options.undoReason === "string" && options.undoReason.trim()
+    ? options.undoReason.trim()
+    : "sheep-log-marker-editor";
+
+  const message = options.message || "Removed linked Pen refill event.";
+  refreshAfterSheepLogPenFillEvent(message);
+  return { success: true, event, message, error: null };
+}
+
 function recordPenFillEventForSheepEntry(entry, options = {}) {
   const recordType = appState.recordType;
   const rule = getPenRule(recordType);
@@ -1601,6 +1627,36 @@ function recordPenFillEventForSheepEntry(entry, options = {}) {
   const message = `Pen refill event added — added ${draft.actualFillAmount}.`;
   refreshAfterSheepLogPenFillEvent(message);
   return { success: true, event: draft, message, error: null };
+}
+
+function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
+  const setValidation = (message) => {
+    if (validationEl instanceof HTMLElement) validationEl.textContent = message;
+  };
+  const penFillEventId = typeof eventId === "string" ? eventId.trim() : "";
+  if (!penFillEventId) {
+    const message = "Missing linked Pen refill event id.";
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+
+  const confirmed = window.confirm("Remove Pen refill event for this sheep row? This will undo the linked planner event.");
+  if (!confirmed) return { success: false, error: "Pen refill removal cancelled." };
+
+  const result = undoPenFillEventById(penFillEventId, {
+    undoReason: "sheep-log-marker-editor",
+    message: "Removed linked Pen refill event."
+  });
+  if (!result.success) {
+    const message = result.message || "Unable to remove Pen refill event.";
+    setValidation(message);
+    window.alert(message);
+    return result;
+  }
+
+  setValidation(result.message);
+  return result;
 }
 
 function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
@@ -1718,7 +1774,15 @@ function createSheepLogPenFillEventStatusBlock(entry) {
     block.appendChild(detail);
   }
 
-  if (status.status !== "linked") {
+  if (status.status === "linked") {
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "sheep-log-pen-fill-remove-btn";
+    removeButton.dataset.action = "remove-pen-fill-event";
+    removeButton.dataset.penFillEventId = status.event?.id || "";
+    removeButton.textContent = "Remove Pen refill event";
+    block.appendChild(removeButton);
+  } else {
     const addButton = document.createElement("button");
     addButton.type = "button";
     addButton.className = "sheep-log-pen-fill-add-btn";
@@ -14773,6 +14837,10 @@ function bindEvents() {
         const editor = actionTarget.closest(".sheep-log-marker-note-editor");
         const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
         promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
+      } else if (action === "remove-pen-fill-event") {
+        const editor = actionTarget.closest(".sheep-log-marker-note-editor");
+        const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
+        promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
       }
     });
     elements.sheepLogBody.addEventListener("change", (event) => {
