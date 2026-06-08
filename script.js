@@ -9945,7 +9945,7 @@ function getNextPlannedDrinkCountdownState() {
   }
 
   const nextDrinkTime = (Math.floor(effectiveElapsedSeconds / drinkIntervalSeconds) + 1) * drinkIntervalSeconds;
-  if (runDurationSeconds > 0 && nextDrinkTime > runDurationSeconds) {
+  if (runDurationSeconds > 0 && nextDrinkTime >= runDurationSeconds) {
     return { mode: "complete" };
   }
 
@@ -10044,14 +10044,15 @@ function updateTimingAlertDisplay() {
   const remainingSeconds = Math.max(runDurationSeconds - elapsedSeconds, 0);
   const inLastQuarter = runDurationSeconds > 0 && remainingSeconds <= LAST_QUARTER_SECONDS;
 
-  const rawCombAlert = getCadenceAlertState(COMB_INTERVAL_SECONDS);
-  const suppressEndOfRunCombCountdown = rawCombAlert?.mode === "countdown"
-    && Number.isFinite(rawCombAlert.eventTime)
-    && runDurationSeconds > 0
-    && rawCombAlert.eventTime >= runDurationSeconds;
-  const combAlert = suppressEndOfRunCombCountdown ? null : rawCombAlert;
-  const cutterAlert = getCadenceAlertState(CUTTER_INTERVAL_SECONDS);
-  const drinkAlert = getCadenceAlertState(DRINK_INTERVAL_SECONDS);
+  const suppressEndOfRunCadenceCountdown = (alert) => {
+    if (alert?.mode !== "countdown") return alert;
+    if (!Number.isFinite(alert.eventTime) || runDurationSeconds <= 0) return alert;
+    return alert.eventTime >= runDurationSeconds ? null : alert;
+  };
+
+  const combAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(COMB_INTERVAL_SECONDS));
+  const cutterAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(CUTTER_INTERVAL_SECONDS));
+  const drinkAlert = suppressEndOfRunCadenceCountdown(getCadenceAlertState(DRINK_INTERVAL_SECONDS));
   const drinkRefillClashAdvisory = getNextDrinkRefillClashAdvisory({ effectiveElapsedSeconds });
 
   if (combAlert) {
