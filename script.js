@@ -1464,34 +1464,48 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
     Number.isFinite(Number(comparison.primaryBeforeAverageCatchDuration))
     && Number.isFinite(Number(comparison.primaryAfterAverageCatchDuration))
   ));
-  if (!usableComparisons.length) return "Not enough recorded catch time around confirmed refills yet.";
+  if (!usableComparisons.length) return "Not enough confirmed refill data yet.";
 
   const averageDelta = averageNumericValues(usableComparisons.map((comparison) => comparison.averageCatchDeltaAfterMinusBefore));
-  const hasMixedSamples = usableComparisons.some((comparison) => comparison.label !== "clean");
   const fullBucket = fullnessBuckets.find((bucket) => bucket.bucket === "fullEarly");
   const lowBucket = fullnessBuckets.find((bucket) => bucket.bucket === "lowLate");
-  if (
+  const lowMinusFull = (
     fullBucket?.sampleSize >= 2
     && lowBucket?.sampleSize >= 2
     && Number.isFinite(Number(fullBucket.averageCatchDuration))
     && Number.isFinite(Number(lowBucket.averageCatchDuration))
-    && Number(lowBucket.averageCatchDuration) > Number(fullBucket.averageCatchDuration) + 0.25
-  ) {
-    return "Low-pen recorded catch times averaged slower than full-pen recorded catch times.";
+  )
+    ? Number(lowBucket.averageCatchDuration) - Number(fullBucket.averageCatchDuration)
+    : null;
+  const comparedConfounderTypes = usableComparisons.flatMap((comparison) => comparison?.confounderSummary?.confounderTypes || []);
+  const bucketConfounderTypes = [fullBucket, lowBucket].flatMap((bucket) => bucket?.confounderTypes || []);
+  const confounderTypes = [...comparedConfounderTypes, ...bucketConfounderTypes];
+  const hasConfounders = confounderTypes.length > 0;
+  const context = hasConfounders
+    ? `Mixed result — affected by ${formatPenFullnessConfounderList(confounderTypes)}.`
+    : "Clean comparison.";
+  const summaryParts = [];
+
+  if (Number.isFinite(averageDelta)) {
+    const deltaSeconds = Math.abs(averageDelta).toFixed(2);
+    if (averageDelta < -0.25) {
+      summaryParts.push(`Catch time improved by ${deltaSeconds}s after confirmed refills.`);
+    } else if (averageDelta > 0.25) {
+      summaryParts.push(`Catch time was ${deltaSeconds}s slower after confirmed refills.`);
+    } else {
+      summaryParts.push("Recorded catch time was similar before and after confirmed refills.");
+    }
   }
-  if (Number.isFinite(averageDelta) && averageDelta < -0.25) {
-    return hasMixedSamples
-      ? "Recorded catch time improved after confirmed refills, but sample is mixed."
-      : "Recorded catch time was lower after confirmed refills in the clean sample.";
+
+  if (Number.isFinite(lowMinusFull) && Math.abs(lowMinusFull) > 0.25) {
+    const lowFullSeconds = Math.abs(lowMinusFull).toFixed(2);
+    summaryParts.push(lowMinusFull > 0
+      ? `When the pen was nearly empty, recorded catch time was ${lowFullSeconds}s slower than when the pen was full.`
+      : `When the pen was nearly empty, recorded catch time was ${lowFullSeconds}s faster than when the pen was full.`);
   }
-  if (Number.isFinite(averageDelta) && averageDelta > 0.25) {
-    return hasMixedSamples
-      ? "Recorded catch time was higher after confirmed refills, but sample is mixed."
-      : "Recorded catch time was higher after confirmed refills in the clean sample.";
-  }
-  return hasMixedSamples
-    ? "Recorded catch time around confirmed refills was mixed."
-    : "Recorded catch time around confirmed refills was similar in the clean sample.";
+
+  if (!summaryParts.length) return "Not enough confirmed refill data yet.";
+  return `${summaryParts.join(" ")} ${context}`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -3956,7 +3970,6 @@ const elements = {
   penFullnessCatchFullEarlyAvg: document.getElementById("penFullnessCatchFullEarlyAvg"),
   penFullnessCatchMidAvg: document.getElementById("penFullnessCatchMidAvg"),
   penFullnessCatchLowLateAvg: document.getElementById("penFullnessCatchLowLateAvg"),
-  penFullnessCatchSampleNote: document.getElementById("penFullnessCatchSampleNote"),
   penFillFinalRefillTargetSelect: document.getElementById("penFillFinalRefillTargetSelect"),
   penFillFinalRefillTargetWindow: document.getElementById("penFillFinalRefillTargetWindow"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
@@ -11381,12 +11394,6 @@ function formatPenFullnessCatchDifference(value) {
   return `${seconds > 0 ? "+" : ""}${seconds.toFixed(3)}s`;
 }
 
-function formatPenFullnessSampleCount(sampleSize) {
-  const count = Number(sampleSize);
-  if (!Number.isFinite(count) || count <= 0) return "";
-  return ` (${count} sheep)`;
-}
-
 function getPenFullnessConfounderDisplayName(type) {
   if (type === MANUAL_MARKER_CUSTOM_TYPE) return "Custom";
   return MANUAL_MARKER_TYPES[type] || String(type || "Unknown");
@@ -11412,22 +11419,6 @@ function getPenFullnessCatchPrimaryComparison(analysis) {
     : null;
 }
 
-function getPenFullnessCatchSampleNote(analysis, primaryComparison) {
-  if (!analysis?.available || !primaryComparison) return "Not enough clean data yet.";
-
-  const comparedTypes = (analysis.refillComparisons || []).flatMap((comparison) => {
-    const hasPrimaryValues = Number.isFinite(Number(comparison?.before?.last2?.averageCatchDuration))
-      && Number.isFinite(Number(comparison?.after?.first2?.averageCatchDuration));
-    return hasPrimaryValues ? (comparison?.confounderSummary?.confounderTypes || []) : [];
-  });
-
-  if (comparedTypes.length) {
-    return `Mixed sample — affected by ${formatPenFullnessConfounderList(comparedTypes)}.`;
-  }
-
-  return "Clean sample.";
-}
-
 function updatePenFullnessCatchAnalysisDisplay() {
   const hasDisplay = elements.penFullnessCatchSummary
     || elements.penFullnessCatchConfirmedCount
@@ -11436,8 +11427,7 @@ function updatePenFullnessCatchAnalysisDisplay() {
     || elements.penFullnessCatchDifference
     || elements.penFullnessCatchFullEarlyAvg
     || elements.penFullnessCatchMidAvg
-    || elements.penFullnessCatchLowLateAvg
-    || elements.penFullnessCatchSampleNote;
+    || elements.penFullnessCatchLowLateAvg;
   if (!hasDisplay || typeof buildPenFullnessCatchAnalysis !== "function") return;
 
   const analysis = buildPenFullnessCatchAnalysis();
@@ -11449,7 +11439,7 @@ function updatePenFullnessCatchAnalysisDisplay() {
     return buckets;
   }, {});
   const formatBucket = (bucket) => (Number.isFinite(Number(bucket?.averageCatchDuration))
-    ? `${formatPenFullnessCatchSeconds(Number(bucket.averageCatchDuration))}${formatPenFullnessSampleCount(bucket.sampleSize)}`
+    ? formatPenFullnessCatchSeconds(Number(bucket.averageCatchDuration))
     : "Not enough data yet.");
 
   setText(elements.penFullnessCatchSummary, summary);
@@ -11468,7 +11458,6 @@ function updatePenFullnessCatchAnalysisDisplay() {
   setText(elements.penFullnessCatchFullEarlyAvg, formatBucket(bucketByKey.fullEarly));
   setText(elements.penFullnessCatchMidAvg, formatBucket(bucketByKey.midCycle));
   setText(elements.penFullnessCatchLowLateAvg, formatBucket(bucketByKey.lowLate));
-  setText(elements.penFullnessCatchSampleNote, getPenFullnessCatchSampleNote(analysis, primaryComparison));
 }
 
 let penFillForecastCountdownTarget = null;

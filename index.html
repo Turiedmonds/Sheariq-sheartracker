@@ -621,17 +621,13 @@
             </div>
             <div class="metric-row panel-metric-row">
               <label class="metric-label panel-metric-label" for="penFillFinalRefillTargetSelect">Final refill target:</label>
-              <select id="penFillFinalRefillTargetSelect" class="panel-metric-value pen-fill-target-select" aria-describedby="penFillFinalRefillTargetWindow">
+              <select id="penFillFinalRefillTargetSelect" class="panel-metric-value pen-fill-target-select">
                 <option value="60">1 min before end</option>
                 <option value="120">2 min before end</option>
                 <option value="180" selected>3 min before end</option>
                 <option value="240">4 min before end</option>
                 <option value="300">5 min before end</option>
               </select>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Target window:</span>
-              <strong id="penFillFinalRefillTargetWindow" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Final refill status:</span>
@@ -656,19 +652,15 @@
           <div class="timing-group panel-section pen-fullness-catch-analysis" aria-labelledby="penFullnessCatchHeading">
             <h3 id="penFullnessCatchHeading" class="timing-group-heading panel-section-title">Catch-time / pen fullness</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Summary:</span>
-              <strong id="penFullnessCatchSummary" class="panel-metric-value">Not enough confirmed refill data yet.</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Confirmed refills analysed:</span>
               <strong id="penFullnessCatchConfirmedCount" class="panel-metric-value">0</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Before refill avg:</span>
+              <span class="metric-label panel-metric-label">Catch avg — last 2 before refill:</span>
               <strong id="penFullnessCatchBeforeAvg" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">After refill avg:</span>
+              <span class="metric-label panel-metric-label">Catch avg — first 2 after refill:</span>
               <strong id="penFullnessCatchAfterAvg" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
@@ -676,20 +668,20 @@
               <strong id="penFullnessCatchDifference" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Full / early cycle avg:</span>
+              <span class="metric-label panel-metric-label">Full pen catch avg:</span>
               <strong id="penFullnessCatchFullEarlyAvg" class="panel-metric-value">Not enough data yet.</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Mid cycle avg:</span>
+              <span class="metric-label panel-metric-label">Half-full pen catch avg:</span>
               <strong id="penFullnessCatchMidAvg" class="panel-metric-value">Not enough data yet.</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Low / late cycle avg:</span>
+              <span class="metric-label panel-metric-label">Nearly empty pen catch avg:</span>
               <strong id="penFullnessCatchLowLateAvg" class="panel-metric-value">Not enough data yet.</strong>
             </div>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Sample note:</span>
-              <strong id="penFullnessCatchSampleNote" class="panel-metric-value">Not enough clean data yet.</strong>
+              <span class="metric-label panel-metric-label">Summary:</span>
+              <strong id="penFullnessCatchSummary" class="panel-metric-value">Not enough confirmed refill data yet.</strong>
             </div>
           </div>
           <div id="penFillConfirmSection" class="pen-fill-confirm-section" aria-labelledby="penFillConfirmHeading" hidden>
