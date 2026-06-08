@@ -1393,21 +1393,139 @@ function getPenFullnessBucketForSheep(analysisEntry, rule = getPenRule(appState.
   return { key: "lowLate", label: "Low / late cycle", basis, cycleSize };
 }
 
-function buildRefillCatchComparison(refillEvent, sheepAnalysisByNumber = new Map()) {
+function isCleanRefillCatchAnalysisEntry(entry) {
+  return Number.isFinite(Number(entry?.catchDuration))
+    && (!Array.isArray(entry?.manualMarkerConfounders) || entry.manualMarkerConfounders.length === 0);
+}
+
+function summarizeSkippedConfoundedEntries(skippedEntries = []) {
+  const confounderTypeCounts = {};
+  skippedEntries.forEach((entry) => {
+    const confounders = Array.isArray(entry?.manualMarkerConfounders) ? entry.manualMarkerConfounders : [];
+    confounders.forEach((confounder) => {
+      const type = confounder?.type || "unknown";
+      confounderTypeCounts[type] = (confounderTypeCounts[type] || 0) + 1;
+    });
+  });
+  return {
+    skippedConfoundedSheepNumbers: skippedEntries
+      .map((entry) => Number(entry?.sheepNumber))
+      .filter((sheepNumber) => Number.isFinite(sheepNumber)),
+    skippedConfounderTypes: Object.keys(confounderTypeCounts),
+    skippedConfounderTypeCounts: confounderTypeCounts,
+    skippedConfoundedEntries: skippedEntries
+  };
+}
+
+function collectCleanRefillCatchSample({
+  refillSheepNumber,
+  sheepAnalysisByNumber = new Map(),
+  direction = 1,
+  startOffset = 1,
+  boundarySheepNumber = null,
+  expectedSize = 2
+} = {}) {
+  const numericRefillSheepNumber = Number(refillSheepNumber);
+  const numericDirection = direction < 0 ? -1 : 1;
+  const numericStartOffset = Number(startOffset);
+  const numericBoundarySheepNumber = Number(boundarySheepNumber);
+  const maxSheepNumber = Math.max(
+    0,
+    ...Array.from(sheepAnalysisByNumber.keys())
+      .map(Number)
+      .filter((sheepNumber) => Number.isFinite(sheepNumber))
+  );
+
+  if (!Number.isFinite(numericRefillSheepNumber) || !Number.isFinite(numericStartOffset) || !Number.isFinite(maxSheepNumber)) {
+    return { entries: [], ...summarizeSkippedConfoundedEntries([]) };
+  }
+
+  const entries = [];
+  const skippedConfoundedEntries = [];
+  let candidateSheepNumber = numericRefillSheepNumber + numericStartOffset;
+
+  const isWithinSearchBounds = (sheepNumber) => {
+    if (!Number.isFinite(sheepNumber) || sheepNumber <= 0 || sheepNumber > maxSheepNumber) return false;
+    if (Number.isFinite(numericBoundarySheepNumber)) {
+      return numericDirection < 0 ? sheepNumber > numericBoundarySheepNumber : sheepNumber < numericBoundarySheepNumber;
+    }
+    return true;
+  };
+
+  while (isWithinSearchBounds(candidateSheepNumber) && entries.length < expectedSize) {
+    const entry = sheepAnalysisByNumber.get(candidateSheepNumber);
+    if (entry) {
+      if (isCleanRefillCatchAnalysisEntry(entry)) {
+        entries.push(entry);
+      } else if (Number.isFinite(Number(entry.catchDuration)) && Array.isArray(entry.manualMarkerConfounders) && entry.manualMarkerConfounders.length) {
+        skippedConfoundedEntries.push(entry);
+      }
+    }
+    candidateSheepNumber += numericDirection;
+  }
+
+  return {
+    entries,
+    ...summarizeSkippedConfoundedEntries(skippedConfoundedEntries)
+  };
+}
+
+function collectCleanBeforeRefillSample(refillSheepNumber, sheepAnalysisByNumber = new Map(), boundarySheepNumber = null, expectedSize = 2) {
+  return collectCleanRefillCatchSample({
+    refillSheepNumber,
+    sheepAnalysisByNumber,
+    direction: -1,
+    startOffset: 0,
+    boundarySheepNumber,
+    expectedSize
+  });
+}
+
+function collectCleanAfterRefillSample(refillSheepNumber, sheepAnalysisByNumber = new Map(), boundarySheepNumber = null, expectedSize = 2) {
+  return collectCleanRefillCatchSample({
+    refillSheepNumber,
+    sheepAnalysisByNumber,
+    direction: 1,
+    startOffset: 1,
+    boundarySheepNumber,
+    expectedSize
+  });
+}
+
+function getCompleteSampleAverage(sample) {
+  return sample?.sampleSize >= sample?.expectedSize && Number.isFinite(Number(sample.averageCatchDuration))
+    ? Number(sample.averageCatchDuration)
+    : null;
+}
+
+function buildRefillCatchComparison(refillEvent, sheepAnalysisByNumber = new Map(), boundaries = {}) {
   const refillSheepNumber = getPenFillAnalysisEventSheepNumber(refillEvent);
-  const getSample = (offsets) => offsets
-    .map((offset) => sheepAnalysisByNumber.get(refillSheepNumber + offset))
-    .filter(Boolean);
-  const beforeOne = summarizeCatchSample(getSample([0]), 1);
-  const beforeTwo = summarizeCatchSample(getSample([-1, 0]), 2);
-  const afterOne = summarizeCatchSample(getSample([1]), 1);
-  const afterTwo = summarizeCatchSample(getSample([1, 2]), 2);
-  const primaryBeforeAverage = beforeTwo.averageCatchDuration ?? beforeOne.averageCatchDuration;
-  const primaryAfterAverage = afterTwo.averageCatchDuration ?? afterOne.averageCatchDuration;
+  const beforeSample = collectCleanBeforeRefillSample(
+    refillSheepNumber,
+    sheepAnalysisByNumber,
+    boundaries.previousRefillSheepNumber,
+    2
+  );
+  const afterSample = collectCleanAfterRefillSample(
+    refillSheepNumber,
+    sheepAnalysisByNumber,
+    boundaries.nextRefillSheepNumber,
+    2
+  );
+  const beforeOne = summarizeCatchSample(beforeSample.entries.slice(0, 1), 1);
+  const beforeTwo = summarizeCatchSample(beforeSample.entries, 2);
+  const afterOne = summarizeCatchSample(afterSample.entries.slice(0, 1), 1);
+  const afterTwo = summarizeCatchSample(afterSample.entries, 2);
+  const primaryBeforeAverage = getCompleteSampleAverage(beforeTwo) ?? getCompleteSampleAverage(beforeOne);
+  const primaryAfterAverage = getCompleteSampleAverage(afterTwo) ?? getCompleteSampleAverage(afterOne);
   const averageCatchDeltaAfterMinusBefore = Number.isFinite(primaryBeforeAverage) && Number.isFinite(primaryAfterAverage)
     ? primaryAfterAverage - primaryBeforeAverage
     : null;
   const confounderSummary = combineSampleLabels([beforeTwo, afterTwo]);
+  const skippedConfounderSummary = combineSampleLabels([
+    summarizeConfoundersForSample(beforeSample.skippedConfoundedEntries),
+    summarizeConfoundersForSample(afterSample.skippedConfoundedEntries)
+  ]);
 
   return {
     refillEventId: refillEvent?.id || null,
@@ -1415,14 +1533,34 @@ function buildRefillCatchComparison(refillEvent, sheepAnalysisByNumber = new Map
     refillSource: refillEvent?.source || null,
     actualFillAmount: Number.isFinite(Number(refillEvent?.actualFillAmount)) ? Number(refillEvent.actualFillAmount) : null,
     resultingPenCount: Number.isFinite(Number(refillEvent?.resultingPenCount)) ? Number(refillEvent.resultingPenCount) : null,
+    previousRefillSheepNumber: Number.isFinite(Number(boundaries.previousRefillSheepNumber)) ? Number(boundaries.previousRefillSheepNumber) : null,
+    nextRefillSheepNumber: Number.isFinite(Number(boundaries.nextRefillSheepNumber)) ? Number(boundaries.nextRefillSheepNumber) : null,
     before: {
       last1: beforeOne,
-      last2: beforeTwo
+      last2: beforeTwo,
+      skippedConfoundedSheepNumbers: beforeSample.skippedConfoundedSheepNumbers,
+      skippedConfounderTypes: beforeSample.skippedConfounderTypes,
+      skippedConfounderTypeCounts: beforeSample.skippedConfounderTypeCounts,
+      skippedConfoundedEntries: beforeSample.skippedConfoundedEntries
     },
     after: {
       first1: afterOne,
-      first2: afterTwo
+      first2: afterTwo,
+      skippedConfoundedSheepNumbers: afterSample.skippedConfoundedSheepNumbers,
+      skippedConfounderTypes: afterSample.skippedConfounderTypes,
+      skippedConfounderTypeCounts: afterSample.skippedConfounderTypeCounts,
+      skippedConfoundedEntries: afterSample.skippedConfoundedEntries
     },
+    skippedConfoundedSheepNumbers: [
+      ...beforeSample.skippedConfoundedSheepNumbers,
+      ...afterSample.skippedConfoundedSheepNumbers
+    ],
+    skippedConfounderTypes: skippedConfounderSummary.confounderTypes,
+    skippedConfounderTypeCounts: skippedConfounderSummary.confounderTypeCounts,
+    skippedConfoundedEntries: [
+      ...beforeSample.skippedConfoundedEntries,
+      ...afterSample.skippedConfoundedEntries
+    ],
     primaryBeforeAverageCatchDuration: primaryBeforeAverage,
     primaryAfterAverageCatchDuration: primaryAfterAverage,
     averageCatchDeltaAfterMinusBefore,
@@ -1465,7 +1603,9 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   if (!available) return reason || "Not enough confirmed refill data yet.";
 
   const usableComparisons = refillComparisons.filter((comparison) => (
-    Number.isFinite(Number(comparison.primaryBeforeAverageCatchDuration))
+    comparison?.before?.last2?.sampleSize >= comparison?.before?.last2?.expectedSize
+    && comparison?.after?.first2?.sampleSize >= comparison?.after?.first2?.expectedSize
+    && Number.isFinite(Number(comparison.primaryBeforeAverageCatchDuration))
     && Number.isFinite(Number(comparison.primaryAfterAverageCatchDuration))
   ));
   if (!usableComparisons.length) return "Not enough confirmed refill data yet.";
@@ -1585,7 +1725,10 @@ function buildPenFullnessCatchAnalysis(options = {}) {
     .sort((a, b) => a.sheepNumber - b.sheepNumber);
 
   const sheepAnalysisByNumber = new Map(sheepAnalysis.map((entry) => [entry.sheepNumber, entry]));
-  const refillComparisons = confirmedRefillEvents.map((event) => buildRefillCatchComparison(event, sheepAnalysisByNumber));
+  const refillComparisons = confirmedRefillEvents.map((event, index) => buildRefillCatchComparison(event, sheepAnalysisByNumber, {
+    previousRefillSheepNumber: index > 0 ? getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index - 1]) : null,
+    nextRefillSheepNumber: index < confirmedRefillEvents.length - 1 ? getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index + 1]) : null
+  }));
   const eligibleRefillCount = refillComparisons.filter((comparison) => (
     comparison.before.last1.sampleSize > 0 && comparison.after.first1.sampleSize > 0
   )).length;
@@ -11632,7 +11775,9 @@ function formatPenFullnessConfounderList(types = []) {
 
 function getPenFullnessCatchPrimaryComparison(analysis) {
   const usableComparisons = (analysis?.refillComparisons || []).filter((comparison) => (
-    Number.isFinite(Number(comparison?.before?.last2?.averageCatchDuration))
+    comparison?.before?.last2?.sampleSize >= comparison?.before?.last2?.expectedSize
+    && comparison?.after?.first2?.sampleSize >= comparison?.after?.first2?.expectedSize
+    && Number.isFinite(Number(comparison?.before?.last2?.averageCatchDuration))
     && Number.isFinite(Number(comparison?.after?.first2?.averageCatchDuration))
   ));
   if (!usableComparisons.length) return null;
@@ -11671,8 +11816,8 @@ function updatePenFullnessCatchAnalysisDisplay() {
   setText(elements.penFullnessCatchConfirmedCount, Number.isFinite(confirmedCount) ? String(confirmedCount) : "0");
 
   if (primaryComparison) {
-    setText(elements.penFullnessCatchBeforeAvg, `${formatPenFullnessCatchSeconds(primaryComparison.beforeAverage)} — last 2 before refill`);
-    setText(elements.penFullnessCatchAfterAvg, `${formatPenFullnessCatchSeconds(primaryComparison.afterAverage)} — first 2 after refill`);
+    setText(elements.penFullnessCatchBeforeAvg, `${formatPenFullnessCatchSeconds(primaryComparison.beforeAverage)} — last 2 clean before refill`);
+    setText(elements.penFullnessCatchAfterAvg, `${formatPenFullnessCatchSeconds(primaryComparison.afterAverage)} — first 2 clean after refill`);
     setText(elements.penFullnessCatchDifference, `${formatPenFullnessCatchDifference(primaryComparison.difference)} after vs before`);
   } else {
     setText(elements.penFullnessCatchBeforeAvg, "Not enough recorded catch time before confirmed refills yet.");
