@@ -620,8 +620,26 @@
               <strong id="penFillForecastFinal" class="panel-metric-value">—</strong>
             </div>
             <div class="metric-row panel-metric-row">
+              <label class="metric-label panel-metric-label" for="penFillFinalRefillTargetSelect">Final refill target:</label>
+              <select id="penFillFinalRefillTargetSelect" class="panel-metric-value pen-fill-target-select" aria-describedby="penFillFinalRefillTargetWindow">
+                <option value="60">1 min before end</option>
+                <option value="120">2 min before end</option>
+                <option value="180" selected>3 min before end</option>
+                <option value="240">4 min before end</option>
+                <option value="300">5 min before end</option>
+              </select>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Target window:</span>
+              <strong id="penFillFinalRefillTargetWindow" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Final refill status:</span>
               <strong id="penFillForecastStatus" class="panel-metric-value">—</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Projected sheep after target:</span>
+              <strong id="penFillPlannerProjectedAfterTarget" class="panel-metric-value">—</strong>
             </div>
           </div>
           <div class="timing-group panel-section">
