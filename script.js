@@ -1388,6 +1388,100 @@ function findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen = getPhy
   )) || null;
 }
 
+function getActivePenFillMarkerEventsForCurrentRun(events = appState.penFillEvents) {
+  return getCurrentRunPenFillEvents(events).filter((event) => (
+    isPenFillAmountEvent(event)
+    && event.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL
+  ));
+}
+
+function formatPenFillMarkerLabel() {
+  return "Pen refill";
+}
+
+function createPenFillDisplayMarker(event) {
+  return {
+    type: "penRefill",
+    label: formatPenFillMarkerLabel(event),
+    source: "penFillEvent",
+    eventId: event?.id || null
+  };
+}
+
+function getPenFillMarkerEventsBySheepRow(entries = appState.sheep, events = appState.penFillEvents) {
+  const markerEvents = getActivePenFillMarkerEventsForCurrentRun(events);
+  const eventsByRowId = new Map();
+  if (!Array.isArray(entries) || !markerEvents.length) return eventsByRowId;
+
+  const rowIdBySheepId = new Map();
+  const rowIdBySheepNumber = new Map();
+  entries.forEach((entry) => {
+    if (!entry || typeof entry !== "object") return;
+    const rowId = entry.id || `sheep-number-${entry.number}`;
+    if (entry.id) rowIdBySheepId.set(entry.id, rowId);
+    const sheepNumber = Number(entry.number);
+    if (Number.isFinite(sheepNumber) && !rowIdBySheepNumber.has(sheepNumber)) {
+      rowIdBySheepNumber.set(sheepNumber, rowId);
+    }
+  });
+
+  const addEventToRow = (rowId, event) => {
+    if (!rowId) return;
+    const existingEvents = eventsByRowId.get(rowId) || [];
+    if (existingEvents.length) return;
+    existingEvents.push(event);
+    eventsByRowId.set(rowId, existingEvents);
+  };
+
+  markerEvents.forEach((event) => {
+    const sheepId = typeof event?.sheepId === "string" ? event.sheepId : "";
+    const sheepIdRowId = sheepId ? rowIdBySheepId.get(sheepId) : "";
+    if (sheepIdRowId) {
+      addEventToRow(sheepIdRowId, event);
+      return;
+    }
+
+    const physicalSheepTakenFromPen = Number(event?.physicalSheepTakenFromPen);
+    if (Number.isFinite(physicalSheepTakenFromPen) && rowIdBySheepNumber.has(physicalSheepTakenFromPen)) {
+      addEventToRow(rowIdBySheepNumber.get(physicalSheepTakenFromPen), event);
+      return;
+    }
+
+    const sheepNumber = Number(event?.sheepNumber);
+    if (Number.isFinite(sheepNumber) && rowIdBySheepNumber.has(sheepNumber)) {
+      addEventToRow(rowIdBySheepNumber.get(sheepNumber), event);
+    }
+  });
+
+  return eventsByRowId;
+}
+
+function getPenFillMarkerEventsForSheepEntry(entry, markerEventsBySheepRow = getPenFillMarkerEventsBySheepRow()) {
+  if (!entry || typeof entry !== "object") return [];
+  const rowId = entry.id || `sheep-number-${entry.number}`;
+  return markerEventsBySheepRow.get(rowId) || [];
+}
+
+function getSheepLogDisplayMarkersForEntry(entry, markerEventsBySheepRow = getPenFillMarkerEventsBySheepRow()) {
+  const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+  const penFillMarkers = getPenFillMarkerEventsForSheepEntry(entry, markerEventsBySheepRow)
+    .slice(0, 1)
+    .map(createPenFillDisplayMarker);
+  return [...manualMarkers, ...penFillMarkers];
+}
+
+function getSheepLogDisplayMarkersLabel(markers) {
+  if (!Array.isArray(markers)) return "";
+  return markers
+    .map((marker) => marker?.source === "penFillEvent"
+      ? marker.label
+      : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE
+        ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
+        : getManualMarkerDisplayLabel(marker)))
+    .filter(Boolean)
+    .join(" + ");
+}
+
 function maybeRecordAssumedPenFillEvent(context = {}) {
   const recordType = Object.prototype.hasOwnProperty.call(context, "recordType") ? context.recordType : appState.recordType;
   const rule = context.rule || getPenRule(recordType);
@@ -8987,6 +9081,7 @@ function renderLogTable() {
   const anomalyAverages = calculateSheepLogAnomalyAverages();
   const plannedDelayMarkers = getPlannedDelayMarkersBySheepNumber();
   const sortedSheep = getSortedSheepLogEntries();
+  const penFillMarkerEventsBySheepRow = getPenFillMarkerEventsBySheepRow(sortedSheep);
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
     const fullCycleClass = requiredCycle > 0
@@ -9004,7 +9099,7 @@ function renderLogTable() {
       <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
       <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
-    row.appendChild(createSheepLogMarkerNoteCell(entry, plannedDelayMarkers));
+    row.appendChild(createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerEventsBySheepRow));
     elements.sheepLogBody.appendChild(row);
   });
 
@@ -9021,12 +9116,13 @@ function renderLogTable() {
   });
 }
 
-function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
+function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerEventsBySheepRow = getPenFillMarkerEventsBySheepRow()) {
   const markerNoteCell = document.createElement("td");
   markerNoteCell.className = "sheep-log-marker-note-col";
   markerNoteCell.dataset.sheepId = entry.id || "";
 
   const manualMarkers = getConfirmedManualMarkersForEntry(entry);
+  const displayMarkers = getSheepLogDisplayMarkersForEntry(entry, penFillMarkerEventsBySheepRow);
   const noteText = normalizeSheepNote(entry.note);
   const allAutoMarkers = plannedDelayMarkers.get(entry.number) || [];
   const autoMarkers = !manualMarkers.length && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
@@ -9053,15 +9149,15 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers) {
     content.appendChild(tags);
   }
 
-  if (manualMarkers.length || noteText) {
+  if (displayMarkers.length || noteText) {
     markerNoteCell.classList.add("has-marker-note");
     const summary = document.createElement("div");
     summary.className = "sheep-log-marker-note-summary";
 
-    if (manualMarkers.length) {
+    if (displayMarkers.length) {
       const markerSummary = document.createElement("div");
       markerSummary.className = "sheep-log-manual-marker-summary";
-      const markerSummaryLabel = getManualMarkersDisplayLabel(manualMarkers);
+      const markerSummaryLabel = getSheepLogDisplayMarkersLabel(displayMarkers);
       markerSummary.textContent = markerSummaryLabel;
       markerSummary.title = markerSummaryLabel;
       summary.appendChild(markerSummary);
