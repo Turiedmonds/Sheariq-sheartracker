@@ -11002,6 +11002,7 @@ function updateQuarterDisplay() {
 }
 
 const TIMING_ALERT_GRACE_SECONDS = 10;
+const TIMING_NOW_ALERT_TIMEOUT_SECONDS = 35;
 
 const TIMING_CADENCE_ALERT_TYPES = ["comb", "cutter", "drink"];
 
@@ -11045,10 +11046,9 @@ function armTimingCadenceAlertLatch(alertType, eventTime) {
   return appState.timingCadenceAlertLatches[alertType];
 }
 
-function getLatchedTimingCadenceNowAlert(alertType, eventTime, elapsedSeconds, graceSeconds, runDurationSeconds) {
+function getLatchedTimingCadenceNowAlert(alertType, eventTime, elapsedSeconds, runDurationSeconds) {
   const safeEventTime = Number(eventTime);
   const safeElapsedSeconds = Number(elapsedSeconds);
-  const safeGraceSeconds = Number(graceSeconds);
   const safeRunDurationSeconds = Number(runDurationSeconds);
   if (!Number.isFinite(safeEventTime) || safeEventTime <= 0) return null;
   if (Number.isFinite(safeRunDurationSeconds) && safeRunDurationSeconds > 0 && safeEventTime >= safeRunDurationSeconds) {
@@ -11065,11 +11065,9 @@ function getLatchedTimingCadenceNowAlert(alertType, eventTime, elapsedSeconds, g
     return null;
   }
 
-  const secondsSinceEvent = safeElapsedSeconds - safeEventTime;
-  const naturalGraceRemainingMs = Math.max(safeGraceSeconds - Math.max(secondsSinceEvent, 0), 0) * 1000;
   const expiresAtMs = Number.isFinite(existingExpiresAtMs) && existingExpiresAtMs > nowMs
     ? existingExpiresAtMs
-    : nowMs + (naturalGraceRemainingMs > 0 ? naturalGraceRemainingMs : safeGraceSeconds * 1000);
+    : nowMs + (TIMING_NOW_ALERT_TIMEOUT_SECONDS * 1000);
 
   appState.timingCadenceAlertLatches[alertType] = { eventTime: safeEventTime, expiresAtMs };
   return { mode: "now", eventTime: safeEventTime };
@@ -11195,12 +11193,12 @@ function updateTimingAlertDisplay() {
       return { mode: "countdown", seconds: Math.ceil(secondsUntilNextEvent), eventTime: nextEventTime };
     }
     if (canShowPostEventGrace) {
-      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, ALERT_GRACE_SECONDS, runDurationSeconds);
+      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, runDurationSeconds);
     }
 
     const latch = getTimingCadenceAlertLatch(alertType);
     if (Number(latch?.eventTime) === previousEventTime) {
-      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, ALERT_GRACE_SECONDS, runDurationSeconds);
+      return getLatchedTimingCadenceNowAlert(alertType, previousEventTime, elapsedSeconds, runDurationSeconds);
     }
     return null;
   };
@@ -11250,12 +11248,18 @@ function normalizePenRefillAlertLatch(latch = appState.penRefillAlertLatch) {
   const runIndex = Number(latch.runIndex);
   const recordType = typeof latch.recordType === "string" ? latch.recordType : appState.recordType;
   if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return null;
+  const createdAtMs = Number.isFinite(Number(latch.createdAtMs)) ? Number(latch.createdAtMs) : Date.now();
+  const expiresAtMs = Number.isFinite(Number(latch.expiresAtMs))
+    ? Number(latch.expiresAtMs)
+    : createdAtMs + (TIMING_NOW_ALERT_TIMEOUT_SECONDS * 1000);
   return {
     recordType,
     runIndex: Number.isFinite(runIndex) ? runIndex : Number(appState.currentRunIndex),
     physicalSheepTakenFromPen,
     promptKey: typeof latch.promptKey === "string" ? latch.promptKey : getPenFillPromptKey(physicalSheepTakenFromPen),
-    createdAtMs: Number.isFinite(Number(latch.createdAtMs)) ? Number(latch.createdAtMs) : Date.now()
+    createdAtMs,
+    expiresAtMs,
+    expiredAtMs: Number.isFinite(Number(latch.expiredAtMs)) ? Number(latch.expiredAtMs) : null
   };
 }
 
@@ -11284,12 +11288,28 @@ function clearPenRefillAlertLatchBeyondSheepCount(newPhysicalSheepCount) {
 function armPenRefillAlertLatch(penState) {
   const physicalSheepTakenFromPen = Number(penState?.physicalSheepTakenFromPen);
   if (!Number.isFinite(physicalSheepTakenFromPen) || physicalSheepTakenFromPen <= 0) return null;
+
+  const promptKey = getPenFillPromptKey(physicalSheepTakenFromPen);
+  const existingLatch = normalizePenRefillAlertLatch(appState.penRefillAlertLatch);
+  if (
+    existingLatch
+    && existingLatch.recordType === appState.recordType
+    && existingLatch.runIndex === Number(appState.currentRunIndex)
+    && existingLatch.promptKey === promptKey
+  ) {
+    appState.penRefillAlertLatch = existingLatch;
+    return existingLatch.expiredAtMs ? null : existingLatch;
+  }
+
+  const createdAtMs = Date.now();
   const latch = {
     recordType: appState.recordType,
     runIndex: Number(appState.currentRunIndex),
     physicalSheepTakenFromPen,
-    promptKey: getPenFillPromptKey(physicalSheepTakenFromPen),
-    createdAtMs: Date.now()
+    promptKey,
+    createdAtMs,
+    expiresAtMs: createdAtMs + (TIMING_NOW_ALERT_TIMEOUT_SECONDS * 1000),
+    expiredAtMs: null
   };
   appState.penRefillAlertLatch = latch;
   return latch;
@@ -11321,6 +11341,17 @@ function getActivePenRefillAlertLatch(sheepTakenFromPen) {
     || hasActivePenFillEventAtOrAfterSheepCount(latch.physicalSheepTakenFromPen)
   ) {
     clearPenRefillAlertLatch();
+    return null;
+  }
+
+  const nowMs = Date.now();
+  const expiresAtMs = Number(latch.expiresAtMs);
+  if (Number.isFinite(expiresAtMs) && expiresAtMs <= nowMs) {
+    appState.penRefillAlertLatch = { ...latch, expiredAtMs: Number(latch.expiredAtMs) || nowMs };
+    return null;
+  }
+  if (latch.expiredAtMs) {
+    appState.penRefillAlertLatch = latch;
     return null;
   }
 
@@ -11371,13 +11402,12 @@ function updatePenRefillAlertDisplay() {
     return;
   }
 
-  if (penState.refillAllowedNow) {
-    armPenRefillAlertLatch(penState);
+  if (getActivePenRefillAlertLatch(sheepTakenFromPen)) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
   }
 
-  if (getActivePenRefillAlertLatch(sheepTakenFromPen)) {
+  if (penState.refillAllowedNow && armPenRefillAlertLatch(penState)) {
     setPenRefillAlertDisplay("now", "Pen refill allowed");
     return;
   }
