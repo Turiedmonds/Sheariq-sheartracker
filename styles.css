@@ -1959,6 +1959,11 @@ td {
   color: #374151;
 }
 
+#panel-pen-fill-planner .panel-metric-row {
+  grid-template-columns: minmax(120px, max-content) minmax(0, 1fr);
+  max-width: 100%;
+}
+
 #panel-cycle .metric-row strong,
 #panel-pen-fill-planner .metric-row strong {
   justify-self: end;
@@ -1966,6 +1971,14 @@ td {
   font-weight: 700;
   color: #111827;
   white-space: nowrap;
+}
+
+#panel-pen-fill-planner .metric-row .panel-metric-value {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 #panel-pen-fill-planner .pen-fill-target-select {
