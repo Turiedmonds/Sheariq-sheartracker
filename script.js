@@ -4413,7 +4413,6 @@ const elements = {
   penFullnessCatchDifference: document.getElementById("penFullnessCatchDifference"),
   penFullnessCatchAdvantageWindow: document.getElementById("penFullnessCatchAdvantageWindow"),
   penFullnessCatchFullEarlyAvg: document.getElementById("penFullnessCatchFullEarlyAvg"),
-  penFullnessCatchMidAvg: document.getElementById("penFullnessCatchMidAvg"),
   penFullnessCatchLowLateAvg: document.getElementById("penFullnessCatchLowLateAvg"),
   penFillFinalRefillTargetSelect: document.getElementById("penFillFinalRefillTargetSelect"),
   penFillFinalRefillTargetWindow: document.getElementById("penFillFinalRefillTargetWindow"),
@@ -12063,7 +12062,8 @@ function formatCatchAdvantageWindowValue(analysis) {
   if (!Number.isFinite(usefulAdvantageSheep) || usefulAdvantageSheep <= 0) {
     return "No useful advantage found yet.";
   }
-  return `about ${Math.floor(usefulAdvantageSheep)} sheep`;
+  const sheepCount = Math.floor(usefulAdvantageSheep);
+  return `Advantage lasts about ${sheepCount} sheep after refill`;
 }
 
 function getPenFullnessConfounderDisplayName(type) {
@@ -12101,7 +12101,6 @@ function updatePenFullnessCatchAnalysisDisplay() {
     || elements.penFullnessCatchDifference
     || elements.penFullnessCatchAdvantageWindow
     || elements.penFullnessCatchFullEarlyAvg
-    || elements.penFullnessCatchMidAvg
     || elements.penFullnessCatchLowLateAvg;
   if (!hasDisplay || typeof buildPenFullnessCatchAnalysis !== "function") return;
 
@@ -12135,7 +12134,6 @@ function updatePenFullnessCatchAnalysisDisplay() {
   }
 
   setText(elements.penFullnessCatchFullEarlyAvg, formatBucket(bucketByKey.fullEarly));
-  setText(elements.penFullnessCatchMidAvg, formatBucket(bucketByKey.midCycle));
   setText(elements.penFullnessCatchLowLateAvg, formatBucket(bucketByKey.lowLate));
 }
 
