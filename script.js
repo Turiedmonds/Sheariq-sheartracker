@@ -11489,11 +11489,10 @@ function getQuarterElapsedSeconds(quarterElapsedSeconds = null) {
     : Math.max(getEffectiveElapsedSeconds() - getCurrentQuarterWindow().startSeconds, 0);
 }
 
-function getCurrentQuarterTargetSheepCount() {
-  const requiredSecondsPerSheep = calculateTargetMetrics().requiredCycle;
-  if (!Number.isFinite(requiredSecondsPerSheep) || requiredSecondsPerSheep <= 0) return null;
+function getCurrentQuarterTargetSheepCount(targetMetrics = null) {
+  const target = targetMetrics ?? calculateTargetMetrics();
+  const quarterTargetSheep = calculateQuarterTotals(target).required;
 
-  const quarterTargetSheep = Math.ceil(900 / requiredSecondsPerSheep);
   return Number.isFinite(quarterTargetSheep) && quarterTargetSheep > 0 ? quarterTargetSheep : null;
 }
 
