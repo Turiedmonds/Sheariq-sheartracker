@@ -1935,7 +1935,7 @@ function buildPenFullnessCatchAnalysis(options = {}) {
   )).length;
   const fullnessBuckets = buildPenFullnessBucketSummary(sheepAnalysis);
   const reason = confirmedRefillEvents.length
-    ? (eligibleRefillCount ? "" : "Not enough recorded catch time around confirmed refills yet.")
+    ? (eligibleRefillCount ? "" : "Not enough clean catch time around confirmed refills yet.")
     : "Not enough confirmed refill data yet.";
   const available = confirmedRefillEvents.length > 0 && eligibleRefillCount > 0;
   const result = {
@@ -12129,8 +12129,8 @@ function updatePenFullnessCatchAnalysisDisplay() {
     setText(elements.penFullnessCatchAfterAvg, formatPenFullnessCatchSeconds(primaryComparison.afterAverage));
     setText(elements.penFullnessCatchDifference, formatPenFullnessCatchDifference(primaryComparison.difference));
   } else {
-    setText(elements.penFullnessCatchBeforeAvg, "Not enough recorded catch time before confirmed refills yet.");
-    setText(elements.penFullnessCatchAfterAvg, "Not enough recorded catch time after confirmed refills yet.");
+    setText(elements.penFullnessCatchBeforeAvg, "Not enough clean catch time before confirmed refills yet.");
+    setText(elements.penFullnessCatchAfterAvg, "Not enough clean catch time after confirmed refills yet.");
     setText(elements.penFullnessCatchDifference, "Not enough data yet.");
   }
 
