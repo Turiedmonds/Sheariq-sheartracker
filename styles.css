@@ -14,7 +14,7 @@
 
 body {
   margin: 0;
-  background: linear-gradient(180deg, #eceff3 0%, #f4f6f9 220px, #eef2f6 100%);
+  background: #242424;
   color: #1f2937;
   zoom: var(--app-zoom);
 }
