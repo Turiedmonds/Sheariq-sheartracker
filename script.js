@@ -1569,6 +1569,243 @@ function buildRefillCatchComparison(refillEvent, sheepAnalysisByNumber = new Map
   };
 }
 
+
+function buildCatchAdvantageWindowAnalysis(options = {}) {
+  const sheep = Object.prototype.hasOwnProperty.call(options, "sheep") ? options.sheep : appState.sheep;
+  const penFillEvents = Object.prototype.hasOwnProperty.call(options, "penFillEvents") ? options.penFillEvents : appState.penFillEvents;
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const includeAssumed = Boolean(options.includeAssumed);
+  const baselineSize = Number.isFinite(Number(options.baselineSize)) ? Math.max(Math.floor(Number(options.baselineSize)), 1) : 2;
+  const usefulThresholdSeconds = Number.isFinite(Number(options.usefulThresholdSeconds)) ? Number(options.usefulThresholdSeconds) : 0.5;
+  const minOffsetSampleSize = Number.isFinite(Number(options.minOffsetSampleSize)) ? Math.max(Math.floor(Number(options.minOffsetSampleSize)), 1) : 2;
+  const rule = options.rule || getPenRule(recordType);
+  const defaultRefillAmount = Number(rule?.defaultRefillAmount);
+  const fallbackMaxOffsets = Number.isFinite(defaultRefillAmount) && defaultRefillAmount > 0 ? Math.min(defaultRefillAmount, 8) : 0;
+  const emptyResult = (reason, extras = {}) => ({
+    available: false,
+    reason,
+    recordType,
+    thresholdSeconds: usefulThresholdSeconds,
+    baselineSize,
+    maxOffsets: fallbackMaxOffsets,
+    confirmedRefillCount: 0,
+    eligibleRefillCount: 0,
+    usefulAdvantageSheep: 0,
+    averageBaselineCatchDuration: null,
+    offsets: [],
+    refillWindows: [],
+    skippedConfoundedSheepNumbers: [],
+    skippedConfounderTypes: [],
+    skippedConfounderTypeCounts: {},
+    includeAssumed,
+    minOffsetSampleSize,
+    ...extras
+  });
+
+  if (!recordType || recordType === "none" || !rule) {
+    return emptyResult("Select a pen refill record type before catch-time advantage analysis is available.");
+  }
+  if (!Array.isArray(sheep) || !sheep.length) {
+    return emptyResult("Not enough sheep timing data yet.");
+  }
+
+  const eventOptions = { recordType, includeAssumed };
+  if (Object.prototype.hasOwnProperty.call(options, "runIndex")) eventOptions.runIndex = options.runIndex;
+  const confirmedRefillEvents = getConfirmedPenFillAnalysisEvents(penFillEvents, eventOptions);
+  const confirmedRefillCount = confirmedRefillEvents.length;
+  if (!confirmedRefillCount) {
+    return emptyResult("Not enough confirmed refill data yet.", { confirmedRefillCount });
+  }
+
+  const sheepAnalysis = sheep
+    .map((entry) => {
+      const timing = getSheepEntryAnalysisTiming(entry);
+      if (!Number.isFinite(Number(timing.sheepNumber))) return null;
+      const manualMarkerConfounders = getManualMarkerConfoundersForSheepEntry(entry);
+      return {
+        entry,
+        sheepNumber: Number(timing.sheepNumber),
+        catchDuration: timing.catchDuration,
+        fullCycle: timing.fullCycle,
+        shearDuration: timing.shearDuration,
+        effectiveElapsedSeconds: timing.effectiveElapsedSeconds,
+        startTime: timing.startTime,
+        endTime: timing.endTime,
+        manualMarkerConfounders,
+        confounded: manualMarkerConfounders.length > 0
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.sheepNumber - b.sheepNumber);
+  const sheepAnalysisByNumber = new Map(sheepAnalysis.map((entry) => [entry.sheepNumber, entry]));
+  const offsetSamples = new Map();
+  const refillWindows = [];
+  const ineligibleRefillWindows = [];
+  const allSkippedConfoundedEntries = [];
+  const eligibleBaselineAverages = [];
+  let observedMaxOffsets = 0;
+
+  confirmedRefillEvents.forEach((refillEvent, index) => {
+    const refillSheepNumber = Number(getPenFillAnalysisEventSheepNumber(refillEvent));
+    const previousRefillSheepNumber = index > 0 ? Number(getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index - 1])) : null;
+    const nextRefillSheepNumber = index < confirmedRefillEvents.length - 1 ? Number(getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index + 1])) : null;
+    const actualFillAmount = Number(refillEvent?.actualFillAmount);
+    const refillAmountForOffsets = Number.isFinite(actualFillAmount) && actualFillAmount > 0 ? actualFillAmount : defaultRefillAmount;
+    const maxOffsetsForRefill = Number.isFinite(refillAmountForOffsets) && refillAmountForOffsets > 0
+      ? Math.min(refillAmountForOffsets, 8)
+      : fallbackMaxOffsets;
+    const baselineSample = collectCleanBeforeRefillSample(
+      refillSheepNumber,
+      sheepAnalysisByNumber,
+      Number.isFinite(previousRefillSheepNumber) ? previousRefillSheepNumber : null,
+      baselineSize
+    );
+    const baselineSummary = summarizeCatchSample(baselineSample.entries, baselineSize);
+    const baselineAverageCatchDuration = baselineSummary.sampleSize >= baselineSize
+      ? baselineSummary.averageCatchDuration
+      : null;
+    const window = {
+      refillEventId: refillEvent?.id || null,
+      refillSheepNumber: Number.isFinite(refillSheepNumber) ? refillSheepNumber : null,
+      baselineAverageCatchDuration,
+      baselineSheepNumbers: baselineSample.entries
+        .map((entry) => Number(entry?.sheepNumber))
+        .filter((sheepNumber) => Number.isFinite(sheepNumber)),
+      baselineSampleSize: baselineSummary.sampleSize,
+      requiredBaselineSize: baselineSize,
+      nextRefillSheepNumber: Number.isFinite(nextRefillSheepNumber) ? nextRefillSheepNumber : null,
+      maxOffsets: maxOffsetsForRefill,
+      eligible: false,
+      reason: "",
+      offsets: []
+    };
+
+    if (!Number.isFinite(refillSheepNumber)) {
+      window.reason = "Refill sheep number is unavailable.";
+      ineligibleRefillWindows.push(window);
+      return;
+    }
+    if (baselineSummary.sampleSize < baselineSize || !Number.isFinite(Number(baselineAverageCatchDuration))) {
+      window.reason = `Fewer than ${baselineSize} clean baseline catches before refill.`;
+      ineligibleRefillWindows.push(window);
+      return;
+    }
+
+    window.eligible = true;
+    eligibleBaselineAverages.push(Number(baselineAverageCatchDuration));
+    observedMaxOffsets = Math.max(observedMaxOffsets, maxOffsetsForRefill);
+
+    for (let offset = 1; offset <= maxOffsetsForRefill; offset += 1) {
+      const sheepNumber = refillSheepNumber + offset;
+      if (Number.isFinite(nextRefillSheepNumber) && sheepNumber >= nextRefillSheepNumber) break;
+      const entry = sheepAnalysisByNumber.get(sheepNumber) || null;
+      const isClean = isCleanRefillCatchAnalysisEntry(entry);
+      const isConfounded = Boolean(entry)
+        && !isClean
+        && Number.isFinite(Number(entry.catchDuration))
+        && Array.isArray(entry.manualMarkerConfounders)
+        && entry.manualMarkerConfounders.length > 0;
+      const skippedEntries = isConfounded ? [entry] : [];
+      const skippedSummary = summarizeSkippedConfoundedEntries(skippedEntries);
+      const offsetWindow = {
+        offset,
+        sheepNumber,
+        sampleSize: isClean ? 1 : 0,
+        catchDuration: isClean ? Number(entry.catchDuration) : null,
+        baselineCatchDuration: Number(baselineAverageCatchDuration),
+        advantageSeconds: isClean ? Number(baselineAverageCatchDuration) - Number(entry.catchDuration) : null,
+        clean: isClean,
+        skipped: isConfounded,
+        skippedConfoundedSheepNumbers: skippedSummary.skippedConfoundedSheepNumbers,
+        skippedConfounderTypes: skippedSummary.skippedConfounderTypes,
+        skippedConfounderTypeCounts: skippedSummary.skippedConfounderTypeCounts
+      };
+      window.offsets.push(offsetWindow);
+
+      if (!offsetSamples.has(offset)) {
+        offsetSamples.set(offset, { samples: [], skippedConfoundedEntries: [] });
+      }
+      const offsetBucket = offsetSamples.get(offset);
+      if (isClean) {
+        offsetBucket.samples.push({
+          catchDuration: Number(entry.catchDuration),
+          baselineCatchDuration: Number(baselineAverageCatchDuration),
+          advantageSeconds: Number(baselineAverageCatchDuration) - Number(entry.catchDuration),
+          sheepNumber
+        });
+      }
+      if (skippedEntries.length) {
+        offsetBucket.skippedConfoundedEntries.push(...skippedEntries);
+        allSkippedConfoundedEntries.push(...skippedEntries);
+      }
+    }
+
+    refillWindows.push(window);
+  });
+
+  const offsets = Array.from(offsetSamples.keys())
+    .sort((a, b) => a - b)
+    .map((offset) => {
+      const offsetBucket = offsetSamples.get(offset);
+      const samples = offsetBucket.samples;
+      const skippedSummary = summarizeSkippedConfoundedEntries(offsetBucket.skippedConfoundedEntries);
+      const averageCatchDuration = averageNumericValues(samples.map((sample) => sample.catchDuration));
+      const averageBaselineCatchDuration = averageNumericValues(samples.map((sample) => sample.baselineCatchDuration));
+      const averageAdvantageSeconds = averageNumericValues(samples.map((sample) => sample.advantageSeconds));
+      const sampleSize = samples.length;
+      const sufficient = sampleSize >= minOffsetSampleSize;
+      const useful = sufficient && Number.isFinite(Number(averageAdvantageSeconds)) && averageAdvantageSeconds >= usefulThresholdSeconds;
+      return {
+        offset,
+        sampleSize,
+        averageCatchDuration,
+        averageBaselineCatchDuration,
+        averageAdvantageSeconds,
+        sufficient,
+        useful,
+        skippedConfoundedSheepNumbers: skippedSummary.skippedConfoundedSheepNumbers,
+        skippedConfounderTypes: skippedSummary.skippedConfounderTypes,
+        skippedConfounderTypeCounts: skippedSummary.skippedConfounderTypeCounts
+      };
+    });
+
+  const usefulOffsets = offsets.filter((offset) => offset.useful).map((offset) => offset.offset);
+  const usefulAdvantageSheep = usefulOffsets.length ? Math.max(...usefulOffsets) : 0;
+  const skippedSummary = summarizeSkippedConfoundedEntries(allSkippedConfoundedEntries);
+  const eligibleRefillCount = refillWindows.length;
+  const averageBaselineCatchDuration = averageNumericValues(eligibleBaselineAverages);
+  const available = eligibleRefillCount > 0 && offsets.some((offset) => offset.sampleSize > 0);
+  let reason = "";
+  if (!eligibleRefillCount) {
+    reason = "Not enough clean baseline catches around confirmed refills yet.";
+  } else if (!offsets.some((offset) => offset.sampleSize > 0)) {
+    reason = "Not enough clean after-refill catch timing samples yet.";
+  } else if (!usefulAdvantageSheep) {
+    reason = "No useful catch-time advantage window found at the current threshold.";
+  }
+
+  return {
+    available,
+    reason,
+    recordType,
+    thresholdSeconds: usefulThresholdSeconds,
+    baselineSize,
+    maxOffsets: observedMaxOffsets || fallbackMaxOffsets,
+    confirmedRefillCount,
+    eligibleRefillCount,
+    usefulAdvantageSheep,
+    averageBaselineCatchDuration,
+    offsets,
+    refillWindows,
+    ineligibleRefillWindows,
+    skippedConfoundedSheepNumbers: skippedSummary.skippedConfoundedSheepNumbers,
+    skippedConfounderTypes: skippedSummary.skippedConfounderTypes,
+    skippedConfounderTypeCounts: skippedSummary.skippedConfounderTypeCounts,
+    includeAssumed,
+    minOffsetSampleSize
+  };
+}
+
 function buildPenFullnessBucketSummary(sheepAnalysisEntries = []) {
   const bucketOrder = ["fullEarly", "midCycle", "lowLate", "unknown"];
   const grouped = sheepAnalysisEntries.reduce((groups, entry) => {
