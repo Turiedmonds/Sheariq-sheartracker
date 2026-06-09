@@ -1991,7 +1991,7 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) return baseSummary;
 
   const timingText = formatUsefulRefillTimingWindowSeconds(estimatedUsefulWindowSeconds);
-  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep after refill, about ${timingText} before run end. ${alignmentMessage}`;
+  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep after refill, about ${timingText} before end of run. ${alignmentMessage}`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -7988,7 +7988,7 @@ function calculateTargetMetrics() {
     targetCatchRunSeconds = elapsedRunSeconds + targetCatchOffsetSeconds;
 
     // Target reach is based on the catch/start moment: the target sheep only needs
-    // to be caught/started before the bell, not fully completed before run end.
+    // to be caught/started before the bell, not fully completed before end of run.
     targetReachable = targetAlreadyReached || targetCatchRunSeconds < runLengthSeconds;
 
     // Dynamic "last possible catch" = predicted hand-on-door start time for the final sheep that can still begin before the run ends.
@@ -8006,8 +8006,8 @@ function calculateTargetMetrics() {
 
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
-      ? `Projected to start target sheep ${formatTargetPaceCountdownDisplay(timeDifference)} before run end`
-      : `Projected to start target sheep ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} after run end`;
+      ? `Projected to catch target sheep ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
+      : `Projected to catch target sheep ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} after end of run`;
     timeSpareIsAhead = timeDifference >= 0;
   }
 
@@ -8364,7 +8364,7 @@ function getCompletedRunTargetPaceRows() {
     [getSafeText("estimatedLastCatchTimeLabel", "Predicted time to catch target:"), getSafeText("estimatedLastCatchTime")],
     ["Predicted final catch of run", getSafeText("maxCatchTime")],
     ["Pace difference per sheep", getSafeText("catchPrediction")],
-    [getSafeText("timeSpareToBellLabel", "Target sheep start vs run end"), getSafeText("timeSpareToBell")]
+    [getSafeText("timeSpareToBellLabel", "Time to catch target sheep"), getSafeText("timeSpareToBell")]
   ]);
 }
 
@@ -12783,15 +12783,15 @@ function updateStatsPanel() {
     elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
     elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
     if (target.timeSpareIsAhead === true) {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
+      setText(elements.timeSpareToBellLabel, "Time to catch target sheep");
       elements.timeSpareToBell.classList.add("target-status-ahead");
       elements.timeSpareToBellLabel.classList.add("target-status-ahead");
     } else if (target.timeSpareIsAhead === false) {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
+      setText(elements.timeSpareToBellLabel, "Time to catch target sheep");
       elements.timeSpareToBell.classList.add("target-status-behind");
       elements.timeSpareToBellLabel.classList.add("target-status-behind");
     } else {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
+      setText(elements.timeSpareToBellLabel, "Time to catch target sheep");
     }
   }
   updateTrendFlags();
@@ -12827,7 +12827,7 @@ function getLiveTargetPacePredictions(targetMetrics = null, quarterTotals = null
     : null;
   const targetCatchTime = target.targetReachable
     ? formatTargetPaceDayClock(target.targetCatchRunSeconds)
-    : "Not reachable before run end";
+    : "Not reachable before end of run";
 
   return {
     predictedQuarterTotal: quarter.predicted,
