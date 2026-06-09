@@ -844,14 +844,14 @@ body.layout-edit-on .panel:hover .resize-handle {
 }
 
 #panel-sim .btn-start-new-day {
-  background: #7f1d1d;
+  background: #111827;
   color: #fff;
-  border-color: #7f1d1d;
+  border-color: #111827;
 }
 
 #panel-sim .btn-start-new-day:hover:not(:disabled) {
-  background: #991b1b;
-  border-color: #991b1b;
+  background: #000;
+  border-color: #000;
 }
 
 .metrics-grid {
@@ -1124,8 +1124,14 @@ button:disabled {
 }
 
 .btn-stop {
-  background: #d32f2f;
+  background: #7f1d1d;
   color: #fff;
+  border-color: #7f1d1d;
+}
+
+.btn-stop:hover:not(:disabled) {
+  background: #991b1b;
+  border-color: #991b1b;
 }
 
 .btn-pause {
@@ -2194,6 +2200,17 @@ td {
 #panel-pen-fill-planner .metric-row:has(#penFillPlannerReason),
 #panel-pen-fill-planner .metric-row:has(#penFillConfirmStatus) {
   align-items: start;
+}
+
+.timing-event-name {
+  display: block;
+  max-width: 100%;
+  margin: 0 0 0.2rem;
+  color: #111827;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 #panel-cycle .run-badge-row {
