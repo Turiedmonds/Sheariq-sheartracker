@@ -1675,6 +1675,10 @@ td {
   gap: 0.7rem;
 }
 
+#panel-block.panel.collapsed .panel-body {
+  display: none;
+}
+
 #trendGraphCanvas {
   width: 100%;
   max-width: 100%;
