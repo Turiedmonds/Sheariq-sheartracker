@@ -1576,7 +1576,6 @@ function buildCatchAdvantageWindowAnalysis(options = {}) {
   const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
   const includeAssumed = Boolean(options.includeAssumed);
   const baselineSize = Number.isFinite(Number(options.baselineSize)) ? Math.max(Math.floor(Number(options.baselineSize)), 1) : 2;
-  const usefulThresholdSeconds = Number.isFinite(Number(options.usefulThresholdSeconds)) ? Number(options.usefulThresholdSeconds) : 0.5;
   const minOffsetSampleSize = Number.isFinite(Number(options.minOffsetSampleSize)) ? Math.max(Math.floor(Number(options.minOffsetSampleSize)), 1) : 2;
   const rule = options.rule || getPenRule(recordType);
   const defaultRefillAmount = Number(rule?.defaultRefillAmount);
@@ -1585,13 +1584,19 @@ function buildCatchAdvantageWindowAnalysis(options = {}) {
     available: false,
     reason,
     recordType,
-    thresholdSeconds: usefulThresholdSeconds,
+    thresholdSeconds: null,
+    initialAdvantageSeconds: null,
+    usefulCutoffSeconds: null,
     baselineSize,
     maxOffsets: fallbackMaxOffsets,
     confirmedRefillCount: 0,
     eligibleRefillCount: 0,
     usefulAdvantageSheep: 0,
+    usesContiguousUsefulOffsets: true,
+    contiguousUsefulOffsets: true,
     averageBaselineCatchDuration: null,
+    averageBeforeCatchDuration: null,
+    averageAfterCatchDuration: null,
     offsets: [],
     refillWindows: [],
     skippedConfoundedSheepNumbers: [],
@@ -1644,6 +1649,18 @@ function buildCatchAdvantageWindowAnalysis(options = {}) {
   const allSkippedConfoundedEntries = [];
   const eligibleBaselineAverages = [];
   let observedMaxOffsets = 0;
+
+  const refillComparisons = confirmedRefillEvents.map((event, index) => buildRefillCatchComparison(event, sheepAnalysisByNumber, {
+    previousRefillSheepNumber: index > 0 ? getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index - 1]) : null,
+    nextRefillSheepNumber: index < confirmedRefillEvents.length - 1 ? getPenFillAnalysisEventSheepNumber(confirmedRefillEvents[index + 1]) : null
+  }));
+  const primaryComparison = getPenFullnessCatchPrimaryComparison({ refillComparisons });
+  const initialAdvantageSeconds = primaryComparison && Number.isFinite(Number(primaryComparison.beforeAverage)) && Number.isFinite(Number(primaryComparison.afterAverage))
+    ? Number(primaryComparison.beforeAverage) - Number(primaryComparison.afterAverage)
+    : null;
+  const usefulCutoffSeconds = Number.isFinite(Number(initialAdvantageSeconds)) && initialAdvantageSeconds > 0
+    ? initialAdvantageSeconds / 2
+    : null;
 
   confirmedRefillEvents.forEach((refillEvent, index) => {
     const refillSheepNumber = Number(getPenFillAnalysisEventSheepNumber(refillEvent));
@@ -1754,7 +1771,11 @@ function buildCatchAdvantageWindowAnalysis(options = {}) {
       const averageAdvantageSeconds = averageNumericValues(samples.map((sample) => sample.advantageSeconds));
       const sampleSize = samples.length;
       const sufficient = sampleSize >= minOffsetSampleSize;
-      const useful = sufficient && Number.isFinite(Number(averageAdvantageSeconds)) && averageAdvantageSeconds >= usefulThresholdSeconds;
+      const useful = sufficient
+        && Number.isFinite(Number(averageAdvantageSeconds))
+        && Number.isFinite(Number(usefulCutoffSeconds))
+        && usefulCutoffSeconds > 0
+        && averageAdvantageSeconds >= usefulCutoffSeconds;
       return {
         offset,
         sampleSize,
@@ -1763,38 +1784,58 @@ function buildCatchAdvantageWindowAnalysis(options = {}) {
         averageAdvantageSeconds,
         sufficient,
         useful,
+        usefulCutoffSeconds,
         skippedConfoundedSheepNumbers: skippedSummary.skippedConfoundedSheepNumbers,
         skippedConfounderTypes: skippedSummary.skippedConfounderTypes,
         skippedConfounderTypeCounts: skippedSummary.skippedConfounderTypeCounts
       };
     });
 
-  const usefulOffsets = offsets.filter((offset) => offset.useful).map((offset) => offset.offset);
-  const usefulAdvantageSheep = usefulOffsets.length ? Math.max(...usefulOffsets) : 0;
+  let usefulAdvantageSheep = 0;
+  for (let expectedOffset = 1; expectedOffset <= offsets.length; expectedOffset += 1) {
+    const offsetSummary = offsets.find((offset) => offset.offset === expectedOffset);
+    if (!offsetSummary || !offsetSummary.sufficient || !offsetSummary.useful) break;
+    usefulAdvantageSheep = expectedOffset;
+  }
+
   const skippedSummary = summarizeSkippedConfoundedEntries(allSkippedConfoundedEntries);
   const eligibleRefillCount = refillWindows.length;
   const averageBaselineCatchDuration = averageNumericValues(eligibleBaselineAverages);
-  const available = eligibleRefillCount > 0 && offsets.some((offset) => offset.sampleSize > 0);
+  const available = eligibleRefillCount > 0
+    && offsets.some((offset) => offset.sampleSize > 0)
+    && Number.isFinite(Number(initialAdvantageSeconds))
+    && initialAdvantageSeconds > 0
+    && Number.isFinite(Number(usefulCutoffSeconds));
   let reason = "";
   if (!eligibleRefillCount) {
     reason = "Not enough clean baseline catches around confirmed refills yet.";
   } else if (!offsets.some((offset) => offset.sampleSize > 0)) {
     reason = "Not enough clean after-refill catch timing samples yet.";
+  } else if (!Number.isFinite(Number(initialAdvantageSeconds))) {
+    reason = "Not enough clean before/after refill catch comparison data yet.";
+  } else if (initialAdvantageSeconds <= 0) {
+    reason = "No faster after-refill catch-time advantage found yet.";
   } else if (!usefulAdvantageSheep) {
-    reason = "No useful catch-time advantage window found at the current threshold.";
+    reason = "No useful catch-time advantage window found at the current half-advantage cutoff.";
   }
 
   return {
     available,
     reason,
     recordType,
-    thresholdSeconds: usefulThresholdSeconds,
+    thresholdSeconds: usefulCutoffSeconds,
+    initialAdvantageSeconds,
+    usefulCutoffSeconds,
     baselineSize,
     maxOffsets: observedMaxOffsets || fallbackMaxOffsets,
     confirmedRefillCount,
     eligibleRefillCount,
     usefulAdvantageSheep,
+    usesContiguousUsefulOffsets: true,
+    contiguousUsefulOffsets: true,
     averageBaselineCatchDuration,
+    averageBeforeCatchDuration: primaryComparison?.beforeAverage ?? null,
+    averageAfterCatchDuration: primaryComparison?.afterAverage ?? null,
     offsets,
     refillWindows,
     ineligibleRefillWindows,
@@ -4512,8 +4553,6 @@ const elements = {
   penFullnessCatchAfterAvg: document.getElementById("penFullnessCatchAfterAvg"),
   penFullnessCatchDifference: document.getElementById("penFullnessCatchDifference"),
   penFullnessCatchAdvantageWindow: document.getElementById("penFullnessCatchAdvantageWindow"),
-  penFullnessCatchFullEarlyAvg: document.getElementById("penFullnessCatchFullEarlyAvg"),
-  penFullnessCatchLowLateAvg: document.getElementById("penFullnessCatchLowLateAvg"),
   penFillFinalRefillTargetSelect: document.getElementById("penFillFinalRefillTargetSelect"),
   penFillFinalRefillTargetWindow: document.getElementById("penFillFinalRefillTargetWindow"),
   penFillStrategyRecommendation: document.getElementById("penFillStrategyRecommendation"),
@@ -12199,9 +12238,7 @@ function updatePenFullnessCatchAnalysisDisplay() {
     || elements.penFullnessCatchBeforeAvg
     || elements.penFullnessCatchAfterAvg
     || elements.penFullnessCatchDifference
-    || elements.penFullnessCatchAdvantageWindow
-    || elements.penFullnessCatchFullEarlyAvg
-    || elements.penFullnessCatchLowLateAvg;
+    || elements.penFullnessCatchAdvantageWindow;
   if (!hasDisplay || typeof buildPenFullnessCatchAnalysis !== "function") return;
 
   const analysis = buildPenFullnessCatchAnalysis();
@@ -12224,14 +12261,6 @@ function updatePenFullnessCatchAnalysisDisplay() {
   }) || analysis?.summary || analysis?.reason || "Not enough confirmed refill data yet.";
   const confirmedCount = Number(analysis?.confirmedRefillCount);
   const primaryComparison = getPenFullnessCatchPrimaryComparison(analysis);
-  const bucketByKey = (analysis?.fullnessBuckets || []).reduce((buckets, bucket) => {
-    if (bucket?.bucket) buckets[bucket.bucket] = bucket;
-    return buckets;
-  }, {});
-  const formatBucket = (bucket) => (Number.isFinite(Number(bucket?.averageCatchDuration))
-    ? formatPenFullnessCatchSeconds(Number(bucket.averageCatchDuration))
-    : "Not enough data yet.");
-
   setText(elements.penFullnessCatchSummary, summary);
   setText(elements.penFullnessCatchConfirmedCount, Number.isFinite(confirmedCount) ? String(confirmedCount) : "0");
   setText(elements.penFullnessCatchAdvantageWindow, formatCatchAdvantageWindowValue(advantageWindowAnalysis));
@@ -12246,8 +12275,6 @@ function updatePenFullnessCatchAnalysisDisplay() {
     setText(elements.penFullnessCatchDifference, "Not enough data yet.");
   }
 
-  setText(elements.penFullnessCatchFullEarlyAvg, formatBucket(bucketByKey.fullEarly));
-  setText(elements.penFullnessCatchLowLateAvg, formatBucket(bucketByKey.lowLate));
 }
 
 let penFillForecastCountdownTarget = null;
