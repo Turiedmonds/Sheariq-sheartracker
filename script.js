@@ -1599,7 +1599,7 @@ function buildPenFullnessBucketSummary(sheepAnalysisEntries = []) {
     });
 }
 
-function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [], fullnessBuckets = [] } = {}) {
+function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [] } = {}) {
   if (!available) return reason || "Not enough confirmed refill data yet.";
 
   const usableComparisons = refillComparisons.filter((comparison) => (
@@ -1611,45 +1611,9 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   if (!usableComparisons.length) return "Not enough confirmed refill data yet.";
 
   const averageDelta = averageNumericValues(usableComparisons.map((comparison) => comparison.averageCatchDeltaAfterMinusBefore));
-  const fullBucket = fullnessBuckets.find((bucket) => bucket.bucket === "fullEarly");
-  const lowBucket = fullnessBuckets.find((bucket) => bucket.bucket === "lowLate");
-  const lowMinusFull = (
-    fullBucket?.sampleSize >= 2
-    && lowBucket?.sampleSize >= 2
-    && Number.isFinite(Number(fullBucket.averageCatchDuration))
-    && Number.isFinite(Number(lowBucket.averageCatchDuration))
-  )
-    ? Number(lowBucket.averageCatchDuration) - Number(fullBucket.averageCatchDuration)
-    : null;
-  const comparedConfounderTypes = usableComparisons.flatMap((comparison) => comparison?.confounderSummary?.confounderTypes || []);
-  const bucketConfounderTypes = [fullBucket, lowBucket].flatMap((bucket) => bucket?.confounderTypes || []);
-  const confounderTypes = [...comparedConfounderTypes, ...bucketConfounderTypes];
-  const hasConfounders = confounderTypes.length > 0;
-  const context = hasConfounders
-    ? `Mixed result — affected by ${formatPenFullnessConfounderList(confounderTypes)}.`
-    : "Clean comparison.";
-  const summaryParts = [];
-
-  if (Number.isFinite(averageDelta)) {
-    const deltaSeconds = Math.abs(averageDelta).toFixed(2);
-    if (averageDelta < -0.25) {
-      summaryParts.push(`Catch time improved by ${deltaSeconds}s after confirmed refills.`);
-    } else if (averageDelta > 0.25) {
-      summaryParts.push(`Catch time was ${deltaSeconds}s slower after confirmed refills.`);
-    } else {
-      summaryParts.push("Recorded catch time was similar before and after confirmed refills.");
-    }
-  }
-
-  if (Number.isFinite(lowMinusFull) && Math.abs(lowMinusFull) > 0.25) {
-    const lowFullSeconds = Math.abs(lowMinusFull).toFixed(2);
-    summaryParts.push(lowMinusFull > 0
-      ? `When the pen was nearly empty, recorded catch time was ${lowFullSeconds}s slower than when the pen was full.`
-      : `When the pen was nearly empty, recorded catch time was ${lowFullSeconds}s faster than when the pen was full.`);
-  }
-
-  if (!summaryParts.length) return "Not enough confirmed refill data yet.";
-  return `${summaryParts.join(" ")} ${context}`;
+  return Number.isFinite(averageDelta)
+    ? formatPenFullnessCatchDifference(averageDelta)
+    : "Not enough confirmed refill data yet.";
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -11758,8 +11722,13 @@ function formatPenFullnessCatchSeconds(value) {
 function formatPenFullnessCatchDifference(value) {
   const seconds = Number(value);
   if (!Number.isFinite(seconds)) return "—";
-  if (Math.abs(seconds) < 0.0005) return "0.000s";
-  return `${seconds > 0 ? "+" : ""}${seconds.toFixed(3)}s`;
+  if (seconds < -0.25) {
+    return `Catch time was ${Math.abs(seconds).toFixed(2)}s faster after refill.`;
+  }
+  if (seconds > 0.25) {
+    return `Catch time was ${Math.abs(seconds).toFixed(2)}s slower after refill.`;
+  }
+  return "Catch time was similar before and after refill.";
 }
 
 function getPenFullnessConfounderDisplayName(type) {
@@ -11818,7 +11787,7 @@ function updatePenFullnessCatchAnalysisDisplay() {
   if (primaryComparison) {
     setText(elements.penFullnessCatchBeforeAvg, formatPenFullnessCatchSeconds(primaryComparison.beforeAverage));
     setText(elements.penFullnessCatchAfterAvg, formatPenFullnessCatchSeconds(primaryComparison.afterAverage));
-    setText(elements.penFullnessCatchDifference, `${formatPenFullnessCatchDifference(primaryComparison.difference)} after vs before`);
+    setText(elements.penFullnessCatchDifference, formatPenFullnessCatchDifference(primaryComparison.difference));
   } else {
     setText(elements.penFullnessCatchBeforeAvg, "Not enough recorded catch time before confirmed refills yet.");
     setText(elements.penFullnessCatchAfterAvg, "Not enough recorded catch time after confirmed refills yet.");
