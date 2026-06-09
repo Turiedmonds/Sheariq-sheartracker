@@ -10549,6 +10549,19 @@ function getSheepLogAnomalyClass(value, average, minSampleSize = 2) {
   return "sheep-log-anomaly-severe";
 }
 
+function getSheepLogTimingGradeClass(value, baseline) {
+  if (!Number.isFinite(value) || !Number.isFinite(baseline) || baseline <= 0) return "timing-neutral";
+
+  const delta = value - baseline;
+  const absDelta = Math.abs(delta);
+  if (absDelta < 0.01) return "timing-neutral";
+
+  const timingDirection = delta < 0 ? "timing-faster" : "timing-slower";
+  if (absDelta <= 1.5) return `${timingDirection}-light`;
+  if (absDelta <= 3) return `${timingDirection}-medium`;
+  return `${timingDirection}-strong`;
+}
+
 function calculateSheepLogAnomalyAverages() {
   if (!Array.isArray(appState.sheep) || appState.sheep.length === 0) {
     return { avgShearDuration: NaN, avgCatchDuration: NaN, avgFullCycle: NaN };
@@ -10615,9 +10628,7 @@ function renderLogTable() {
   const penFillMarkerEventsBySheepRow = getPenFillMarkerEventsBySheepRow(sortedSheep);
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
-    const fullCycleClass = requiredCycle > 0
-      ? (entry.fullCycle < requiredCycle - 0.05 ? "pace-good" : (entry.fullCycle > requiredCycle + 0.05 ? "pace-bad" : "pace-neutral"))
-      : "pace-neutral";
+    const fullCycleClass = getSheepLogTimingGradeClass(entry.fullCycle, requiredCycle);
     const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, anomalyAverages.avgShearDuration);
     const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, anomalyAverages.avgCatchDuration);
     const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, anomalyAverages.avgFullCycle);

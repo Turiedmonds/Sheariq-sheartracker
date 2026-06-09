@@ -1338,6 +1338,70 @@ button:disabled {
   padding-bottom: 12px;
 }
 
+#panel-log .table-wrap {
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12), inset 0 3px 0 #dc2626;
+}
+
+#panel-log table {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 860px;
+  background: #ffffff;
+}
+
+#panel-log thead th {
+  background: linear-gradient(180deg, #171717 0%, #050505 100%);
+  color: #ffffff;
+  border-color: #1f2937;
+  border-bottom: 2px solid #dc2626;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+#panel-log th,
+#panel-log td {
+  border-color: #e2e8f0;
+  padding: 0.32rem 0.42rem;
+  font-size: 0.84rem;
+  line-height: 1.25;
+}
+
+#panel-log tbody td {
+  background-clip: padding-box;
+  border-width: 0 1px 1px 0;
+}
+
+#panel-log tbody tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+#panel-log tbody tr:hover td:not([class*="timing-"]):not([class*="sheep-log-anomaly-"]) {
+  background-color: #fff1f2;
+}
+
+#panel-log tbody tr:hover td[class*="timing-"],
+#panel-log tbody tr:hover td[class*="sheep-log-anomaly-"] {
+  filter: saturate(1.04) contrast(1.01);
+}
+
+#panel-log tbody td:first-child,
+#panel-log thead th:first-child {
+  border-left: 0;
+}
+
+#panel-log tbody td:last-child,
+#panel-log thead th:last-child {
+  border-right: 0;
+}
+
+
 .sheep-log-sort-controls {
   display: flex;
   flex-wrap: wrap;
@@ -1552,12 +1616,24 @@ button:disabled {
 
 #panel-log .sheep-log-marker-note-btn {
   flex: 0 0 auto;
-  padding: 0.12rem 0.42rem;
+  padding: 0.12rem 0.48rem;
   min-width: 1.45rem;
   width: auto;
   min-height: 1.35rem;
-  font-size: 0.78rem;
+  border-color: #111827;
+  background: linear-gradient(180deg, #ffffff 0%, #f1f5f9 100%);
+  color: #111827;
+  font-size: 0.76rem;
+  font-weight: 800;
   line-height: 1.1;
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.7), 0 1px 2px rgba(15, 23, 42, 0.12);
+}
+
+#panel-log .sheep-log-marker-note-btn:hover,
+#panel-log .sheep-log-marker-note-btn:focus-visible {
+  border-color: #b91c1c;
+  background: linear-gradient(180deg, #fff5f5 0%, #fee2e2 100%);
+  color: #7f1d1d;
 }
 
 #panel-log .sheep-log-marker-note-col.is-empty .sheep-log-marker-note-btn {
@@ -2702,18 +2778,52 @@ td {
 }
 
 
-td.pace-good {
-  background: #ecfdf5;
+td.pace-good,
+#panel-log td.timing-faster-light {
+  background: #dcfce7;
   color: #166534;
 }
 
-td.pace-bad {
-  background: #fef2f2;
+#panel-log td.timing-faster-medium {
+  background: #86efac;
+  color: #14532d;
+  font-weight: 700;
+}
+
+#panel-log td.timing-faster-strong {
+  background: #22c55e;
+  color: #052e16;
+  font-weight: 800;
+  box-shadow: inset 3px 0 0 #15803d;
+}
+
+td.pace-bad,
+#panel-log td.timing-slower-light {
+  background: #fee2e2;
   color: #991b1b;
 }
 
-td.pace-neutral {
+#panel-log td.timing-slower-medium {
+  background: #fca5a5;
+  color: #7f1d1d;
+  font-weight: 700;
+}
+
+#panel-log td.timing-slower-strong {
+  background: #ef4444;
+  color: #ffffff;
+  font-weight: 800;
+  box-shadow: inset 3px 0 0 #b91c1c;
+}
+
+td.pace-neutral,
+#panel-log td.timing-neutral {
   background: #f9fafb;
+}
+
+#panel-log td[class*="timing-"] {
+  border-left-color: rgba(15, 23, 42, 0.12);
+  border-right-color: rgba(15, 23, 42, 0.12);
 }
 
 .debug-box {
@@ -2775,15 +2885,23 @@ td.pace-neutral {
 }
 
 #panel-log td.sheep-log-anomaly-mild {
-  background: #fef9c3;
+  background: #fff7ed;
+  color: #9a3412;
+  box-shadow: inset 3px 0 0 #fed7aa;
 }
 
 #panel-log td.sheep-log-anomaly-strong {
-  background: #fde68a;
+  background: #fed7aa;
+  color: #9a3412;
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 #fb923c;
 }
 
 #panel-log td.sheep-log-anomaly-severe {
-  background: #fdba74;
+  background: #fb923c;
+  color: #431407;
+  font-weight: 800;
+  box-shadow: inset 3px 0 0 #c2410c;
 }
 
 .sheep-log-help-swatches {
@@ -2807,15 +2925,18 @@ td.pace-neutral {
 }
 
 .sheep-log-help-swatch.sheep-log-anomaly-mild {
-  background: #fef9c3;
+  background: #fff7ed;
+  border-color: #fed7aa;
 }
 
 .sheep-log-help-swatch.sheep-log-anomaly-strong {
-  background: #fde68a;
+  background: #fed7aa;
+  border-color: #fb923c;
 }
 
 .sheep-log-help-swatch.sheep-log-anomaly-severe {
-  background: #fdba74;
+  background: #fb923c;
+  border-color: #c2410c;
 }
 
 #panel-cycle .timing-alert-row {
