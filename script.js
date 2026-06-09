@@ -164,7 +164,11 @@ const MANUAL_MARKER_TYPES = {
   comb: "Comb"
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
+const SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY = "sheartracker.sheepLogColumnWidths.v1";
+const SHEEP_LOG_COLUMN_MIN_WIDTHS = [58, 72, 112, 112, 126, 126, 116, 220];
 let sheepLogMarkerNoteEditorSheepId = "";
+let sheepLogMarkerNotePopoverEl = null;
+let sheepLogMarkerNotePopoverAnchorEl = null;
 let selectedSheepLogIds = new Set();
 
 function isValidManualMarkerType(type) {
@@ -10616,6 +10620,99 @@ function formatSheepLogClock(entry, field) {
   return formatClock(field === "start" ? entry?.startTime : entry?.endTime);
 }
 
+function getSheepLogTable() {
+  return elements.sheepLogBody?.closest("table") || document.querySelector("#panel-log table");
+}
+
+function loadSheepLogColumnWidths() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.map((value) => Number(value)) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveSheepLogColumnWidths(widths) {
+  try {
+    localStorage.setItem(SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
+  } catch (error) {
+    // Ignore storage failures; resizing should still work for the current page view.
+  }
+}
+
+function applySheepLogColumnWidths(widths = loadSheepLogColumnWidths()) {
+  const table = getSheepLogTable();
+  if (!(table instanceof HTMLTableElement)) return;
+  const cols = [...table.querySelectorAll("colgroup col")];
+  cols.forEach((col, index) => {
+    const savedWidth = Number(widths[index]);
+    const fallbackMin = SHEEP_LOG_COLUMN_MIN_WIDTHS[index] || 72;
+    const width = Number.isFinite(savedWidth) && savedWidth > 0 ? Math.max(savedWidth, fallbackMin) : fallbackMin;
+    col.style.width = `${width}px`;
+  });
+}
+
+function setupSheepLogColumnResizing() {
+  const table = getSheepLogTable();
+  if (!(table instanceof HTMLTableElement) || table.dataset.columnResizeReady === "true") return;
+  table.dataset.columnResizeReady = "true";
+  applySheepLogColumnWidths();
+
+  [...table.querySelectorAll("thead th")].forEach((header, index) => {
+    if (!(header instanceof HTMLElement) || header.querySelector(".sheep-log-column-resize-handle")) return;
+    header.classList.add("sheep-log-resizable-header");
+    const handle = document.createElement("span");
+    handle.className = "sheep-log-column-resize-handle";
+    handle.setAttribute("role", "separator");
+    handle.setAttribute("aria-orientation", "vertical");
+    handle.setAttribute("aria-label", `Resize ${header.textContent?.trim() || "column"} column`);
+    handle.title = "Drag to resize column";
+
+    handle.addEventListener("pointerdown", (event) => {
+      if (!(event.currentTarget instanceof HTMLElement)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const cols = [...table.querySelectorAll("colgroup col")];
+      const targetCol = cols[index];
+      if (!(targetCol instanceof HTMLTableColElement)) return;
+      const startX = event.clientX;
+      const startWidth = targetCol.getBoundingClientRect().width || header.getBoundingClientRect().width;
+      const minWidth = SHEEP_LOG_COLUMN_MIN_WIDTHS[index] || 72;
+      const pointerId = event.pointerId;
+      handle.setPointerCapture?.(pointerId);
+      table.classList.add("is-column-resizing");
+
+      const onPointerMove = (moveEvent) => {
+        if (moveEvent.pointerId !== pointerId) return;
+        const nextWidth = Math.max(minWidth, Math.round(startWidth + moveEvent.clientX - startX));
+        targetCol.style.width = `${nextWidth}px`;
+        positionSheepLogMarkerNotePopover();
+      };
+
+      const onPointerEnd = (endEvent) => {
+        if (endEvent.pointerId !== pointerId) return;
+        handle.releasePointerCapture?.(pointerId);
+        table.classList.remove("is-column-resizing");
+        handle.removeEventListener("pointermove", onPointerMove);
+        handle.removeEventListener("pointerup", onPointerEnd);
+        handle.removeEventListener("pointercancel", onPointerEnd);
+        const widths = [...table.querySelectorAll("colgroup col")].map((col, colIndex) => {
+          const width = Math.round(col.getBoundingClientRect().width);
+          return Math.max(width, SHEEP_LOG_COLUMN_MIN_WIDTHS[colIndex] || 72);
+        });
+        saveSheepLogColumnWidths(widths);
+      };
+
+      handle.addEventListener("pointermove", onPointerMove);
+      handle.addEventListener("pointerup", onPointerEnd);
+      handle.addEventListener("pointercancel", onPointerEnd);
+    });
+
+    header.appendChild(handle);
+  });
+}
+
 function renderLogTable() {
   if (!elements.sheepLogBody) return;
   syncSelectedSheepLogIds();
@@ -10667,12 +10764,6 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerE
   const noteText = normalizeSheepNote(entry.note);
   const allAutoMarkers = plannedDelayMarkers.get(entry.number) || [];
   const autoMarkers = !manualMarkers.length && appState.showPlannedDelayMarkers ? allAutoMarkers : [];
-
-  if (sheepLogMarkerNoteEditorSheepId && entry.id === sheepLogMarkerNoteEditorSheepId) {
-    markerNoteCell.classList.add("is-editing");
-    markerNoteCell.appendChild(createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText));
-    return markerNoteCell;
-  }
 
   const content = document.createElement("div");
   content.className = "sheep-log-marker-note-content";
@@ -10838,17 +10929,62 @@ function createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText) {
     markerGroup.appendChild(checkboxLabel);
   });
 
+  const penFillStatus = getPenFillEventStatusForSheepEntry(entry);
+  const penFillCheckboxLabel = document.createElement("label");
+  penFillCheckboxLabel.className = "sheep-log-marker-checkbox-label sheep-log-marker-checkbox-label-pen-fill";
+  penFillCheckboxLabel.title = penFillStatus.message;
+
+  const penFillCheckbox = document.createElement("input");
+  penFillCheckbox.type = "checkbox";
+  penFillCheckbox.dataset.role = "pen-fill-checkbox";
+  penFillCheckbox.checked = penFillStatus.status === "linked";
+  penFillCheckbox.dataset.initialStatus = penFillStatus.status;
+  penFillCheckbox.dataset.penFillEventId = penFillStatus.event?.id || "";
+
+  const penFillLabelText = document.createElement("span");
+  penFillLabelText.textContent = "Pen refill";
+
+  penFillCheckboxLabel.append(penFillCheckbox, penFillLabelText);
+  markerGroup.appendChild(penFillCheckboxLabel);
+
+  const customToggleLabel = document.createElement("label");
+  customToggleLabel.className = "sheep-log-marker-checkbox-label sheep-log-marker-checkbox-label-custom";
+
+  const customToggle = document.createElement("input");
+  customToggle.type = "checkbox";
+  customToggle.dataset.role = "custom-toggle";
+  customToggle.checked = Boolean(customMarker);
+
+  const customToggleText = document.createElement("span");
+  customToggleText.textContent = "Custom";
+
+  customToggleLabel.append(customToggle, customToggleText);
+  markerGroup.appendChild(customToggleLabel);
+
   editor.appendChild(markerGroup);
-  editor.appendChild(createSheepLogPenFillEventStatusBlock(entry));
+
+  const customInputWrap = document.createElement("label");
+  customInputWrap.className = "sheep-log-marker-custom-field";
+  customInputWrap.hidden = !customToggle.checked;
+
+  const customInputLabel = document.createElement("span");
+  customInputLabel.textContent = "Custom marker";
 
   const customInput = document.createElement("input");
   customInput.type = "text";
   customInput.className = "sheep-log-marker-custom-input";
   customInput.dataset.role = "custom-label";
   customInput.maxLength = 60;
-  customInput.placeholder = "Custom marker label (optional)";
+  customInput.placeholder = "e.g. Crutching delay";
   customInput.value = customMarker?.customLabel || "";
-  editor.appendChild(customInput);
+
+  customToggle.addEventListener("change", () => {
+    customInputWrap.hidden = !customToggle.checked;
+    if (customToggle.checked) requestAnimationFrame(() => customInput.focus());
+  });
+
+  customInputWrap.append(customInputLabel, customInput);
+  editor.appendChild(customInputWrap);
 
   const noteInput = document.createElement("textarea");
   noteInput.className = "sheep-log-marker-note-input";
@@ -11316,15 +11452,62 @@ function sanitizeManualMarkersOnSheepEntries(entries) {
   });
 }
 
-function openSheepLogMarkerNoteEditor(sheepId) {
+function openSheepLogMarkerNoteEditor(sheepId, anchorEl = null) {
   if (!sheepId) return;
+  const entry = getSheepLogEntryById(sheepId);
+  if (!entry) return;
+
+  closeSheepLogMarkerNoteEditor({ skipFocus: true });
   sheepLogMarkerNoteEditorSheepId = sheepId;
-  renderLogTable();
+  sheepLogMarkerNotePopoverAnchorEl = anchorEl instanceof HTMLElement ? anchorEl : null;
+
+  const popover = document.createElement("div");
+  popover.className = "sheep-log-marker-note-popover";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `Marker or note editor for sheep #${entry.number}`);
+
+  const editor = createSheepLogMarkerNoteEditor(entry, getConfirmedManualMarkersForEntry(entry), normalizeSheepNote(entry.note));
+  popover.appendChild(editor);
+  document.body.appendChild(popover);
+  sheepLogMarkerNotePopoverEl = popover;
+
+  positionSheepLogMarkerNotePopover();
+  requestAnimationFrame(() => {
+    const firstField = popover.querySelector('input, textarea, button');
+    if (firstField instanceof HTMLElement) firstField.focus();
+  });
 }
 
-function closeSheepLogMarkerNoteEditor() {
+function closeSheepLogMarkerNoteEditor(options = {}) {
+  const previousAnchor = sheepLogMarkerNotePopoverAnchorEl;
   sheepLogMarkerNoteEditorSheepId = "";
-  renderLogTable();
+  sheepLogMarkerNotePopoverAnchorEl = null;
+  if (sheepLogMarkerNotePopoverEl) {
+    sheepLogMarkerNotePopoverEl.remove();
+    sheepLogMarkerNotePopoverEl = null;
+  }
+  if (!options.skipFocus && previousAnchor instanceof HTMLElement && document.contains(previousAnchor)) {
+    previousAnchor.focus();
+  }
+}
+
+function positionSheepLogMarkerNotePopover() {
+  if (!sheepLogMarkerNotePopoverEl || !sheepLogMarkerNotePopoverAnchorEl) return;
+  const anchorRect = sheepLogMarkerNotePopoverAnchorEl.getBoundingClientRect();
+  const popoverRect = sheepLogMarkerNotePopoverEl.getBoundingClientRect();
+  const viewportGap = 8;
+  const preferredLeft = anchorRect.right + viewportGap;
+  const fallbackLeft = anchorRect.left - popoverRect.width - viewportGap;
+  const maxLeft = window.innerWidth - popoverRect.width - viewportGap;
+  let left = preferredLeft <= maxLeft ? preferredLeft : fallbackLeft;
+  left = Math.max(viewportGap, Math.min(left, maxLeft));
+
+  const maxTop = window.innerHeight - popoverRect.height - viewportGap;
+  let top = anchorRect.top;
+  top = Math.max(viewportGap, Math.min(top, maxTop));
+
+  sheepLogMarkerNotePopoverEl.style.left = `${left}px`;
+  sheepLogMarkerNotePopoverEl.style.top = `${top}px`;
 }
 
 function getSheepLogEntryById(sheepId) {
@@ -11404,7 +11587,14 @@ function saveSheepLogMarkerNoteFromEditor(editor) {
     .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked)
     .map((checkbox) => buildManualMarker(checkbox.value))
     .filter(Boolean);
-  const customLabel = customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
+  const customToggle = editor.querySelector('[data-role="custom-toggle"]');
+  const customSelected = customToggle instanceof HTMLInputElement && customToggle.checked;
+  const customLabel = customSelected && customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
+  if (customSelected && !customLabel) {
+    if (validation) validation.textContent = "Enter a custom marker label or untick Custom before saving.";
+    if (customInput instanceof HTMLInputElement) customInput.focus();
+    return;
+  }
   if (customLabel) {
     const customMarker = buildManualMarker(MANUAL_MARKER_CUSTOM_TYPE, customLabel);
     if (!customMarker) {
@@ -11415,13 +11605,25 @@ function saveSheepLogMarkerNoteFromEditor(editor) {
     manualMarkers.push(customMarker);
   }
 
+  const penFillCheckbox = editor.querySelector('[data-role="pen-fill-checkbox"]');
+  if (penFillCheckbox instanceof HTMLInputElement) {
+    const initiallyHadPenFill = penFillCheckbox.dataset.initialStatus === "linked";
+    if (penFillCheckbox.checked && !initiallyHadPenFill) {
+      const result = promptAddPenFillEventForSheepEntry(sheepId, validation);
+      if (!result.success) return;
+    } else if (!penFillCheckbox.checked && penFillCheckbox.dataset.initialStatus === "linked") {
+      const result = promptRemovePenFillEventForSheepEntry(penFillCheckbox.dataset.penFillEventId || "", validation);
+      if (!result.success) return;
+    }
+  }
+
   const updated = updateSheepEntryMarkerNoteById(sheepId, manualMarkers, noteText);
   if (!updated) {
     if (validation) validation.textContent = "Could not find this sheep row. Refresh and try again.";
     return;
   }
 
-  sheepLogMarkerNoteEditorSheepId = "";
+  closeSheepLogMarkerNoteEditor({ skipFocus: true });
   autosaveState();
   renderLogTable();
   updateStatsPanel();
@@ -16023,6 +16225,36 @@ function closeSimulationControlsHelpModal() {
   }
 }
 
+function handleSheepLogMarkerNoteAction(actionTarget) {
+  const action = actionTarget.dataset.action;
+  if (action === "edit-marker-note") {
+    openSheepLogMarkerNoteEditor(actionTarget.dataset.sheepId || "", actionTarget);
+    return true;
+  }
+  if (action === "cancel-marker-note") {
+    closeSheepLogMarkerNoteEditor();
+    return true;
+  }
+  if (action === "save-marker-note") {
+    const editor = actionTarget.closest(".sheep-log-marker-note-editor");
+    if (editor instanceof HTMLElement) saveSheepLogMarkerNoteFromEditor(editor);
+    return true;
+  }
+  if (action === "add-pen-fill-event") {
+    const editor = actionTarget.closest(".sheep-log-marker-note-editor");
+    const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
+    promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
+    return true;
+  }
+  if (action === "remove-pen-fill-event") {
+    const editor = actionTarget.closest(".sheep-log-marker-note-editor");
+    const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
+    promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
+    return true;
+  }
+  return false;
+}
+
 function bindEvents() {
   ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
@@ -16475,29 +16707,14 @@ function bindEvents() {
   if (elements.resetMarkerSettingsBtn) {
     elements.resetMarkerSettingsBtn.addEventListener("click", resetMarkerSettings);
   }
+  setupSheepLogColumnResizing();
   if (elements.sheepLogBody) {
     elements.sheepLogBody.addEventListener("click", (event) => {
       const target = event.target;
       if (!(target instanceof Element)) return;
       const actionTarget = target.closest("[data-action]");
       if (!(actionTarget instanceof HTMLElement)) return;
-      const action = actionTarget.dataset.action;
-      if (action === "edit-marker-note") {
-        openSheepLogMarkerNoteEditor(actionTarget.dataset.sheepId || "");
-      } else if (action === "cancel-marker-note") {
-        closeSheepLogMarkerNoteEditor();
-      } else if (action === "save-marker-note") {
-        const editor = actionTarget.closest(".sheep-log-marker-note-editor");
-        if (editor instanceof HTMLElement) saveSheepLogMarkerNoteFromEditor(editor);
-      } else if (action === "add-pen-fill-event") {
-        const editor = actionTarget.closest(".sheep-log-marker-note-editor");
-        const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
-        promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
-      } else if (action === "remove-pen-fill-event") {
-        const editor = actionTarget.closest(".sheep-log-marker-note-editor");
-        const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
-        promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
-      }
+      handleSheepLogMarkerNoteAction(actionTarget);
     });
     elements.sheepLogBody.addEventListener("change", (event) => {
       const target = event.target;
@@ -16614,6 +16831,30 @@ function bindEvents() {
     }
   });
 
+  document.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    const actionTarget = target.closest("[data-action]");
+    if (actionTarget instanceof HTMLElement && sheepLogMarkerNotePopoverEl?.contains(actionTarget)) {
+      handleSheepLogMarkerNoteAction(actionTarget);
+      return;
+    }
+    if (!sheepLogMarkerNotePopoverEl) return;
+    if (sheepLogMarkerNotePopoverEl.contains(target)) return;
+    if (actionTarget instanceof HTMLElement && actionTarget.dataset.action === "edit-marker-note") return;
+    closeSheepLogMarkerNoteEditor({ skipFocus: true });
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && sheepLogMarkerNotePopoverEl) {
+      closeSheepLogMarkerNoteEditor();
+    }
+  });
+
+  document.addEventListener("scroll", () => {
+    if (sheepLogMarkerNotePopoverEl) positionSheepLogMarkerNotePopover();
+  }, true);
+
   window.addEventListener("resize", () => {
     if (appState.controlsDockEnabled) {
       const zoom = getAppZoomScale();
@@ -16629,6 +16870,7 @@ function bindEvents() {
     if (appState.layoutEditMode) {
       updateDashboardCanvasSize();
     }
+    if (sheepLogMarkerNotePopoverEl) positionSheepLogMarkerNotePopover();
   });
 }
 
