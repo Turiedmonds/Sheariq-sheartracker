@@ -3189,7 +3189,7 @@ function getPenFillInstructionModel(options = {}) {
     notPlanningYet: `Monitoring — planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
     waiting: "Waiting for pace data"
   };
-  const reason = reasonByStatus[planner?.status]
+  const baseReason = reasonByStatus[planner?.status]
     || (Number.isFinite(projectedFinalFillSecondsBeforeEnd) ? "Final refill on target" : (validation.error || "—"));
   const remainingFillPlan = Array.isArray(planner?.remainingFillPlan) ? planner.remainingFillPlan : [];
   const remainingFillsMessage = planner?.remainingFillsMessage || formatRemainingFillsMessage(remainingFillPlan, {
@@ -3197,6 +3197,23 @@ function getPenFillInstructionModel(options = {}) {
     hasReductionPlan: selectedPlan.some((fill) => Number(fill?.reduction) > 0)
   });
   const finalTargetPrediction = getFinalTargetPrediction(appState.currentStats.avgCycle, recordType);
+  const includeUsefulCatchAdvantageContext = Boolean(options.includeUsefulCatchAdvantageContext);
+  const catchAdvantageWindowAnalysis = includeUsefulCatchAdvantageContext
+    ? (Object.prototype.hasOwnProperty.call(options, "catchAdvantageWindowAnalysis")
+      ? options.catchAdvantageWindowAnalysis
+      : buildCatchAdvantageWindowAnalysis({ recordType }))
+    : null;
+  const usefulCatchAdvantageContext = includeUsefulCatchAdvantageContext
+    ? buildUsefulCatchAdvantageStrategyContext({
+      catchAdvantageWindowAnalysis,
+      finalTargetPrediction,
+      planner,
+      recordType
+    })
+    : buildUsefulCatchAdvantageStrategyContext({ planner: null, recordType });
+  const reason = usefulCatchAdvantageContext.available && usefulCatchAdvantageContext.message
+    ? `${baseReason} ${usefulCatchAdvantageContext.message}`
+    : baseReason;
   const finalFillTimingWindow = getFinalFillTimingWindow(recordType);
   const finalTargetMessage = Number.isFinite(projectedFinalFillSecondsBeforeEnd)
     && projectedFinalFillSecondsBeforeEnd < finalFillTimingWindow.minBeforeEndSeconds
@@ -3225,6 +3242,7 @@ function getPenFillInstructionModel(options = {}) {
     remainingFillsMessage,
     finalTargetPrediction,
     finalTargetMessage,
+    usefulCatchAdvantageContext,
     canConfirmNow,
     reason,
     planner,
@@ -3246,7 +3264,8 @@ function updatePenFillPlannerStrategyDetails(options = {}) {
     rule,
     physicalSheepTakenFromPen,
     penState,
-    planner: options.planner
+    planner: options.planner,
+    includeUsefulCatchAdvantageContext: true
   });
 
   setText(elements.penFillPlannerReason, instructionModel.reason || "—");
@@ -3799,6 +3818,75 @@ function getFinalTargetPrediction(avgCycleSeconds = appState.currentStats.avgCyc
     predictedSheep,
     cycleSecondsUsed,
     message: `About ${predictedSheep} sheep`
+  };
+}
+
+function buildUsefulCatchAdvantageStrategyContext(options = {}) {
+  const catchAdvantageWindowAnalysis = options.catchAdvantageWindowAnalysis || null;
+  const finalTargetPrediction = options.finalTargetPrediction || null;
+  const planner = options.planner || null;
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  const unavailableResult = (extras = {}) => ({
+    available: false,
+    alignment: "unavailable",
+    usefulAdvantageSheep: null,
+    projectedSheepAfterTarget: null,
+    message: "",
+    ...extras
+  });
+
+  const actionableStatuses = new Set([
+    "onTarget",
+    "recommendReduction",
+    "tooEarly",
+    "tooLate",
+    "noGoodPlan"
+  ]);
+  if (!recordType || recordType === "none" || !actionableStatuses.has(planner?.status)) {
+    return unavailableResult();
+  }
+
+  const usefulAdvantageSheep = Number(catchAdvantageWindowAnalysis?.usefulAdvantageSheep);
+  if (
+    !catchAdvantageWindowAnalysis?.available
+    || !Number.isFinite(usefulAdvantageSheep)
+    || usefulAdvantageSheep <= 0
+  ) {
+    return unavailableResult({ usefulAdvantageSheep: Number.isFinite(usefulAdvantageSheep) ? usefulAdvantageSheep : null });
+  }
+
+  const projectedSheepAfterTarget = Number(finalTargetPrediction?.predictedSheep);
+  if (!Number.isFinite(projectedSheepAfterTarget) || projectedSheepAfterTarget <= 0) {
+    return unavailableResult({ usefulAdvantageSheep });
+  }
+
+  const difference = projectedSheepAfterTarget - usefulAdvantageSheep;
+  if (Math.abs(difference) <= 1) {
+    return {
+      available: true,
+      alignment: "aligned",
+      usefulAdvantageSheep,
+      projectedSheepAfterTarget,
+      message: "Target appears aligned with the useful catch advantage window."
+    };
+  }
+
+  if (difference > 1) {
+    return {
+      available: true,
+      alignment: "moreThanAdvantage",
+      usefulAdvantageSheep,
+      projectedSheepAfterTarget,
+      message: "Target may leave more sheep than the useful catch advantage window."
+    };
+  }
+
+  return {
+    available: true,
+    alignment: "lessThanAdvantage",
+    usefulAdvantageSheep,
+    projectedSheepAfterTarget,
+    message: "Target may leave fewer sheep than the useful catch advantage window."
   };
 }
 
