@@ -1348,7 +1348,7 @@ button:disabled {
 #panel-log table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 860px;
+  min-width: 780px;
   background: #ffffff;
 }
 
@@ -1549,19 +1549,31 @@ button:disabled {
 #panel-log .sheep-log-time-col,
 #panel-log td.sheep-log-time-col {
   text-align: center;
+  white-space: nowrap;
+}
+
+#panel-log .sheep-log-total-time-col {
+  width: 5.9rem;
+  max-width: 5.9rem;
+}
+
+#panel-log thead th.sheep-log-total-time-col {
+  white-space: normal;
+  line-height: 1.05;
 }
 
 #panel-log .sheep-log-marker-note-col {
-  min-width: 190px;
-  max-width: 280px;
+  min-width: 132px;
+  width: 10.5rem;
+  max-width: 180px;
   vertical-align: top;
 }
 
 #panel-log .sheep-log-marker-note-content {
   display: flex;
   align-items: flex-start;
-  gap: 0.45rem;
-  justify-content: space-between;
+  gap: 0.28rem;
+  justify-content: flex-start;
 }
 
 #panel-log .sheep-log-marker-note-col.is-empty .sheep-log-marker-note-content {
@@ -1595,28 +1607,59 @@ button:disabled {
   flex: 1 1 auto;
   min-width: 0;
   display: grid;
-  gap: 0.18rem;
-  font-size: 0.8rem;
-  line-height: 1.25;
+  gap: 0.14rem;
+  font-size: 0.78rem;
+  line-height: 1.15;
 }
 
-#panel-log .sheep-log-manual-marker-summary {
-  font-weight: 700;
-  color: #0f172a;
-}
-
+#panel-log .sheep-log-manual-marker-summary,
 #panel-log .sheep-log-note-summary {
-  color: #475569;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.16rem;
+  min-width: 0;
+}
+
+#panel-log .sheep-log-marker-pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 0.12rem 0.4rem;
+  background: #1f2937;
+  color: #ffffff;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+}
+
+#panel-log .sheep-log-marker-pill-drink,
+#panel-log .sheep-log-marker-pill-cutter,
+#panel-log .sheep-log-marker-pill-comb {
+  background: #111827;
+}
+
+#panel-log .sheep-log-marker-pill-pen-refill {
+  border: 1px solid #7f1d1d;
+  background: #991b1b;
+  color: #ffffff;
+}
+
+#panel-log .sheep-log-marker-pill-custom,
+#panel-log .sheep-log-marker-pill-note {
+  background: #374151;
+  color: #f9fafb;
+}
+
+#panel-log .sheep-log-marker-pill-note {
+  font-weight: 700;
 }
 
 #panel-log .sheep-log-marker-note-btn {
   flex: 0 0 auto;
-  padding: 0.12rem 0.48rem;
+  padding: 0.12rem 0.38rem;
   min-width: 1.45rem;
   width: auto;
   min-height: 1.35rem;
@@ -2910,28 +2953,28 @@ td.pace-neutral {
 
 #panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-mild,
 #panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-mild {
-  background-color: #fff7ed;
+  background-color: #ffedd5;
   color: #9a3412;
-  border-color: rgba(251, 146, 60, 0.35);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  border-color: rgba(251, 146, 60, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 
 #panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-strong,
 #panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-strong {
-  background-color: #ffedd5;
-  color: #9a3412;
-  border-color: rgba(249, 115, 22, 0.42);
+  background-color: #fed7aa;
+  color: #7c2d12;
+  border-color: rgba(249, 115, 22, 0.55);
   font-weight: 700;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
 }
 
 #panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-severe,
 #panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-severe {
-  background-color: #fed7aa;
-  color: #7c2d12;
-  border-color: rgba(234, 88, 12, 0.5);
+  background-color: #fdba74;
+  color: #431407;
+  border-color: rgba(234, 88, 12, 0.62);
   font-weight: 800;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
 }
 
 #panel-log td.sheep-log-total-time-col[class*="timing-"] {
@@ -2967,17 +3010,17 @@ td.pace-neutral {
 }
 
 .sheep-log-help-swatch.sheep-log-anomaly-mild {
-  background: #fff7ed;
-  border-color: #fed7aa;
-}
-
-.sheep-log-help-swatch.sheep-log-anomaly-strong {
   background: #ffedd5;
   border-color: #fb923c;
 }
 
-.sheep-log-help-swatch.sheep-log-anomaly-severe {
+.sheep-log-help-swatch.sheep-log-anomaly-strong {
   background: #fed7aa;
+  border-color: #f97316;
+}
+
+.sheep-log-help-swatch.sheep-log-anomaly-severe {
+  background: #fdba74;
   border-color: #ea580c;
 }
 

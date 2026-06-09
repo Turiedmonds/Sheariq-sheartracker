@@ -10699,16 +10699,22 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerE
       const markerSummary = document.createElement("div");
       markerSummary.className = "sheep-log-manual-marker-summary";
       const markerSummaryLabel = getSheepLogDisplayMarkersLabel(displayMarkers);
-      markerSummary.textContent = markerSummaryLabel;
       markerSummary.title = markerSummaryLabel;
+      displayMarkers.forEach((marker) => {
+        const markerPill = createSheepLogMarkerPill(marker);
+        if (markerPill) markerSummary.appendChild(markerPill);
+      });
       summary.appendChild(markerSummary);
     }
 
     if (noteText) {
       const noteSummary = document.createElement("div");
       noteSummary.className = "sheep-log-note-summary";
-      noteSummary.textContent = noteText;
-      noteSummary.title = noteText;
+      const notePill = document.createElement("span");
+      notePill.className = "sheep-log-marker-pill sheep-log-marker-pill-note";
+      notePill.textContent = noteText;
+      notePill.title = noteText;
+      noteSummary.appendChild(notePill);
       summary.appendChild(noteSummary);
     }
 
@@ -10721,6 +10727,24 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerE
 
   markerNoteCell.appendChild(content);
   return markerNoteCell;
+}
+
+function createSheepLogMarkerPill(marker) {
+  const label = marker?.source === "penFillEvent"
+    ? marker.label
+    : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE
+      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
+      : getManualMarkerDisplayLabel(marker));
+  if (!label) return null;
+
+  const pill = document.createElement("span");
+  const typeClass = marker?.source === "penFillEvent"
+    ? "pen-refill"
+    : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE ? "custom" : marker?.type);
+  pill.className = `sheep-log-marker-pill sheep-log-marker-pill-${typeClass}`;
+  pill.textContent = label;
+  pill.title = label;
+  return pill;
 }
 
 function createSheepLogStatusControls(entry) {
