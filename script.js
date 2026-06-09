@@ -4520,6 +4520,7 @@ const elements = {
   runClock: document.getElementById("runClock"),
   runCountdown: document.getElementById("runCountdown"),
   runBadge: document.getElementById("runBadge"),
+  eventNameDisplay: document.getElementById("eventNameDisplay"),
   breakTimingRows: document.getElementById("breakTimingRows"),
   breakStatus: document.getElementById("breakStatus"),
   breakStartedTime: document.getElementById("breakStartedTime"),
@@ -6148,6 +6149,17 @@ function normalizeFarmName(value) {
   return (value || "").trim();
 }
 
+function getCurrentEventName() {
+  return normalizeFarmName(elements.farmInput?.value || appState.farm || "");
+}
+
+function updateEventNameDisplay() {
+  if (!elements.eventNameDisplay) return;
+  const eventName = getCurrentEventName();
+  elements.eventNameDisplay.textContent = eventName;
+  elements.eventNameDisplay.hidden = !eventName;
+}
+
 function parseSavedFarmList(rawValue) {
   if (!Array.isArray(rawValue)) return [];
   const unique = [];
@@ -6199,6 +6211,8 @@ function removeSavedFarm(name) {
 
   if (elements.farmInput && normalizeFarmName(elements.farmInput.value).toLowerCase() === normalized) {
     elements.farmInput.value = "";
+    appState.farm = "";
+    updateEventNameDisplay();
   }
 
   persistSavedFarms();
@@ -6233,7 +6247,7 @@ function renderFarmDropdown() {
   if (!farms.length) {
     const empty = document.createElement("div");
     empty.className = "farm-dropdown-empty";
-    empty.textContent = "No saved farms.";
+    empty.textContent = "No saved events.";
     elements.farmDropdownMenu.appendChild(empty);
     return;
   }
@@ -6263,7 +6277,9 @@ function renderFarmDropdown() {
 
 function saveFarmFromInput() {
   if (!elements.farmInput) return;
-  const changed = addSavedFarm(elements.farmInput.value);
+  appState.farm = normalizeFarmName(elements.farmInput.value);
+  updateEventNameDisplay();
+  const changed = addSavedFarm(appState.farm);
   if (changed) {
     renderFarmDropdown();
   }
@@ -6604,6 +6620,7 @@ function updateStartRunButtonUI() {
 }
 
 function updateRunBadge() {
+  updateEventNameDisplay();
   if (appState.dayComplete) {
     setText(elements.runBadge, "End of Day");
     return;
@@ -9564,7 +9581,7 @@ function renderReviewRunModal(snapshot) {
 
   const runInfo = appendReviewRunSection(elements.reviewRunModalContent, "Run Info");
   appendReviewRunKeyValueTable(runInfo, buildCompletedRunKeyValueRows([
-    ["Farm", snapshot.farm || "—"],
+    ["Event", snapshot.farm || "—"],
     ["Session date", formattedSessionDate],
     ["Record type", snapshot.recordTypeLabel || snapshot.recordType || "—"],
     ["Time system", snapshot.runTypeLabel || snapshot.runType || "—"],
@@ -13770,6 +13787,7 @@ function attachResizeHandles(panel) {
 }
 
 function getAutosavePayload() {
+  appState.farm = getCurrentEventName();
   return {
     state: {
       runActive: appState.runActive,
@@ -14090,7 +14108,7 @@ function getPdfExportFilename(snapshot = getPdfExportSnapshot()) {
   const pad = (value) => String(value).padStart(2, "0");
   const timestamp = `${exportedAt.getFullYear()}-${pad(exportedAt.getMonth() + 1)}-${pad(exportedAt.getDate())}_${pad(exportedAt.getHours())}-${pad(exportedAt.getMinutes())}`;
   const sessionDate = sanitizePdfFilenamePart(snapshot.sessionDate || "No-Date");
-  const farm = sanitizePdfFilenamePart(snapshot.farm || "Unknown-Farm");
+  const farm = sanitizePdfFilenamePart(snapshot.farm || "Unknown-Event");
   const runNumber = sanitizePdfFilenamePart(snapshot.runNumber || "1");
   return `SHEARiQ_ShearTracker_${sessionDate}_${farm}_Run-${runNumber}_${timestamp}.pdf`;
 }
@@ -14266,7 +14284,7 @@ function exportPdf() {
   addPdfSectionTitle(doc, "1. Header / Report Info");
   addPdfKeyValueTable(doc, [
     ["Session date", snapshot.sessionDate || "—"],
-    ["Farm", snapshot.farm || "—"],
+    ["Event", snapshot.farm || "—"],
     ["Run number", snapshot.runNumber],
     ["Time system", snapshot.runType],
     ["Record type", snapshot.recordType],
@@ -14587,7 +14605,7 @@ function getManualSaveDetailLines(entry) {
     `Run: ${entry?.runNumber || 1}`,
     `Sheep: ${entry?.sheepTotal || 0}`,
     `Status: ${entry?.status || "Unknown"}`,
-    `Farm: ${entry?.farm || "Session"}`,
+    `Event: ${entry?.farm || "Session"}`,
     `Session: ${[entry?.recordType, entry?.runType].filter(Boolean).join(" • ") || "Record type/session info n/a"}`
   ];
 }
@@ -14942,6 +14960,7 @@ function restoreSessionPayload(raw, options = {}) {
   if (raw.dayStartTime && elements.dayStartTimeInput) elements.dayStartTimeInput.value = raw.dayStartTime;
   if (raw.targetSheep !== undefined && elements.targetSheepInput) elements.targetSheepInput.value = raw.targetSheep;
   if (elements.farmInput) elements.farmInput.value = appState.farm || "";
+  updateEventNameDisplay();
   if (elements.customHours && elements.runType) {
     elements.customHours.disabled = elements.runType.value !== "custom";
   }
@@ -15966,6 +15985,8 @@ function bindEvents() {
   if (elements.farmInput) {
     elements.farmInput.addEventListener("focus", openFarmDropdown);
     elements.farmInput.addEventListener("input", () => {
+      appState.farm = normalizeFarmName(elements.farmInput.value);
+      updateEventNameDisplay();
       renderFarmDropdown();
       if (elements.farmDropdownMenu?.hidden) openFarmDropdown();
     });
@@ -16567,6 +16588,7 @@ function initialize() {
   ensureInitialPanelLayout();
   applyPanelLayout();
   renderFarmDropdown();
+  updateEventNameDisplay();
   renderShortcutSettings();
 
   if (elements.customHours && elements.runType) {

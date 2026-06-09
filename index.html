@@ -171,8 +171,8 @@
             <div class="button-row run-controls-main-row">
               <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
               <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
-              <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
               <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
+              <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
               <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
               <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
             </div>
@@ -282,11 +282,11 @@
               <label for="sessionDate">Session Date</label>
               <input id="sessionDate" type="date" />
 
-              <label for="farmInput">Farm</label>
+              <label for="farmInput">Event</label>
               <div class="farm-dropdown" id="farmDropdown">
                 <div class="farm-input-row">
-                  <input id="farmInput" type="text" placeholder="Enter or select farm name" autocomplete="off" />
-                  <button id="farmDropdownToggle" class="farm-dropdown-toggle" type="button" aria-label="Toggle farm list" aria-expanded="false">▼</button>
+                  <input id="farmInput" type="text" placeholder="Enter event name" autocomplete="off" />
+                  <button id="farmDropdownToggle" class="farm-dropdown-toggle" type="button" aria-label="Toggle event list" aria-expanded="false">▼</button>
                 </div>
                 <div id="farmDropdownMenu" class="farm-dropdown-menu" hidden role="listbox"></div>
               </div>
@@ -468,6 +468,7 @@
       </div>
       <div class="panel-body">
         <div class="metrics-grid">
+          <div id="eventNameDisplay" class="timing-event-name" hidden></div>
           <div class="metric-row panel-metric-row run-badge-row">
             <span id="runBadge" class="run-badge panel-metric-value">Run 1</span>
           </div>
@@ -991,7 +992,7 @@
 
         <h4 class="connection-help-title">Session Details</h4>
         <p><strong>Session Date:</strong><br />The date for this session.</p>
-        <p><strong>Farm:</strong><br />The farm/station name for this session. The dropdown helps reuse saved farm names.</p>
+        <p><strong>Event:</strong><br />The event or session name for this day. The dropdown helps reuse saved event names.</p>
 
         <h4 class="connection-help-title">Run Setup</h4>
         <p><strong>Time System:</strong><br />Sets the run structure used by the app.</p>
