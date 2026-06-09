@@ -11816,8 +11816,8 @@ function updatePenFullnessCatchAnalysisDisplay() {
   setText(elements.penFullnessCatchConfirmedCount, Number.isFinite(confirmedCount) ? String(confirmedCount) : "0");
 
   if (primaryComparison) {
-    setText(elements.penFullnessCatchBeforeAvg, `${formatPenFullnessCatchSeconds(primaryComparison.beforeAverage)} — last 2 clean before refill`);
-    setText(elements.penFullnessCatchAfterAvg, `${formatPenFullnessCatchSeconds(primaryComparison.afterAverage)} — first 2 clean after refill`);
+    setText(elements.penFullnessCatchBeforeAvg, formatPenFullnessCatchSeconds(primaryComparison.beforeAverage));
+    setText(elements.penFullnessCatchAfterAvg, formatPenFullnessCatchSeconds(primaryComparison.afterAverage));
     setText(elements.penFullnessCatchDifference, `${formatPenFullnessCatchDifference(primaryComparison.difference)} after vs before`);
   } else {
     setText(elements.penFullnessCatchBeforeAvg, "Not enough recorded catch time before confirmed refills yet.");
