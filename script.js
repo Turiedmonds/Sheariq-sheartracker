@@ -4595,7 +4595,6 @@ const elements = {
   requiredQuarterTotal: document.getElementById("requiredQuarterTotal"),
   estimatedLastCatchTime: document.getElementById("estimatedLastCatchTime"),
   estimatedLastCatchTimeLabel: document.getElementById("estimatedLastCatchTimeLabel"),
-  timeSpareToBell: document.getElementById("timeSpareToBell"),
   currentSheepTimeLeft: document.getElementById("currentSheepTimeLeft"),
   maxCatchTime: document.getElementById("maxCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
@@ -4707,7 +4706,6 @@ const elements = {
   targetPaceSettings: document.getElementById("targetPaceSettings"),
   targetPaceSections: document.getElementById("targetPaceSections"),
   predictedCatchClockMode: document.getElementById("predictedCatchClockMode"),
-  timeSpareToBellLabel: document.getElementById("timeSpareToBellLabel"),
   currentSheepTimeLeftLabel: document.getElementById("currentSheepTimeLeftLabel"),
   dashboardConnectionHelpBtn: document.getElementById("dashboardConnectionHelpBtn"),
   settingsConnectionHelpBtn: document.getElementById("settingsConnectionHelpBtn"),
@@ -5409,7 +5407,6 @@ const METRIC_VALUE_IDS = new Set([
   "requiredDayTotalSheep",
   "requiredRunTotalSheep",
   "estimatedLastCatchTime",
-  "timeSpareToBell",
   "currentSheepTimeLeft",
   "maxCatchTime",
   "catchPrediction",
@@ -8363,8 +8360,7 @@ function getCompletedRunTargetPaceRows() {
     ["Predicted official run total", getSafeText("projectedTotal")],
     [getSafeText("estimatedLastCatchTimeLabel", "Predicted time to catch target:"), getSafeText("estimatedLastCatchTime")],
     ["Predicted final catch of run", getSafeText("maxCatchTime")],
-    ["Pace difference per sheep", getSafeText("catchPrediction")],
-    [getSafeText("timeSpareToBellLabel", "Target sheep start vs run end"), getSafeText("timeSpareToBell")]
+    ["Pace difference per sheep", getSafeText("catchPrediction")]
   ]);
 }
 
@@ -12774,26 +12770,10 @@ function updateStatsPanel() {
   setText(elements.predictedHourTotal, displayPredictions.predictedHourTotal === null ? "—" : String(displayPredictions.predictedHourTotal));
   setText(elements.projectedTotal, displayPredictions.projectedTotal === null ? "—" : String(displayPredictions.projectedTotal));
   setText(elements.estimatedLastCatchTime, displayPredictions.estimatedLastCatchTime);
-  setText(elements.timeSpareToBell, target.timeSpareText);
   setText(elements.maxCatchTime, livePredictions.maxCatchTime);
   setText(elements.catchPrediction, displayPredictions.catchPrediction);
   if (elements.estimatedLastCatchTimeLabel) {
     setText(elements.estimatedLastCatchTimeLabel, getTargetRunTotalPredictionLabel(requiredRunTotalSheep));
-  }
-  if (elements.timeSpareToBell && elements.timeSpareToBellLabel) {
-    elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
-    elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
-    if (target.timeSpareIsAhead === true) {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
-      elements.timeSpareToBell.classList.add("target-status-ahead");
-      elements.timeSpareToBellLabel.classList.add("target-status-ahead");
-    } else if (target.timeSpareIsAhead === false) {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
-      elements.timeSpareToBell.classList.add("target-status-behind");
-      elements.timeSpareToBellLabel.classList.add("target-status-behind");
-    } else {
-      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
-    }
   }
   updateTrendFlags();
   updatePenFillForecastDisplay();
@@ -14053,7 +14033,6 @@ function getPdfExportSnapshot() {
     ["Required run total", "requiredRunTotalSheep"],
     ["Required quarter total", "requiredQuarterTotal"],
     ["Estimated last catch", "estimatedLastCatchTime"],
-    ["Time spare to bell", "timeSpareToBell"],
     ["Current sheep time left", "currentSheepTimeLeft"],
     ["Max catch time", "maxCatchTime"],
     ["Catch prediction", "catchPrediction"],
