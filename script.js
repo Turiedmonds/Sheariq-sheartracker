@@ -1888,9 +1888,9 @@ function formatUsefulRefillTimingWindowSeconds(totalSeconds) {
 
 function formatUsefulRefillTimingAlignmentMessage(context) {
   if (!context?.available) return "";
-  if (context.alignment === "aligned") return "Selected target appears aligned.";
-  if (context.alignment === "selectedEarlier") return "Selected target may be earlier than this window.";
-  if (context.alignment === "selectedLater") return "Selected target may be later than this window.";
+  if (context.alignment === "aligned") return "Selected target looks right.";
+  if (context.alignment === "selectedEarlier") return "Selected target may be too early.";
+  if (context.alignment === "selectedLater") return "Selected target may be too late.";
   return "";
 }
 
@@ -1982,16 +1982,18 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   const averageDelta = averageNumericValues(usableComparisons.map((comparison) => comparison.averageCatchDeltaAfterMinusBefore));
   if (!Number.isFinite(averageDelta)) return "Not enough confirmed refill data yet.";
 
-  const baseSummary = formatPenFullnessCatchDifference(averageDelta);
-  if (!usefulRefillTimingTargetContext?.available) return baseSummary;
+  const baseSummary = formatPenFullnessCatchDifferenceSummary(averageDelta);
+  if (!usefulRefillTimingTargetContext?.available) return `${baseSummary} Advantage not clear enough yet.`;
 
   const usefulAdvantageSheep = Math.floor(Number(usefulRefillTimingTargetContext.usefulAdvantageSheep));
   const estimatedUsefulWindowSeconds = Number(usefulRefillTimingTargetContext.estimatedUsefulWindowSeconds);
   const alignmentMessage = usefulRefillTimingTargetContext.message || formatUsefulRefillTimingAlignmentMessage(usefulRefillTimingTargetContext);
-  if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) return baseSummary;
+  if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) {
+    return `${baseSummary} Advantage not clear enough yet.`;
+  }
 
   const timingText = formatUsefulRefillTimingWindowSeconds(estimatedUsefulWindowSeconds);
-  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep after refill, about ${timingText} before end of run. ${alignmentMessage}`;
+  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep. Useful window: about ${timingText} before end of run. ${alignmentMessage}`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -12192,6 +12194,18 @@ function formatPenFullnessCatchDifference(value) {
     return `Catch time was ${Math.abs(seconds).toFixed(2)}s slower after refill.`;
   }
   return "Catch time was similar before and after refill.";
+}
+
+function formatPenFullnessCatchDifferenceSummary(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "—";
+  if (seconds < -0.25) {
+    return `${Math.abs(seconds).toFixed(2)}s faster after refill.`;
+  }
+  if (seconds > 0.25) {
+    return `${Math.abs(seconds).toFixed(2)}s slower after refill.`;
+  }
+  return "Catch time similar before/after refill.";
 }
 
 function formatCatchAdvantageWindowValue(analysis) {
