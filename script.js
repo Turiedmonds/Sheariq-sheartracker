@@ -15124,6 +15124,23 @@ function applyPanelState() {
   });
 }
 
+const PANEL_LOCK_ICON_SVGS = {
+  locked: `
+    <svg class="panel-lock-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path class="panel-lock-shackle" d="M7.75 10.5V8.25C7.75 5.9 9.65 4 12 4s4.25 1.9 4.25 4.25v2.25" />
+      <rect class="panel-lock-body" x="6" y="10" width="12" height="9" rx="2" />
+      <path class="panel-lock-accent" d="M12 13.15v2.95" />
+    </svg>
+  `,
+  unlocked: `
+    <svg class="panel-lock-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path class="panel-lock-shackle" d="M8 10.5V8.7C8 6.45 9.8 4.65 12.05 4.65c1.35 0 2.55.65 3.3 1.75" />
+      <rect class="panel-lock-body" x="6" y="10" width="12" height="9" rx="2" />
+      <path class="panel-lock-accent" d="M12 13.15v2.95" />
+    </svg>
+  `,
+};
+
 function ensurePanelLockButtons() {
   getPanelElements().forEach((panel) => {
     const actions = panel.querySelector(".panel-header-actions");
@@ -15142,7 +15159,8 @@ function updatePanelLockUI(panel) {
   panel.classList.toggle("panel-locked", locked);
   const lockBtn = panel.querySelector(".panel-lock-toggle");
   if (lockBtn) {
-    lockBtn.textContent = locked ? "🔒" : "🔓";
+    lockBtn.innerHTML = locked ? PANEL_LOCK_ICON_SVGS.locked : PANEL_LOCK_ICON_SVGS.unlocked;
+    lockBtn.dataset.lockState = locked ? "locked" : "unlocked";
     lockBtn.setAttribute("aria-pressed", String(locked));
     lockBtn.setAttribute("aria-label", locked ? "Unlock panel" : "Lock panel");
     lockBtn.title = locked ? "Unlock panel" : "Lock panel";
