@@ -2479,6 +2479,70 @@ td {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+.panel-header-actions .panel-icon-btn,
+.panel-header-actions .panel-help-btn,
+.panel-header-actions .panel-settings-btn,
+.panel-header-actions .panel-dock-btn,
+.panel-header-actions .panel-lock-toggle {
+  border-color: #9ca3af;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 52%, #e5e7eb 100%);
+  color: #111827;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 3px rgba(2, 6, 23, 0.34);
+  text-shadow: none;
+}
+
+.panel-header-actions .panel-lock-toggle .panel-lock-body {
+  fill: #111827;
+  stroke: rgba(15, 23, 42, 0.42);
+}
+
+.panel-header-actions .panel-lock-toggle .panel-lock-shackle,
+.panel-header-actions .panel-lock-toggle .panel-lock-accent {
+  stroke: #dc2626;
+}
+
+.panel-header-actions .panel-lock-toggle[data-lock-state="locked"] .panel-lock-shackle {
+  stroke: #111827;
+}
+
+.panel-header-actions .panel-icon-btn:hover,
+.panel-header-actions .panel-help-btn:hover,
+.panel-header-actions .panel-settings-btn:hover,
+.panel-header-actions .panel-dock-btn:hover,
+.panel-header-actions .panel-lock-toggle:hover {
+  border-color: #dc2626;
+  background: linear-gradient(180deg, #fff7f7 0%, #fee2e2 58%, #fecaca 100%);
+  color: #111827;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 1px rgba(220, 38, 38, 0.22), 0 2px 6px rgba(2, 6, 23, 0.28);
+}
+
+.panel-header-actions .panel-lock-toggle:hover .panel-lock-shackle,
+.panel-header-actions .panel-lock-toggle:hover .panel-lock-accent,
+.panel-header-actions .panel-lock-toggle[data-lock-state="locked"]:hover .panel-lock-shackle {
+  stroke: #b91c1c;
+}
+
+.panel-header-actions .panel-icon-btn:focus-visible,
+.panel-header-actions .panel-help-btn:focus-visible,
+.panel-header-actions .panel-settings-btn:focus-visible,
+.panel-header-actions .panel-dock-btn:focus-visible,
+.panel-header-actions .panel-lock-toggle:focus-visible {
+  border-color: #dc2626;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 0 0 3px rgba(220, 38, 38, 0.28), 0 1px 3px rgba(2, 6, 23, 0.26);
+}
+
+.panel-header-actions .panel-icon-btn:disabled,
+.panel-header-actions .panel-help-btn:disabled,
+.panel-header-actions .panel-settings-btn:disabled,
+.panel-header-actions .panel-dock-btn:disabled,
+.panel-header-actions .panel-lock-toggle:disabled {
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, #f8fafc 0%, #e5e7eb 100%);
+  color: #475569;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  opacity: 0.58;
+}
+
 #panel-performance .perf-section.is-collapsed .perf-section-content {
   display: none;
 }
