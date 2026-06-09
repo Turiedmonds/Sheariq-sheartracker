@@ -3898,7 +3898,8 @@ td.pace-neutral {
 
 .sheep-log-marker-note-popover {
   position: fixed;
-  z-index: 80;
+  /* Keep this body-level editor above panels, sticky table headers, and docked controls. */
+  z-index: 10000;
   width: min(340px, calc(100vw - 16px));
   max-height: min(78vh, 520px);
   overflow: auto;
