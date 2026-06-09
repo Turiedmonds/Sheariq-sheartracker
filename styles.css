@@ -1650,9 +1650,9 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-pill-comb {
-  border-color: #ec4899;
-  background: #fce7f3;
-  color: #9d174d;
+  border-color: #eab308;
+  background: #fef9c3;
+  color: #713f12;
 }
 
 #panel-log .sheep-log-marker-pill-pen-refill {
@@ -1722,47 +1722,64 @@ button:disabled {
   height: 0.86rem;
   stroke: currentColor;
   stroke-width: 2.6;
+  pointer-events: none;
 }
-
 
 #panel-log .sheep-log-marker-note-editor {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.45rem;
+  width: 100%;
   min-width: 180px;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.65rem;
+  background: #f8fafc;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 #panel-log .sheep-log-marker-checkboxes {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(4.9rem, 1fr));
+  gap: 0.28rem;
   min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 0.4rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
 }
 
 #panel-log .sheep-log-marker-checkboxes legend {
+  grid-column: 1 / -1;
   width: 100%;
-  margin-bottom: 0.05rem;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
+  margin-bottom: 0.03rem;
+  color: #475569;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
 }
 
 #panel-log .sheep-log-marker-checkbox-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.15rem 0.35rem;
-  border: 1px solid rgba(148, 163, 184, 0.35);
+  gap: 0.25rem;
+  min-width: 0;
+  padding: 0.2rem 0.35rem;
+  border: 1px solid #cbd5e1;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 0.76rem;
+  background: #f8fafc;
+  color: #334155;
+  font-size: 0.73rem;
+  font-weight: 700;
   line-height: 1.1;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 #panel-log .sheep-log-marker-checkbox-label input {
+  flex: 0 0 auto;
   width: 0.85rem;
   height: 0.85rem;
   margin: 0;
@@ -1770,69 +1787,107 @@ button:disabled {
 
 #panel-log .sheep-log-pen-fill-status {
   display: grid;
-  gap: 0.1rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid rgba(14, 165, 233, 0.28);
-  border-radius: 0.45rem;
-  background: rgba(14, 165, 233, 0.08);
+  gap: 0.2rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  border-radius: 0.55rem;
+  background: #eef2ff;
 }
 
 #panel-log .sheep-log-pen-fill-status-label {
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  font-weight: 700;
+  color: #3730a3;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: uppercase;
+  letter-spacing: 0.035em;
 }
 
 #panel-log .sheep-log-pen-fill-status-message {
-  font-size: 0.78rem;
-  font-weight: 700;
+  color: #1e293b;
+  font-size: 0.76rem;
+  font-weight: 800;
   line-height: 1.2;
 }
 
 #panel-log .sheep-log-pen-fill-status-detail {
-  color: var(--text-muted);
-  font-size: 0.72rem;
+  color: #475569;
+  font-size: 0.7rem;
   line-height: 1.2;
+}
+
+#panel-log .sheep-log-pen-fill-add-btn,
+#panel-log .sheep-log-pen-fill-remove-btn {
+  justify-self: start;
+  width: auto;
+  min-height: 1.45rem;
+  padding: 0.18rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+#panel-log .sheep-log-pen-fill-add-btn {
+  border-color: #6366f1;
+  background: #fff;
+  color: #3730a3;
+}
+
+#panel-log .sheep-log-pen-fill-remove-btn {
+  border-color: #cbd5e1;
+  background: #fff;
+  color: #475569;
 }
 
 #panel-log .sheep-log-marker-custom-input,
 #panel-log .sheep-log-marker-note-input {
   width: 100%;
   min-width: 0;
-  font-size: 0.82rem;
-  line-height: 1.2;
+  box-sizing: border-box;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: #0f172a;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 #panel-log .sheep-log-marker-custom-input {
-  min-height: 2rem;
+  min-height: 1.85rem;
   padding: 0.3rem 0.5rem;
 }
 
 #panel-log .sheep-log-marker-note-input {
   resize: vertical;
-  min-height: 3rem;
+  min-height: 2.6rem;
   padding: 0.35rem 0.5rem;
 }
 
 #panel-log .sheep-log-marker-note-validation {
-  min-height: 0.95rem;
-  font-size: 0.75rem;
-  line-height: 1.2;
+  min-height: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
   color: #b91c1c;
 }
 
 #panel-log .sheep-log-marker-note-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   justify-content: flex-end;
+  align-items: center;
 }
 
 #panel-log .sheep-log-marker-note-save,
 #panel-log .sheep-log-marker-note-cancel {
   width: auto;
-  min-height: 1.7rem;
-  padding: 0.2rem 0.55rem;
-  font-size: 0.78rem;
+  min-height: 1.65rem;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 800;
   line-height: 1.1;
 }
 
@@ -1842,10 +1897,22 @@ button:disabled {
   border-color: #1d4ed8;
 }
 
+#panel-log .sheep-log-marker-note-save:hover,
+#panel-log .sheep-log-marker-note-save:focus-visible {
+  background: #1d4ed8;
+  border-color: #1e40af;
+}
+
 #panel-log .sheep-log-marker-note-cancel {
-  background: #f8fafc;
+  background: #fff;
   color: #334155;
   border-color: #cbd5e1;
+}
+
+#panel-log .sheep-log-marker-note-cancel:hover,
+#panel-log .sheep-log-marker-note-cancel:focus-visible {
+  background: #e2e8f0;
+  color: #0f172a;
 }
 
 thead th {

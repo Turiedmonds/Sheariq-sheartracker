@@ -16478,7 +16478,7 @@ function bindEvents() {
   if (elements.sheepLogBody) {
     elements.sheepLogBody.addEventListener("click", (event) => {
       const target = event.target;
-      if (!(target instanceof HTMLElement)) return;
+      if (!(target instanceof Element)) return;
       const actionTarget = target.closest("[data-action]");
       if (!(actionTarget instanceof HTMLElement)) return;
       const action = actionTarget.dataset.action;
