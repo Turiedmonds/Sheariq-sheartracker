@@ -8006,8 +8006,8 @@ function calculateTargetMetrics() {
 
     const timeDifference = runLengthSeconds - targetCatchRunSeconds;
     timeSpareText = timeDifference >= 0
-      ? `Target-count sheep catch/start projected ${formatTargetPaceCountdownDisplay(timeDifference)} before end of run`
-      : `Target-count sheep catch/start projected ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} after end of run`;
+      ? `Projected to start target sheep ${formatTargetPaceCountdownDisplay(timeDifference)} before run end`
+      : `Projected to start target sheep ${formatTargetPaceCountdownDisplay(Math.abs(timeDifference))} after run end`;
     timeSpareIsAhead = timeDifference >= 0;
   }
 
@@ -8364,7 +8364,7 @@ function getCompletedRunTargetPaceRows() {
     [getSafeText("estimatedLastCatchTimeLabel", "Predicted time to catch target:"), getSafeText("estimatedLastCatchTime")],
     ["Predicted final catch of run", getSafeText("maxCatchTime")],
     ["Pace difference per sheep", getSafeText("catchPrediction")],
-    [getSafeText("timeSpareToBellLabel", "Run target timing"), getSafeText("timeSpareToBell")]
+    [getSafeText("timeSpareToBellLabel", "Target sheep start vs run end"), getSafeText("timeSpareToBell")]
   ]);
 }
 
@@ -12784,15 +12784,15 @@ function updateStatsPanel() {
     elements.timeSpareToBell.classList.remove("target-status-ahead", "target-status-behind");
     elements.timeSpareToBellLabel.classList.remove("target-status-ahead", "target-status-behind");
     if (target.timeSpareIsAhead === true) {
-      setText(elements.timeSpareToBellLabel, "Run target timing");
+      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
       elements.timeSpareToBell.classList.add("target-status-ahead");
       elements.timeSpareToBellLabel.classList.add("target-status-ahead");
     } else if (target.timeSpareIsAhead === false) {
-      setText(elements.timeSpareToBellLabel, "Run target timing");
+      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
       elements.timeSpareToBell.classList.add("target-status-behind");
       elements.timeSpareToBellLabel.classList.add("target-status-behind");
     } else {
-      setText(elements.timeSpareToBellLabel, "Run target timing");
+      setText(elements.timeSpareToBellLabel, "Target sheep start vs run end");
     }
   }
   updateTrendFlags();
@@ -13981,7 +13981,6 @@ function getPdfPenRefillPlannerRows() {
     ["Last refill amount", getSafeText("penStateLastConfirmedFill")],
     ["Average refill interval", getSafeText("penFillAverageInterval")],
     ["Last 3 refill intervals", getSafeText("penFillRecentIntervals")],
-    ["Assumed refill amount", getSafeText("penStateModel")],
     ["Refill status", getSafeText("penStateRefillStatus")],
     ["Next refill", getSafeText("penFillForecastNext")],
     ["Refill reminder", getSafeText("penFillEarlyReminder")],
