@@ -105,8 +105,8 @@
         <div>Service Worker installed: <span id="swInstalledStatus">Checking…</span></div>
         <div>App cached for offline: <span id="offlineCachedStatus">Checking…</span></div>
         <div>Current network: <span id="networkStatus">Checking…</span></div>
-        <div class="offline-help-copy">This confirms the app can run at the farm even without internet once it has been installed and cached.</div>
-        <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) At farm join Shelly Wi‑Fi, then open from Home Screen.</div>
+        <div class="offline-help-copy">This confirms the app can run on site even without internet once it has been installed and cached.</div>
+        <div>Checklist: 1) Open once with internet 2) Add to Home Screen 3) On site, join Shelly Wi‑Fi, then open from Home Screen.</div>
       </div>
     </details>
   </section>
@@ -1513,7 +1513,7 @@
       <h4 class="connection-help-subtitle">Quick Start</h4>
       <ol class="connection-help-list">
         <li><strong class="connection-help-step-heading">Power on the shearing plant</strong><p class="connection-help-step-copy">Plug in and power on the Heiniger Evo shearing plant. This also powers the Shelly device inside the plant.</p></li>
-        <li><strong class="connection-help-step-heading">Connect your laptop to the Shelly Wi-Fi <span class="help-tip" tabindex="0" title="The Shelly creates its own local Wi-Fi network when it has power. Your laptop connects to this Wi-Fi so the app can talk to the Shelly without internet.">ⓘ</span></strong><p class="connection-help-step-copy">Open Wi-Fi settings and connect to <strong>Shear-Tracker-Shelly</strong>. If Windows says <em>No internet</em> <span class="help-tip" tabindex="0" title="This is normal. The laptop only needs a local connection to the Shelly. It does not need home Wi-Fi, mobile data, or farm internet.">ⓘ</span>, that is normal.</p></li>
+        <li><strong class="connection-help-step-heading">Connect your laptop to the Shelly Wi-Fi <span class="help-tip" tabindex="0" title="The Shelly creates its own local Wi-Fi network when it has power. Your laptop connects to this Wi-Fi so the app can talk to the Shelly without internet.">ⓘ</span></strong><p class="connection-help-step-copy">Open Wi-Fi settings and connect to <strong>Shear-Tracker-Shelly</strong>. If Windows says <em>No internet</em> <span class="help-tip" tabindex="0" title="This is normal. The laptop only needs a local connection to the Shelly. It does not need home Wi-Fi, mobile data, or site internet.">ⓘ</span>, that is normal.</p></li>
         <li><strong class="connection-help-step-heading">Start the Shear Tracker app</strong><p class="connection-help-step-copy">On the laptop desktop/home screen, double-click <strong>Shear Tracker Launcher</strong>. It opens two command windows: <strong>ShearTracker Web</strong> and <strong>ShearTracker Proxy</strong>. It should also open a browser tab at <strong>http://localhost:8080/index.html</strong>. That browser tab is the <strong>SHEΔR iQ Shear Tracker</strong> app. Keep both command windows open while using the app <span class="help-tip" tabindex="0" title="ShearTracker Web is the local app server on localhost:8080, so the browser can open the app from this laptop. ShearTracker Proxy is the Shelly helper on localhost:5000, so the app can ask the Shelly for motor ON/OFF status. Localhost means this same computer, not the internet. These two command windows keep both services running.">ⓘ</span>.</p></li>
       </ol>
     </section>
