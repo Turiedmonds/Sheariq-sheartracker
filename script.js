@@ -166,6 +166,7 @@ const MANUAL_MARKER_TYPES = {
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 const SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY = "sheartracker.sheepLogColumnWidths.v1";
 const SHEEP_LOG_COLUMN_MIN_WIDTHS = [58, 72, 112, 112, 126, 126, 116, 220];
+const SHEEP_LOG_MARKER_NOTE_POPOVER_VIEWPORT_GAP = 10;
 let sheepLogMarkerNoteEditorSheepId = "";
 let sheepLogMarkerNotePopoverEl = null;
 let sheepLogMarkerNotePopoverAnchorEl = null;
@@ -11493,21 +11494,41 @@ function closeSheepLogMarkerNoteEditor(options = {}) {
 
 function positionSheepLogMarkerNotePopover() {
   if (!sheepLogMarkerNotePopoverEl || !sheepLogMarkerNotePopoverAnchorEl) return;
+
+  const viewportGap = SHEEP_LOG_MARKER_NOTE_POPOVER_VIEWPORT_GAP;
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
   const anchorRect = sheepLogMarkerNotePopoverAnchorEl.getBoundingClientRect();
   const popoverRect = sheepLogMarkerNotePopoverEl.getBoundingClientRect();
-  const viewportGap = 8;
-  const preferredLeft = anchorRect.right + viewportGap;
-  const fallbackLeft = anchorRect.left - popoverRect.width - viewportGap;
-  const maxLeft = window.innerWidth - popoverRect.width - viewportGap;
-  let left = preferredLeft <= maxLeft ? preferredLeft : fallbackLeft;
-  left = Math.max(viewportGap, Math.min(left, maxLeft));
+  const clamp = (value, min, max) => Math.max(min, Math.min(value, Math.max(min, max)));
+  const maxLeft = viewportWidth - popoverRect.width - viewportGap;
+  const maxTop = viewportHeight - popoverRect.height - viewportGap;
+  const centeredLeft = anchorRect.left + anchorRect.width / 2 - popoverRect.width / 2;
+  const sideTop = anchorRect.top + anchorRect.height / 2 - popoverRect.height / 2;
+  const spaceAbove = anchorRect.top - viewportGap;
+  const spaceBelow = viewportHeight - anchorRect.bottom - viewportGap;
+  const spaceRight = viewportWidth - anchorRect.right - viewportGap;
+  const spaceLeft = anchorRect.left - viewportGap;
+  let left = clamp(centeredLeft, viewportGap, maxLeft);
+  let top;
 
-  const maxTop = window.innerHeight - popoverRect.height - viewportGap;
-  let top = anchorRect.top;
-  top = Math.max(viewportGap, Math.min(top, maxTop));
+  if (spaceAbove >= popoverRect.height) {
+    top = anchorRect.top - popoverRect.height - viewportGap;
+  } else if (spaceBelow >= popoverRect.height) {
+    top = anchorRect.bottom + viewportGap;
+  } else if (spaceRight >= popoverRect.width || spaceLeft >= popoverRect.width) {
+    left = spaceRight >= popoverRect.width || spaceRight >= spaceLeft
+      ? anchorRect.right + viewportGap
+      : anchorRect.left - popoverRect.width - viewportGap;
+    top = sideTop;
+  } else {
+    top = spaceAbove >= spaceBelow
+      ? anchorRect.top - popoverRect.height - viewportGap
+      : anchorRect.bottom + viewportGap;
+  }
 
-  sheepLogMarkerNotePopoverEl.style.left = `${left}px`;
-  sheepLogMarkerNotePopoverEl.style.top = `${top}px`;
+  sheepLogMarkerNotePopoverEl.style.left = `${clamp(left, viewportGap, maxLeft)}px`;
+  sheepLogMarkerNotePopoverEl.style.top = `${clamp(top, viewportGap, maxTop)}px`;
 }
 
 function getSheepLogEntryById(sheepId) {
