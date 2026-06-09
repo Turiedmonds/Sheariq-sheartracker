@@ -4323,6 +4323,7 @@ const elements = {
   penFullnessCatchBeforeAvg: document.getElementById("penFullnessCatchBeforeAvg"),
   penFullnessCatchAfterAvg: document.getElementById("penFullnessCatchAfterAvg"),
   penFullnessCatchDifference: document.getElementById("penFullnessCatchDifference"),
+  penFullnessCatchAdvantageWindow: document.getElementById("penFullnessCatchAdvantageWindow"),
   penFullnessCatchFullEarlyAvg: document.getElementById("penFullnessCatchFullEarlyAvg"),
   penFullnessCatchMidAvg: document.getElementById("penFullnessCatchMidAvg"),
   penFullnessCatchLowLateAvg: document.getElementById("penFullnessCatchLowLateAvg"),
@@ -11968,6 +11969,15 @@ function formatPenFullnessCatchDifference(value) {
   return "Catch time was similar before and after refill.";
 }
 
+function formatCatchAdvantageWindowValue(analysis) {
+  if (!analysis?.available) return "Not enough data yet.";
+  const usefulAdvantageSheep = Number(analysis.usefulAdvantageSheep);
+  if (!Number.isFinite(usefulAdvantageSheep) || usefulAdvantageSheep <= 0) {
+    return "No useful advantage found yet.";
+  }
+  return `about ${Math.floor(usefulAdvantageSheep)} sheep`;
+}
+
 function getPenFullnessConfounderDisplayName(type) {
   if (type === MANUAL_MARKER_CUSTOM_TYPE) return "Custom";
   return MANUAL_MARKER_TYPES[type] || String(type || "Unknown");
@@ -12001,12 +12011,16 @@ function updatePenFullnessCatchAnalysisDisplay() {
     || elements.penFullnessCatchBeforeAvg
     || elements.penFullnessCatchAfterAvg
     || elements.penFullnessCatchDifference
+    || elements.penFullnessCatchAdvantageWindow
     || elements.penFullnessCatchFullEarlyAvg
     || elements.penFullnessCatchMidAvg
     || elements.penFullnessCatchLowLateAvg;
   if (!hasDisplay || typeof buildPenFullnessCatchAnalysis !== "function") return;
 
   const analysis = buildPenFullnessCatchAnalysis();
+  const advantageWindowAnalysis = typeof buildCatchAdvantageWindowAnalysis === "function"
+    ? buildCatchAdvantageWindowAnalysis()
+    : null;
   const summary = analysis?.summary || analysis?.reason || "Not enough confirmed refill data yet.";
   const confirmedCount = Number(analysis?.confirmedRefillCount);
   const primaryComparison = getPenFullnessCatchPrimaryComparison(analysis);
@@ -12020,6 +12034,7 @@ function updatePenFullnessCatchAnalysisDisplay() {
 
   setText(elements.penFullnessCatchSummary, summary);
   setText(elements.penFullnessCatchConfirmedCount, Number.isFinite(confirmedCount) ? String(confirmedCount) : "0");
+  setText(elements.penFullnessCatchAdvantageWindow, formatCatchAdvantageWindowValue(advantageWindowAnalysis));
 
   if (primaryComparison) {
     setText(elements.penFullnessCatchBeforeAvg, formatPenFullnessCatchSeconds(primaryComparison.beforeAverage));
