@@ -2908,23 +2908,26 @@ td.pace-neutral {
   display:block;
 }
 
-#panel-log td.sheep-log-anomaly-mild {
-  background: #fff7ed;
+#panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-mild,
+#panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-mild {
+  background-color: #fff7ed;
   color: #9a3412;
   border-color: rgba(251, 146, 60, 0.35);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
-#panel-log td.sheep-log-anomaly-strong {
-  background: #ffedd5;
+#panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-strong,
+#panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-strong {
+  background-color: #ffedd5;
   color: #9a3412;
   border-color: rgba(249, 115, 22, 0.42);
   font-weight: 700;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
 }
 
-#panel-log td.sheep-log-anomaly-severe {
-  background: #fed7aa;
+#panel-log tbody td.sheep-log-time-col.sheep-log-anomaly-severe,
+#panel-log tbody tr:hover td.sheep-log-time-col.sheep-log-anomaly-severe {
+  background-color: #fed7aa;
   color: #7c2d12;
   border-color: rgba(234, 88, 12, 0.5);
   font-weight: 800;
