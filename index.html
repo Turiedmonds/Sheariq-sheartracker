@@ -135,15 +135,15 @@
             </div>
           </div>
           <div class="sim-controls-section-content panel-section-content">
-            <div class="form-grid single-row sim-toggle-row">
-            <label for="simulationModeToggle">Simulation Mode</label>
-            <input id="simulationModeToggle" type="checkbox" />
-            </div>
+            <label class="sim-toggle-row" for="simulationModeToggle">
+              <input id="simulationModeToggle" type="checkbox" />
+              <span>Simulation Mode</span>
+            </label>
             <div id="simulationBanner" class="sim-banner" hidden>
               Simulation active: Shelly polling is paused.
             </div>
             <div class="form-grid single-row sim-setting-row simulation-run-length-row">
-              <label for="simulationRunLengthMode">Simulation run length:</label>
+              <label for="simulationRunLengthMode">Run length</label>
               <select id="simulationRunLengthMode" disabled>
                 <option value="real" selected>Real run</option>
                 <option value="test5">5 min test</option>
@@ -155,12 +155,6 @@
               <input id="simulationCustomMinutes" type="number" min="1" max="60" step="1" value="10" hidden disabled />
             </div>
             <div id="simulationRunLengthIndicator" class="sim-test-length-indicator" hidden></div>
-            <div id="simulationControls" class="button-row" hidden>
-              <button id="simMotorOnBtn" type="button">Motor ON</button>
-              <button id="simMotorOffBtn" type="button">Motor OFF</button>
-              <button id="resetCurrentSheepBtn" class="btn-inline-small" type="button" disabled>Reset Current Sheep</button>
-              <button id="undoLastSheepBtn" class="btn-inline-small" type="button" disabled>Undo Last Sheep</button>
-            </div>
           </div>
         </section>
 
@@ -174,13 +168,20 @@
             </div>
           </div>
           <div class="sim-controls-section-content panel-section-content">
-            <div class="button-row">
-            <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
-            <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
-            <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
-            <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
-            <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
-            <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
+            <div class="button-row run-controls-main-row">
+              <button id="startRunBtn" class="btn-start" type="button">Start Run</button>
+              <button id="stopRunBtn" class="btn-stop" type="button" disabled>Stop Run</button>
+              <button id="finishRunBreakBtn" type="button" disabled>Finish Run / Break</button>
+              <button id="pauseRunBtn" class="btn-pause" type="button" disabled>Pause</button>
+              <button id="resetRunBtn" class="btn-reset" type="button">Reset Run</button>
+              <button id="controlsDockReset" class="btn-inline-small" type="button" hidden>Reset position</button>
+            </div>
+            <div id="simulationControls" class="button-row run-controls-secondary-row">
+              <button id="simMotorOnBtn" type="button" disabled>Motor ON</button>
+              <button id="simMotorOffBtn" type="button" disabled>Motor OFF</button>
+              <button id="resetCurrentSheepBtn" class="btn-inline-small" type="button" disabled>Reset Current Sheep</button>
+              <button id="undoLastSheepBtn" class="btn-inline-small" type="button" disabled>Undo Last Sheep</button>
+              <button id="startNewDayBtn" class="btn-start-new-day" type="button">Start New Day</button>
             </div>
           </div>
         </section>

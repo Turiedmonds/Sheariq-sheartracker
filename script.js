@@ -4464,6 +4464,7 @@ const elements = {
   finishRunBreakBtn: document.getElementById("finishRunBreakBtn"),
   pauseRunBtn: document.getElementById("pauseRunBtn"),
   resetRunBtn: document.getElementById("resetRunBtn"),
+  startNewDayBtn: document.getElementById("startNewDayBtn"),
   totalSheep: document.getElementById("totalSheep"),
   officialSheepCount: document.getElementById("officialSheepCount"),
   rejectedSheepCount: document.getElementById("rejectedSheepCount"),
@@ -6394,6 +6395,8 @@ function updateSimulationRunLengthControls() {
       elements.simulationRunLengthIndicator.hidden = true;
     }
   }
+
+  updateSimulationActionButtonsUI();
 }
 
 function getValidSimulationRunLengthMode(mode) {
@@ -7042,6 +7045,65 @@ function resetRun() {
   updateStatsPanel();
 }
 
+function refreshAfterStartNewDayReset() {
+  if (elements.startRunBtn) elements.startRunBtn.disabled = false;
+  if (elements.stopRunBtn) elements.stopRunBtn.disabled = true;
+  if (elements.runStatus) elements.runStatus.textContent = "Idle";
+  if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
+
+  selectedSheepLogIds = new Set();
+  sheepLogMarkerNoteEditorSheepId = "";
+  resetQualityRatingForm();
+  setPaused(false);
+  if (shouldStartRealtimeLoops()) startRealtimeLoops();
+  updateSimulationRunLengthControls();
+  updateFinishRunBreakButtonUI();
+  updateStartRunButtonUI();
+  updatePauseButtonUI();
+  updateResetCurrentSheepButtonUI();
+  updateUndoLastSheepButtonUI();
+  updateBreakTimingDisplay();
+  updateBreakOverlayDisplay();
+  updateLivePanel();
+  updateRunBadge();
+  updateDayClockDisplay();
+  updateStatsPanel();
+  renderLogTable();
+  renderReviewList();
+  updateReviewRunButtonState();
+  drawTrendGraph();
+  updateTrendFlags();
+  updateTrendDetailsVisibility();
+  if (elements.blockMinutes) renderBlock(Number(elements.blockMinutes.value) || 15);
+}
+
+function startNewDay() {
+  clearPanelInteractionHighlights();
+  resetRunState();
+  appState.qualityRatings = [];
+  appState.qualityRatingEditId = "";
+  appState.officialRejectedAdjustment = 0;
+  appState.currentStats = {
+    avgShear: 0,
+    avgCatch: 0,
+    avgCycle: 0,
+    sheepPerHour: 0
+  };
+  refreshAfterStartNewDayReset();
+  autosaveState({ force: true });
+}
+
+async function confirmStartNewDay() {
+  const confirmed = await confirmModal({
+    title: "Start a new day?",
+    message: "Start a new day? This will clear the current day’s sheep, timing, run progress, and live session data.",
+    confirmText: "Start New Day",
+    cancelText: "Cancel"
+  });
+  if (!confirmed) return;
+  startNewDay();
+}
+
 function isCountingPausedForBreak() {
   return appState.breakActive === true;
 }
@@ -7132,9 +7194,15 @@ function canResetCurrentSheepTiming() {
   );
 }
 
+function updateSimulationActionButtonsUI() {
+  if (elements.simMotorOnBtn) elements.simMotorOnBtn.disabled = !canRunSimulationMotorOnShortcut();
+  if (elements.simMotorOffBtn) elements.simMotorOffBtn.disabled = !canRunSimulationMotorOffShortcut();
+}
+
 function updateResetCurrentSheepButtonUI() {
   if (!elements.resetCurrentSheepBtn) return;
   elements.resetCurrentSheepBtn.disabled = !canResetCurrentSheepTiming();
+  updateSimulationActionButtonsUI();
 }
 
 function canUndoLastSheep() {
@@ -7150,6 +7218,7 @@ function canUndoLastSheep() {
 function updateUndoLastSheepButtonUI() {
   if (!elements.undoLastSheepBtn) return;
   elements.undoLastSheepBtn.disabled = !canUndoLastSheep();
+  updateSimulationActionButtonsUI();
 }
 
 function clearPenFillPromptKeyBeyondSheepCount(keyName, newPhysicalSheepCount) {
@@ -7725,7 +7794,7 @@ function maybeHandleRunEndExpired() {
 }
 
 function handleMotorOn() {
-  if (!appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
+  if (!appState.simulationMode || !appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
   const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
@@ -7743,6 +7812,7 @@ function handleMotorOn() {
   }
 
   updateLivePanel();
+  updateSimulationActionButtonsUI();
 }
 
 function refreshAfterSheepEntry() {
@@ -7758,12 +7828,13 @@ function refreshAfterSheepEntry() {
 }
 
 function handleMotorOff() {
-  if (!appState.runActive || isCountingPaused()) return;
+  if (!appState.simulationMode || !appState.runActive || isCountingPaused()) return;
 
   if (!appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
     appState.currentCycle.motorOn = false;
     appState.currentMotorDisplay = "OFF";
     updateLivePanel();
+    updateSimulationActionButtonsUI();
     return;
   }
 
@@ -7816,6 +7887,7 @@ function handleMotorOff() {
   }
 
   refreshAfterSheepEntry();
+  updateSimulationActionButtonsUI();
 }
 
 
@@ -14970,7 +15042,6 @@ function restoreSessionPayload(raw, options = {}) {
   updateBreakOverlayDisplay();
   if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
   if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
-  if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
   updateSimulationRunLengthControls();
   updateResetCurrentSheepButtonUI();
   updateUndoLastSheepButtonUI();
@@ -15461,7 +15532,6 @@ function setSimulationMode(enabled) {
   appState.simulationCustomMinutes = sanitizeSimulationCustomMinutes(appState.simulationCustomMinutes);
   if (elements.simulationModeToggle) elements.simulationModeToggle.checked = appState.simulationMode;
   if (elements.simulationBanner) elements.simulationBanner.hidden = !appState.simulationMode;
-  if (elements.simulationControls) elements.simulationControls.hidden = !appState.simulationMode;
   updateSimulationRunLengthControls();
   updateResetCurrentSheepButtonUI();
   updateUndoLastSheepButtonUI();
@@ -16037,6 +16107,7 @@ function bindEvents() {
   }
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  if (elements.startNewDayBtn) elements.startNewDayBtn.addEventListener("click", confirmStartNewDay);
   if (elements.resetCurrentSheepBtn) elements.resetCurrentSheepBtn.addEventListener("click", resetCurrentSheepTiming);
   if (elements.undoLastSheepBtn) elements.undoLastSheepBtn.addEventListener("click", undoLastSheep);
   if (elements.mergeSelectedSheepBtn) elements.mergeSelectedSheepBtn.addEventListener("click", mergeSelectedSheep);
