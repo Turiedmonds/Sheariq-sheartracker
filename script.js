@@ -1836,7 +1836,98 @@ function buildPenFullnessBucketSummary(sheepAnalysisEntries = []) {
     });
 }
 
-function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [] } = {}) {
+function formatUsefulRefillTimingWindowSeconds(totalSeconds) {
+  const safeSeconds = Math.max(Math.round(Number(totalSeconds) || 0), 0);
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  if (minutes > 0 && seconds > 0) return `${minutes}m ${seconds}s`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function formatUsefulRefillTimingAlignmentMessage(context) {
+  if (!context?.available) return "";
+  if (context.alignment === "aligned") return "Selected target appears aligned.";
+  if (context.alignment === "selectedEarlier") return "Selected target may be earlier than this window.";
+  if (context.alignment === "selectedLater") return "Selected target may be later than this window.";
+  return "";
+}
+
+function buildUsefulRefillTimingTargetContext(options = {}) {
+  const catchAdvantageWindowAnalysis = options.catchAdvantageWindowAnalysis || null;
+  const unavailableResult = (reason, extras = {}) => ({
+    available: false,
+    reason,
+    usefulAdvantageSheep: null,
+    avgCycleSeconds: null,
+    estimatedUsefulWindowSeconds: null,
+    selectedTargetSeconds: null,
+    differenceSeconds: null,
+    alignment: "unavailable",
+    message: "",
+    ...extras
+  });
+
+  const usefulAdvantageSheep = Number(catchAdvantageWindowAnalysis?.usefulAdvantageSheep);
+  if (
+    !catchAdvantageWindowAnalysis?.available
+    || !Number.isFinite(usefulAdvantageSheep)
+    || usefulAdvantageSheep <= 0
+  ) {
+    return unavailableResult("Useful catch advantage timing is not available yet.", {
+      usefulAdvantageSheep: Number.isFinite(usefulAdvantageSheep) ? usefulAdvantageSheep : null
+    });
+  }
+
+  const avgCycleSeconds = Number(options.avgCycleSeconds);
+  if (!Number.isFinite(avgCycleSeconds) || avgCycleSeconds <= 0) {
+    return unavailableResult("Average cycle time is not available yet.", { usefulAdvantageSheep });
+  }
+
+  const recordType = Object.prototype.hasOwnProperty.call(options, "recordType") ? options.recordType : appState.recordType;
+  if (!recordType || recordType === "none") {
+    return unavailableResult("Select a pen refill record type before useful refill timing is available.", {
+      usefulAdvantageSheep,
+      avgCycleSeconds
+    });
+  }
+
+  const timingWindow = options.timingWindow || getFinalFillTimingWindow(recordType);
+  const selectedTargetSeconds = Number.isFinite(Number(options.selectedTargetSeconds))
+    ? Number(options.selectedTargetSeconds)
+    : Number(timingWindow?.idealBeforeEndSeconds);
+  const toleranceSeconds = Number.isFinite(Number(options.toleranceSeconds))
+    ? Math.max(Number(options.toleranceSeconds), 0)
+    : Math.max(Number(timingWindow?.toleranceSeconds), 0);
+
+  if (!Number.isFinite(selectedTargetSeconds)) {
+    return unavailableResult("Selected final refill target is not available yet.", {
+      usefulAdvantageSheep,
+      avgCycleSeconds
+    });
+  }
+
+  const estimatedUsefulWindowSeconds = usefulAdvantageSheep * avgCycleSeconds;
+  const differenceSeconds = selectedTargetSeconds - estimatedUsefulWindowSeconds;
+  const alignment = Math.abs(differenceSeconds) <= toleranceSeconds
+    ? "aligned"
+    : (differenceSeconds > toleranceSeconds ? "selectedEarlier" : "selectedLater");
+  const message = formatUsefulRefillTimingAlignmentMessage({ available: true, alignment });
+
+  return {
+    available: true,
+    reason: "Useful catch advantage timing estimate is available.",
+    usefulAdvantageSheep,
+    avgCycleSeconds,
+    estimatedUsefulWindowSeconds,
+    selectedTargetSeconds,
+    differenceSeconds,
+    alignment,
+    message
+  };
+}
+
+function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [], usefulRefillTimingTargetContext = null } = {}) {
   if (!available) return reason || "Not enough confirmed refill data yet.";
 
   const usableComparisons = refillComparisons.filter((comparison) => (
@@ -1848,9 +1939,18 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   if (!usableComparisons.length) return "Not enough confirmed refill data yet.";
 
   const averageDelta = averageNumericValues(usableComparisons.map((comparison) => comparison.averageCatchDeltaAfterMinusBefore));
-  return Number.isFinite(averageDelta)
-    ? formatPenFullnessCatchDifference(averageDelta)
-    : "Not enough confirmed refill data yet.";
+  if (!Number.isFinite(averageDelta)) return "Not enough confirmed refill data yet.";
+
+  const baseSummary = formatPenFullnessCatchDifference(averageDelta);
+  if (!usefulRefillTimingTargetContext?.available) return baseSummary;
+
+  const usefulAdvantageSheep = Math.floor(Number(usefulRefillTimingTargetContext.usefulAdvantageSheep));
+  const estimatedUsefulWindowSeconds = Number(usefulRefillTimingTargetContext.estimatedUsefulWindowSeconds);
+  const alignmentMessage = usefulRefillTimingTargetContext.message || formatUsefulRefillTimingAlignmentMessage(usefulRefillTimingTargetContext);
+  if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) return baseSummary;
+
+  const timingText = formatUsefulRefillTimingWindowSeconds(estimatedUsefulWindowSeconds);
+  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep after refill, about ${timingText} before run end. ${alignmentMessage}`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -12108,7 +12208,20 @@ function updatePenFullnessCatchAnalysisDisplay() {
   const advantageWindowAnalysis = typeof buildCatchAdvantageWindowAnalysis === "function"
     ? buildCatchAdvantageWindowAnalysis()
     : null;
-  const summary = analysis?.summary || analysis?.reason || "Not enough confirmed refill data yet.";
+  const recordType = analysis?.recordType || appState.recordType;
+  const finalFillTimingWindow = getFinalFillTimingWindow(recordType);
+  const usefulRefillTimingTargetContext = buildUsefulRefillTimingTargetContext({
+    catchAdvantageWindowAnalysis: advantageWindowAnalysis,
+    avgCycleSeconds: appState.currentStats?.avgCycle,
+    recordType,
+    selectedTargetSeconds: getFinalFillTargetBeforeEndSeconds(recordType),
+    timingWindow: finalFillTimingWindow,
+    toleranceSeconds: finalFillTimingWindow.toleranceSeconds
+  });
+  const summary = buildPenFullnessCatchSummary({
+    ...analysis,
+    usefulRefillTimingTargetContext
+  }) || analysis?.summary || analysis?.reason || "Not enough confirmed refill data yet.";
   const confirmedCount = Number(analysis?.confirmedRefillCount);
   const primaryComparison = getPenFullnessCatchPrimaryComparison(analysis);
   const bucketByKey = (analysis?.fullnessBuckets || []).reduce((buckets, bucket) => {
