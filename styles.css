@@ -2778,47 +2778,71 @@ td {
 }
 
 
-td.pace-good,
-#panel-log td.timing-faster-light {
+td.pace-good {
   background: #dcfce7;
   color: #166534;
 }
 
-#panel-log td.timing-faster-medium {
-  background: #86efac;
-  color: #14532d;
-  font-weight: 700;
-}
-
-#panel-log td.timing-faster-strong {
-  background: #22c55e;
-  color: #052e16;
-  font-weight: 800;
-  box-shadow: inset 3px 0 0 #15803d;
-}
-
-td.pace-bad,
-#panel-log td.timing-slower-light {
+td.pace-bad {
   background: #fee2e2;
   color: #991b1b;
 }
 
+td.pace-neutral {
+  background: #f9fafb;
+}
+
+#panel-log td.timing-faster-light {
+  --sheep-log-timing-bg: #dcfce7;
+  --sheep-log-timing-fg: #166534;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
+}
+
+#panel-log td.timing-faster-medium {
+  --sheep-log-timing-bg: #86efac;
+  --sheep-log-timing-fg: #14532d;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
+  font-weight: 700;
+}
+
+#panel-log td.timing-faster-strong {
+  --sheep-log-timing-bg: #22c55e;
+  --sheep-log-timing-fg: #052e16;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
+  font-weight: 800;
+}
+
+#panel-log td.timing-slower-light {
+  --sheep-log-timing-bg: #fee2e2;
+  --sheep-log-timing-fg: #991b1b;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
+}
+
 #panel-log td.timing-slower-medium {
-  background: #fca5a5;
-  color: #7f1d1d;
+  --sheep-log-timing-bg: #fca5a5;
+  --sheep-log-timing-fg: #7f1d1d;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
   font-weight: 700;
 }
 
 #panel-log td.timing-slower-strong {
-  background: #ef4444;
-  color: #ffffff;
+  --sheep-log-timing-bg: #ef4444;
+  --sheep-log-timing-fg: #450a0a;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
   font-weight: 800;
-  box-shadow: inset 3px 0 0 #b91c1c;
 }
 
-td.pace-neutral,
 #panel-log td.timing-neutral {
-  background: #f9fafb;
+  --sheep-log-timing-bg: #f9fafb;
+  --sheep-log-timing-fg: #334155;
+  background: var(--sheep-log-timing-bg);
+  color: var(--sheep-log-timing-fg);
 }
 
 #panel-log td[class*="timing-"] {
@@ -2902,6 +2926,18 @@ td.pace-neutral,
   color: #431407;
   font-weight: 800;
   box-shadow: inset 3px 0 0 #c2410c;
+}
+
+#panel-log td.sheep-log-total-time-col[class*="timing-"] {
+  background: var(--sheep-log-timing-bg, #f9fafb);
+  color: var(--sheep-log-timing-fg, #334155);
+  font-variant-numeric: tabular-nums;
+  text-shadow: none;
+  box-shadow: none;
+}
+
+#panel-log td.sheep-log-total-time-col.timing-neutral {
+  font-weight: 600;
 }
 
 .sheep-log-help-swatches {
