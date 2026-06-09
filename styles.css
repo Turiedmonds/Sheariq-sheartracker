@@ -2329,55 +2329,154 @@ td {
 
 #panel-performance .perf-section-move-up,
 #panel-performance .perf-section-move-down,
-#panel-performance .perf-section-toggle {
-  min-width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  background: #f8fafc;
-  color: #334155;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
+#panel-performance .perf-section-toggle,
 .panel-icon-btn,
 .panel-help-btn,
 .panel-settings-btn,
 .panel-dock-btn,
 .panel-lock-toggle,
 .section-icon-btn {
-  min-width: 1.5rem;
-  height: 1.5rem;
-  border: 1px solid #64748b;
-  border-radius: 4px;
-  background: #f8fafc;
-  color: #0f172a;
-  font-weight: 700;
+  min-width: 1.65rem;
+  height: 1.65rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 0 0.42rem;
+  border: 1px solid #030712;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #1f2937 0%, #0b1120 54%, #020617 100%);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 1px 2px rgba(2, 6, 23, 0.32);
+  font-weight: 800;
   line-height: 1;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.38);
   cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease, color 0.16s ease, opacity 0.16s ease;
+}
+
+.panel-icon-btn,
+.section-icon-btn,
+#panel-performance .perf-section-move-up,
+#panel-performance .perf-section-move-down,
+#panel-performance .perf-section-toggle {
+  width: 1.65rem;
+  padding: 0;
+}
+
+.panel-help-btn,
+.panel-dock-btn,
+.panel-settings-btn {
+  min-width: 1.65rem;
+  width: auto;
+  white-space: nowrap;
+}
+
+.panel-header-actions .panel-icon-btn,
+.panel-header-actions .panel-lock-toggle,
+.panel-section-actions .section-icon-btn {
+  width: 1.65rem;
+  min-width: 1.65rem;
+  padding: 0;
+}
+
+.panel-header-actions .panel-help-btn,
+.panel-header-actions .panel-settings-btn,
+.panel-header-actions .panel-dock-btn {
+  min-width: 1.65rem;
+  padding: 0 0.42rem;
+}
+
+.control-icon {
+  width: 1rem;
+  height: 1rem;
+  display: block;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.control-icon-help {
+  stroke-width: 2.1;
+}
+
+.control-icon-settings {
+  stroke-width: 1.9;
+}
+
+.control-icon-label {
+  display: inline-block;
+  color: currentColor;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.panel-lock-toggle .panel-lock-icon {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
+.panel-lock-toggle .panel-lock-body {
+  fill: #ffffff;
+  stroke: rgba(255, 255, 255, 0.75);
+}
+
+.panel-lock-toggle .panel-lock-shackle,
+.panel-lock-toggle .panel-lock-accent {
+  stroke: #ffffff;
+}
+
+.panel-lock-toggle[data-lock-state="locked"] .panel-lock-shackle {
+  stroke: #ffffff;
 }
 
 #panel-performance .perf-section-move-up:hover,
 #panel-performance .perf-section-move-down:hover,
-#panel-performance .perf-section-toggle:hover {
-  background: #f1f5f9;
-}
-
+#panel-performance .perf-section-toggle:hover,
 .panel-icon-btn:hover,
 .panel-help-btn:hover,
 .panel-settings-btn:hover,
 .panel-dock-btn:hover,
 .panel-lock-toggle:hover,
 .section-icon-btn:hover {
-  background: #fee2e2;
+  border-color: #ef4444;
+  background: linear-gradient(180deg, #2b1114 0%, #111827 44%, #020617 100%);
+  color: #ffffff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 0 0 1px rgba(239, 68, 68, 0.2), 0 2px 5px rgba(2, 6, 23, 0.32);
+  transform: translateY(-1px);
+}
+
+#panel-performance .perf-section-move-up:focus-visible,
+#panel-performance .perf-section-move-down:focus-visible,
+#panel-performance .perf-section-toggle:focus-visible,
+.panel-icon-btn:focus-visible,
+.panel-help-btn:focus-visible,
+.panel-settings-btn:focus-visible,
+.panel-dock-btn:focus-visible,
+.panel-lock-toggle:focus-visible,
+.section-icon-btn:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
   border-color: #ef4444;
 }
 
-
-#panel-performance .perf-section-actions button:disabled {
-  opacity: 0.45;
+#panel-performance .perf-section-actions button:disabled,
+.panel-icon-btn:disabled,
+.panel-help-btn:disabled,
+.panel-settings-btn:disabled,
+.panel-dock-btn:disabled,
+.panel-lock-toggle:disabled,
+.section-icon-btn:disabled {
+  opacity: 0.42;
   cursor: not-allowed;
+  transform: none;
+  border-color: #334155;
+  background: linear-gradient(180deg, #334155 0%, #1f2937 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 #panel-performance .perf-section.is-collapsed .perf-section-content {
