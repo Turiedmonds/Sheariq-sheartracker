@@ -10788,10 +10788,14 @@ function createSheepLogStatusActionButton(entry, mode) {
 function createSheepLogMarkerNoteActionButton(entry, mode) {
   const button = document.createElement("button");
   button.type = "button";
-  button.className = "sheep-log-marker-note-btn";
+  button.className = `sheep-log-marker-note-btn sheep-log-marker-note-btn-${mode}`;
   button.dataset.action = "edit-marker-note";
   button.dataset.sheepId = entry.id || "";
-  button.textContent = mode === "edit" ? "Edit" : "+";
+  if (mode === "edit") {
+    button.textContent = "Edit";
+  } else {
+    button.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3.5v9M3.5 8h9" fill="none" stroke-linecap="round"/></svg>`;
+  }
   button.setAttribute("aria-label", mode === "edit" ? `Edit marker or note for sheep #${entry.number}` : `Add marker or note for sheep #${entry.number}`);
   button.title = mode === "edit" ? `Edit marker or note for sheep #${entry.number}` : `Add marker or note for sheep #${entry.number}`;
   return button;
