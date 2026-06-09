@@ -104,6 +104,12 @@ body {
   gap: 0.18rem;
 }
 
+.app-zoom-label {
+  font-size: 0.86rem;
+  font-weight: 700;
+  color: #e5e7eb;
+}
+
 .app-zoom-step-btn {
   min-width: 2rem;
   padding-inline: 0.48rem;
