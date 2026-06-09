@@ -10631,7 +10631,6 @@ function renderLogTable() {
     const fullCycleClass = getSheepLogTimingGradeClass(entry.fullCycle, requiredCycle);
     const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, anomalyAverages.avgShearDuration);
     const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, anomalyAverages.avgCatchDuration);
-    const fullCycleAnomalyClass = getSheepLogAnomalyClass(entry.fullCycle, anomalyAverages.avgFullCycle);
     row.innerHTML = `
       <td class="sheep-log-select-col"><input class="sheep-log-select-checkbox" type="checkbox" data-sheep-id="${entry.id || ""}" aria-label="Select sheep #${entry.number} for merge" ${selectedSheepLogIds.has(entry.id) ? "checked" : ""}></td>
       <td>${entry.number}</td>
@@ -10639,7 +10638,7 @@ function renderLogTable() {
       <td class="sheep-log-time-col">${formatSheepLogClock(entry, "end")}</td>
       <td class="sheep-log-time-col ${catchAnomalyClass}">${formatSeconds(entry.catchDuration)}</td>
       <td class="sheep-log-time-col ${shearAnomalyClass}">${formatSeconds(entry.shearDuration)}</td>
-      <td class="sheep-log-time-col ${fullCycleClass} ${fullCycleAnomalyClass}">${formatSeconds(entry.fullCycle)}</td>
+      <td class="sheep-log-time-col sheep-log-total-time-col ${fullCycleClass}">${formatSeconds(entry.fullCycle)}</td>
     `;
     row.appendChild(createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerEventsBySheepRow));
     elements.sheepLogBody.appendChild(row);
