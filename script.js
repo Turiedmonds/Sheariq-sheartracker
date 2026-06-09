@@ -5079,8 +5079,8 @@ function initTargetPaceSections() {
     const updateToggleState = () => {
       if (!toggleBtn) return;
       const isCollapsed = section.classList.contains("is-collapsed");
-      toggleBtn.textContent = isCollapsed ? "+" : "−";
       toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      setCollapseControlIcon(toggleBtn, isCollapsed);
     };
     updateToggleState();
 
@@ -5196,8 +5196,8 @@ function initializeSimulationSections() {
     }
     const updateToggleState = () => {
       const isCollapsed = section.classList.contains("is-collapsed");
-      toggleBtn.textContent = isCollapsed ? "+" : "−";
       toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      setCollapseControlIcon(toggleBtn, isCollapsed);
     };
     updateToggleState();
     toggleBtn.addEventListener("click", () => {
@@ -5315,8 +5315,8 @@ function initializePerformanceSections() {
     }
     const updateToggleState = () => {
       const isCollapsed = section.classList.contains("is-collapsed");
-      toggleBtn.textContent = isCollapsed ? "+" : "−";
       toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      setCollapseControlIcon(toggleBtn, isCollapsed);
     };
     updateToggleState();
     toggleBtn.addEventListener("click", () => {
@@ -5383,8 +5383,8 @@ function initializeDayConfigSections() {
     }
     const updateToggleState = () => {
       const isCollapsed = section.classList.contains("is-collapsed");
-      toggleBtn.textContent = isCollapsed ? "+" : "−";
       toggleBtn.setAttribute("aria-expanded", String(!isCollapsed));
+      setCollapseControlIcon(toggleBtn, isCollapsed);
     };
     updateToggleState();
     toggleBtn.addEventListener("click", () => {
@@ -15112,6 +15112,66 @@ function loadLastSave() {
   }
 }
 
+const CONTROL_ICON_SVGS = {
+  moveUp: `
+    <svg class="control-icon control-icon-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M4.25 12.35L10 6.65l5.75 5.7" />
+    </svg>
+  `,
+  moveDown: `
+    <svg class="control-icon control-icon-chevron" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M4.25 7.65L10 13.35l5.75-5.7" />
+    </svg>
+  `,
+  collapse: `
+    <svg class="control-icon control-icon-collapse" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M4.5 10h11" />
+    </svg>
+  `,
+  expand: `
+    <svg class="control-icon control-icon-expand" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 4.5v11M4.5 10h11" />
+    </svg>
+  `,
+  help: `
+    <svg class="control-icon control-icon-help" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <circle cx="10" cy="10" r="7" />
+      <path d="M7.85 8.15A2.25 2.25 0 0 1 10.1 6.3c1.35 0 2.25.78 2.25 1.9 0 .9-.45 1.38-1.35 1.92-.72.43-.98.72-.98 1.43" />
+      <path d="M10 14.1h.01" />
+    </svg>
+  `,
+  settings: `
+    <svg class="control-icon control-icon-settings" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
+      <path d="M10 6.85a3.15 3.15 0 1 1 0 6.3 3.15 3.15 0 0 1 0-6.3Z" />
+      <path d="M10 3.5v1.35M10 15.15v1.35M15.63 6.25l-1.16.68M5.53 13.07l-1.16.68M15.63 13.75l-1.16-.68M5.53 6.93l-1.16-.68" />
+    </svg>
+  `,
+};
+
+function setControlButtonIcon(button, iconName, labelText = "") {
+  if (!button || !CONTROL_ICON_SVGS[iconName]) return;
+  const labelMarkup = labelText ? `<span class="control-icon-label">${labelText}</span>` : "";
+  button.innerHTML = `${CONTROL_ICON_SVGS[iconName]}${labelMarkup}`;
+}
+
+function setCollapseControlIcon(button, isCollapsed) {
+  setControlButtonIcon(button, isCollapsed ? "expand" : "collapse");
+}
+
+function enhanceHeaderControlIcons() {
+  document.querySelectorAll(".panel-move-up, .target-section-move-up, .sim-controls-section-move-up, .perf-section-move-up")
+    .forEach((button) => setControlButtonIcon(button, "moveUp"));
+  document.querySelectorAll(".panel-move-down, .target-section-move-down, .sim-controls-section-move-down, .perf-section-move-down")
+    .forEach((button) => setControlButtonIcon(button, "moveDown"));
+  document.querySelectorAll(".panel-collapse, .target-section-toggle, .sim-controls-section-toggle, .perf-section-toggle, .day-config-section-toggle")
+    .forEach((button) => setCollapseControlIcon(button, button.getAttribute("aria-expanded") === "false"));
+  document.querySelectorAll(".panel-help-btn").forEach((button) => setControlButtonIcon(button, "help", "Help"));
+  document.querySelectorAll(".panel-settings-btn").forEach((button) => {
+    const labelText = button.textContent.includes("Marker Settings") ? "Marker Settings" : "";
+    setControlButtonIcon(button, "settings", labelText);
+  });
+}
+
 function applyPanelState() {
   getPanelElements().forEach((panel) => {
     const collapsed = Boolean(appState.panelCollapsed[panel.id]);
@@ -15119,7 +15179,7 @@ function applyPanelState() {
     const collapseBtn = panel.querySelector(".panel-collapse");
     if (collapseBtn) {
       collapseBtn.setAttribute("aria-expanded", String(!collapsed));
-      collapseBtn.textContent = collapsed ? "+" : "−";
+      setCollapseControlIcon(collapseBtn, collapsed);
     }
   });
 }
@@ -16597,6 +16657,7 @@ function initialize() {
   updateConnectionInputs();
   initializeOfflineStatusPanel();
   ensurePanelLockButtons();
+  enhanceHeaderControlIcons();
   initializeMetricValueStyling();
   initializeConnectionHelp();
   bindEvents();
