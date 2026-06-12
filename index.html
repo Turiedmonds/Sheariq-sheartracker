@@ -730,7 +730,7 @@
             </div>
             <div class="target-section-content panel-section-content">
               <div class="panel-metric-row"><span class="panel-metric-label">Required average total time per sheep:</span> <strong id="requiredCycle" class="panel-metric-value">0.0s</strong></div>
-              <div class="panel-metric-row"><span class="panel-metric-label">Required Remaining Average:</span> <strong id="requiredCycleRemaining" class="panel-metric-value">—</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Live Target Time Per Sheep:</span> <strong id="requiredCycleRemaining" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required 15-minute total:</span> <strong id="requiredQuarterTotal" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required sheep per hour:</span> <strong id="requiredRate" class="panel-metric-value">0.00</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required run total:</span> <strong id="requiredRunTotalSheep" class="panel-metric-value">—</strong></div>
@@ -828,7 +828,7 @@
       </div>
       <div class="panel-body">
         <div class="sheep-log-merge-controls" aria-label="Sheep log correction tools">
-          <span id="mergeSelectedSheepStatus" class="sheep-log-merge-status" aria-live="polite">Select two adjacent sheep to merge.</span>
+          <span id="mergeSelectedSheepStatus" class="sheep-log-merge-status" aria-live="polite"></span>
         </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">
           <table>
@@ -1167,8 +1167,8 @@
         <p>Target progress uses the official accepted sheep count: physical sheep minus official reject adjustments. Physical timing averages still use every sheep timed.</p>
         <h4>Required section</h4>
         <ul>
-          <li><strong>Required average total time per sheep:</strong> Fixed target average Total Time Per Sheep for the full run.</li>
-          <li><strong>Required Remaining Average:</strong> Average Total Time Per Sheep needed from this point onward to still hit the target. If the shearer falls behind this number gets faster; if the shearer gets ahead this number gets easier.</li>
+          <li><strong>Required Average Total Time Per Sheep:</strong> The original target average for the run. This does not change during the run and represents the benchmark pace set at the start of the run.</li>
+          <li><strong>Live Target Time Per Sheep:</strong> Updates during the run and shows the average total time per sheep now required to still achieve the run target. If the shearer falls behind, this number becomes faster; if the shearer gets ahead, this number becomes easier. It applies to the current run only, not the entire day.</li>
           <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
           <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
           <li><strong>Required run total:</strong> Target sheep count for this run.</li>
