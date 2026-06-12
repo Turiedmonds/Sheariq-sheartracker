@@ -7307,7 +7307,7 @@ function updateMergeSelectedSheepButtonUI(message = "") {
     elements.mergeSelectedSheepStatus.textContent = message || (canMerge
       ? `Ready to merge sheep ${adjacentSelection.first.number} and ${adjacentSelection.second.number}.`
       : (selectedCount === 0
-        ? "Select two adjacent sheep to merge."
+        ? ""
         : `${selectedCount} selected — choose exactly two adjacent sheep.`));
   }
 }
@@ -8442,7 +8442,7 @@ function getCompletedRunPerformanceRows() {
 function getCompletedRunTargetPaceRows() {
   return buildCompletedRunKeyValueRows([
     ["Required average total time per sheep", getSafeText("requiredCycle")],
-    ["Required Remaining Average", getSafeText("requiredCycleRemaining")],
+    ["Live Target Time Per Sheep", getSafeText("requiredCycleRemaining")],
     ["Required 15-minute total", getSafeText("requiredQuarterTotal")],
     ["Required sheep per hour", getSafeText("requiredRate")],
     ["Required run total", getSafeText("requiredRunTotalSheep")],
