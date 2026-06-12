@@ -730,6 +730,7 @@
             </div>
             <div class="target-section-content panel-section-content">
               <div class="panel-metric-row"><span class="panel-metric-label">Required average total time per sheep:</span> <strong id="requiredCycle" class="panel-metric-value">0.0s</strong></div>
+              <div class="panel-metric-row"><span class="panel-metric-label">Required Remaining Average:</span> <strong id="requiredCycleRemaining" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required 15-minute total:</span> <strong id="requiredQuarterTotal" class="panel-metric-value">—</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required sheep per hour:</span> <strong id="requiredRate" class="panel-metric-value">0.00</strong></div>
               <div class="panel-metric-row"><span class="panel-metric-label">Required run total:</span> <strong id="requiredRunTotalSheep" class="panel-metric-value">—</strong></div>
@@ -817,6 +818,7 @@
       <div class="panel-header" draggable="true">
         <h2 id="sheep-log-title">Sheep Log Table Panel</h2>
         <div class="panel-header-actions">
+          <button id="mergeSelectedSheepBtn" class="btn-inline-small sheep-log-merge-header-btn" type="button" disabled>Merge Sheep</button>
           <button id="sheepLogSettingsToggle" class="panel-settings-btn" type="button" aria-label="Open Sheep Log settings">⚙</button>
           <button id="sheepLogHelpBtn" class="sheep-log-help-btn panel-help-btn" type="button" aria-label="Open Sheep Log help">? Help</button>
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
@@ -826,7 +828,6 @@
       </div>
       <div class="panel-body">
         <div class="sheep-log-merge-controls" aria-label="Sheep log correction tools">
-          <button id="mergeSelectedSheepBtn" class="btn-inline-small" type="button" disabled>Merge Selected Sheep</button>
           <span id="mergeSelectedSheepStatus" class="sheep-log-merge-status" aria-live="polite">Select two adjacent sheep to merge.</span>
         </div>
         <div class="table-wrap sheep-log-scroll sheep-log-scroll-wrap">
@@ -1044,35 +1045,42 @@
         <p><strong>Catch Duration:</strong><br />How long it took from the end of one sheep to the start of the next sheep.</p>
         <p><strong>Total Time Per Sheep:</strong><br />The total time per sheep. This combines catch time and shear time.</p>
 
+        <h4 class="connection-help-title">Merge Sheep</h4>
+        <p>Use Merge Sheep when one physical sheep has been accidentally split into two adjacent Sheep Log rows, usually because the motor stopped and started again during the same sheep.</p>
+        <p>Tick exactly two adjacent rows, then select Merge Sheep. The app keeps the first start time, uses the second end time, keeps the first catch time, and treats the gap between the two rows as interruption/shearing time.</p>
+        <p>After merging, the app renumbers later sheep and recalculates averages, targets, trends, and pen-fill forecasts.</p>
+        <p>Do not use Merge Sheep for two real sheep. Some merges may be blocked if later manual or confirmed pen-fill events would make the correction unsafe.</p>
+
         <h4 class="connection-help-title">Colour shading</h4>
         <p>Amber/orange shading means that time was longer than normal compared with the average for that same column.</p>
+        <p>No colour is shown until the value is above the normal cutoff: whichever is greater of <strong>average + 2 seconds</strong> or <strong>average × 1.3</strong>.</p>
         <div class="sheep-log-help-swatches" aria-label="Colour shading examples">
           <div class="sheep-log-help-swatch-row">
             <span class="sheep-log-help-swatch sheep-log-anomaly-mild" aria-hidden="true"></span>
-            <span><strong>Light amber:</strong> Above the normal range, but not more than <strong>2×</strong> the average for that column.</span>
+            <span><strong>Light amber:</strong> Above the normal cutoff, up to <strong>2×</strong> the average for that column.</span>
           </div>
           <div class="sheep-log-help-swatch-row">
             <span class="sheep-log-help-swatch sheep-log-anomaly-strong" aria-hidden="true"></span>
-            <span><strong>Warm amber:</strong> More than <strong>2×</strong> the average, but not more than <strong>3×</strong> the average for that column.</span>
+            <span><strong>Warm amber:</strong> Above <strong>2×</strong> the average, up to <strong>3×</strong> the average for that column.</span>
           </div>
           <div class="sheep-log-help-swatch-row">
             <span class="sheep-log-help-swatch sheep-log-anomaly-severe" aria-hidden="true"></span>
-            <span><strong>Orange:</strong> More than <strong>3×</strong> the average for that column.</span>
+            <span><strong>Orange:</strong> Above <strong>3×</strong> the average for that column.</span>
           </div>
         </div>
         <ul class="connection-help-list">
-          <li><strong>Normal / no colour:</strong> The time is close to the average for that column.</li>
+          <li><strong>Normal / no colour:</strong> The time is at or below the normal cutoff for that column.</li>
         </ul>
         <p><strong>What “average for that column” means:</strong><br />Each duration column is compared with its own average: Shear Duration with average shear duration, Catch Duration with average catch duration, and Total Time Per Sheep with average Total Time Per Sheep.</p>
-        <p><strong>Example (catch duration):</strong><br />If the average catch duration is 7 seconds, 8 or 9 seconds may stay normal, around 12 seconds may show light amber, around 20 seconds may show warm amber, and around 25 seconds or more may show orange. This is an example only.</p>
+        <p><strong>Example (catch duration):</strong><br />If the average catch duration is 7 seconds, the normal cutoff is 9.1 seconds because 7 × 1.3 is greater than 7 + 2. Times at or below that stay normal, higher times may show light amber, and much higher times may show warm amber or orange. This is an example only.</p>
         <p>The colour does not automatically mean something went wrong. It is only a quick way to spot times worth checking.</p>
 
         <h4 class="connection-help-title">Markers</h4>
         <p>Automatic marker suggestions stay suggestions until saved. Confirmed markers are user-selected facts from the Marker / Note column, and one sheep can have multiple confirmed markers.</p>
-        <p><strong>Drink?:</strong><br />Possible drink break.</p>
-        <p><strong>Cutter:</strong><br />Likely cutter change.</p>
-        <p><strong>Comb:</strong><br />Likely comb/handpiece change.</p>
-        <p>A marker appears only when the sheep is near the planned timing window and the catch time is long enough compared with the average catch time per sheep.</p>
+        <p><strong>Built-in confirmed markers:</strong><br />Drink, Cutter, and Comb.</p>
+        <p><strong>Automatic suggestions:</strong><br />Suggestion markers may appear when the sheep is near the planned timing window and the catch time is long enough compared with the average catch time per sheep. A possible drink break may show as a Drink suggestion before it is confirmed.</p>
+        <p><strong>Custom markers:</strong><br />Custom markers can be added through the Marker / Note editor. They display using the marker name entered by the user.</p>
+        <p><strong>Pen refill markers:</strong><br />Pen refill markers can also appear as marker pills when linked to pen-fill/refill events.</p>
 
         <h4 class="connection-help-title">Settings</h4>
         <p>Use the ⚙ button in the Sheep Log header to open Sort, Order, Fill, and Marker Settings.</p>
@@ -1159,7 +1167,8 @@
         <p>Target progress uses the official accepted sheep count: physical sheep minus official reject adjustments. Physical timing averages still use every sheep timed.</p>
         <h4>Required section</h4>
         <ul>
-          <li><strong>Required average total time per sheep:</strong> Required Total Time Per Sheep needed to hit the run target.</li>
+          <li><strong>Required average total time per sheep:</strong> Fixed target average Total Time Per Sheep for the full run.</li>
+          <li><strong>Required Remaining Average:</strong> Average Total Time Per Sheep needed from this point onward to still hit the target. If the shearer falls behind this number gets faster; if the shearer gets ahead this number gets easier.</li>
           <li><strong>Required 15-minute total:</strong> Sheep needed in the current quarter.</li>
           <li><strong>Required sheep per hour:</strong> Hourly pace needed to hit target.</li>
           <li><strong>Required run total:</strong> Target sheep count for this run.</li>

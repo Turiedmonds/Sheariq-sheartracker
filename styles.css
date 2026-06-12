@@ -3402,6 +3402,21 @@ td.pace-neutral {
     justify-content: flex-end;
   }
 }
+.sheep-log-merge-header-btn {
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sheep-log-merge-header-btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
 .sheep-log-merge-controls {
   display: flex;
   align-items: center;

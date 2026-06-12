@@ -285,9 +285,7 @@ function syncLegacyManualMarkerToFirstManualMarker(entry, manualMarkers = getCon
 
 function getManualMarkersDisplayLabel(manualMarkers) {
   return sanitizeManualMarkerArray(manualMarkers)
-    .map((manualMarker) => manualMarker.type === MANUAL_MARKER_CUSTOM_TYPE
-      ? `Custom: ${getManualMarkerDisplayLabel(manualMarker)}`
-      : getManualMarkerDisplayLabel(manualMarker))
+    .map(getManualMarkerDisplayLabel)
     .filter(Boolean)
     .join(" + ");
 }
@@ -2811,11 +2809,7 @@ function getSheepLogDisplayMarkersForEntry(entry, markerEventsBySheepRow = getPe
 function getSheepLogDisplayMarkersLabel(markers) {
   if (!Array.isArray(markers)) return "";
   return markers
-    .map((marker) => marker?.source === "penFillEvent"
-      ? marker.label
-      : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE
-        ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
-        : getManualMarkerDisplayLabel(marker)))
+    .map((marker) => marker?.source === "penFillEvent" ? marker.label : getManualMarkerDisplayLabel(marker))
     .filter(Boolean)
     .join(" + ");
 }
@@ -4593,6 +4587,7 @@ const elements = {
   penFillConfirmStatus: document.getElementById("penFillConfirmStatus"),
   dayClock: document.getElementById("dayClock"),
   requiredCycle: document.getElementById("requiredCycle"),
+  requiredCycleRemaining: document.getElementById("requiredCycleRemaining"),
   requiredRate: document.getElementById("requiredRate"),
   projectedTotal: document.getElementById("projectedTotal"),
   predictedQuarterTotal: document.getElementById("predictedQuarterTotal"),
@@ -5411,6 +5406,7 @@ const METRIC_VALUE_IDS = new Set([
   "slowestSheepToday",
   "lastSheepTime",
   "requiredCycle",
+  "requiredCycleRemaining",
   "requiredRate",
   "projectedTotal",
   "requiredDayTotalSheep",
@@ -7391,9 +7387,7 @@ function createMergedSheepEntry(firstEntry, secondEntry, overrides = {}) {
       const dedupKey = getManualMarkerDedupKey(marker);
       return dedupKey && !firstMarkerKeys.has(dedupKey);
     })
-    .map((marker) => marker.type === MANUAL_MARKER_CUSTOM_TYPE
-      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
-      : getManualMarkerDisplayLabel(marker))
+    .map(getManualMarkerDisplayLabel)
     .filter(Boolean);
   const markerAuditNote = additionalSecondMarkerLabels.length
     ? `Merged sheep also had marker${additionalSecondMarkerLabels.length > 1 ? "s" : ""}: ${additionalSecondMarkerLabels.join(" + ")}.`
@@ -7563,7 +7557,7 @@ async function mergeSelectedSheep() {
   }
 
   const confirmed = await confirmModal({
-    title: "Merge selected sheep?",
+    title: "Merge Sheep?",
     message: `Merge sheep ${selection.first.number} and sheep ${selection.second.number} into one sheep? This is for cases where one real sheep was accidentally recorded as two entries. Later sheep will be renumbered.`,
     confirmText: "Merge Sheep",
     cancelText: "Cancel"
@@ -7578,7 +7572,7 @@ async function mergeSelectedSheep() {
 
   const assumedMessage = result.affectedPenFillEvents.length
     ? "Merged sheep. Future assumed pen refill events were marked undone so the planner can recreate them."
-    : "Merged selected sheep.";
+    : "Merged sheep.";
   refreshAfterManualSheepMerge(assumedMessage);
   autosaveState();
   return result;
@@ -8448,6 +8442,7 @@ function getCompletedRunPerformanceRows() {
 function getCompletedRunTargetPaceRows() {
   return buildCompletedRunKeyValueRows([
     ["Required average total time per sheep", getSafeText("requiredCycle")],
+    ["Required Remaining Average", getSafeText("requiredCycleRemaining")],
     ["Required 15-minute total", getSafeText("requiredQuarterTotal")],
     ["Required sheep per hour", getSafeText("requiredRate")],
     ["Required run total", getSafeText("requiredRunTotalSheep")],
@@ -9814,17 +9809,13 @@ function formatTrendFlagList(items) {
 function getTrendFlagMarkerLabels(windowRows) {
   const markers = dedupeManualMarkers(windowRows.flatMap((entry) => getConfirmedManualMarkersForEntry(entry)));
   return markers
-    .map((marker) => marker.type === MANUAL_MARKER_CUSTOM_TYPE
-      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
-      : getManualMarkerDisplayLabel(marker))
+    .map(getManualMarkerDisplayLabel)
     .filter(Boolean);
 }
 
 function getTrendFlagMarkerLabel(marker) {
   if (!marker) return "";
-  return marker.type === MANUAL_MARKER_CUSTOM_TYPE
-    ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
-    : getManualMarkerDisplayLabel(marker);
+  return getManualMarkerDisplayLabel(marker);
 }
 
 function buildTrendFlagSameMarkerTimingAverages(comparisonRows, metricKeys) {
@@ -10822,11 +10813,7 @@ function createSheepLogMarkerNoteCell(entry, plannedDelayMarkers, penFillMarkerE
 }
 
 function createSheepLogMarkerPill(marker) {
-  const label = marker?.source === "penFillEvent"
-    ? marker.label
-    : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE
-      ? `Custom: ${getManualMarkerDisplayLabel(marker)}`
-      : getManualMarkerDisplayLabel(marker));
+  const label = marker?.source === "penFillEvent" ? marker.label : getManualMarkerDisplayLabel(marker);
   if (!label) return null;
 
   const pill = document.createElement("span");
@@ -13110,6 +13097,13 @@ function updateStatsPanel() {
   setText(elements.lastShearTime, formatDurationValue(last?.shearDuration));
   setText(elements.lastSheepTime, formatDurationValue(last?.fullCycle));
   setText(elements.requiredCycle, formatSeconds(target.requiredCycle));
+  const requiredRemainingAverage = appState.runActive
+    && !target.targetAlreadyReached
+    && Number.isFinite(target.requiredCycleRemaining)
+    && target.requiredCycleRemaining > 0
+    ? formatSeconds(target.requiredCycleRemaining)
+    : "—";
+  setText(elements.requiredCycleRemaining, requiredRemainingAverage);
   setText(elements.requiredRate, target.requiredRate.toFixed(2));
   setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
@@ -15402,9 +15396,9 @@ const CONTROL_ICON_SVGS = {
     </svg>
   `,
   settings: `
-    <svg class="control-icon control-icon-settings" viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M10 6.85a3.15 3.15 0 1 1 0 6.3 3.15 3.15 0 0 1 0-6.3Z" />
-      <path d="M10 3.5v1.35M10 15.15v1.35M15.63 6.25l-1.16.68M5.53 13.07l-1.16.68M15.63 13.75l-1.16-.68M5.53 6.93l-1.16-.68" />
+    <svg class="control-icon control-icon-settings" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <path d="M12 8.4a3.6 3.6 0 1 1 0 7.2 3.6 3.6 0 0 1 0-7.2Z" />
+      <path d="M19.4 13.5c.08-.49.08-1.01 0-1.5l2.05-1.55-2-3.46-2.5 1a8.1 8.1 0 0 0-1.3-.75L15.28 4h-4.56l-.37 3.24c-.46.19-.9.44-1.3.75l-2.5-1-2 3.46L6.6 12a8.8 8.8 0 0 0 0 1.5l-2.05 1.55 2 3.46 2.5-1c.4.31.84.56 1.3.75l.37 3.24h4.56l.37-3.24c.46-.19.9-.44 1.3-.75l2.5 1 2-3.46-2.05-1.55Z" />
     </svg>
   `,
 };
