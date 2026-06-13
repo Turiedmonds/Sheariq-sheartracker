@@ -161,16 +161,18 @@ const SHEEP_STATUS = {
 const MANUAL_MARKER_TYPES = {
   drink: "Drink",
   cutter: "Cutter",
-  comb: "Comb"
+  comb: "Comb",
+  stitch: "Stitch"
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 const RUN_PACE_MARKER_DOT_STYLES = {
-  penRefill: { label: "Pen refill", color: "#db2777", priority: 1 },
-  comb: { label: MANUAL_MARKER_TYPES.comb, color: "#eab308", priority: 2 },
-  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#8b5cf6", priority: 3 },
-  drink: { label: MANUAL_MARKER_TYPES.drink, color: "#38bdf8", priority: 4 },
-  [MANUAL_MARKER_CUSTOM_TYPE]: { label: "Custom marker", color: "#64748b", priority: 5 },
-  noteOnly: { label: "Note only", color: "#cbd5e1", priority: 6 }
+  stitch: { label: MANUAL_MARKER_TYPES.stitch, color: "#f97316", priority: 1 },
+  penRefill: { label: "Pen refill", color: "#2563eb", priority: 2 },
+  comb: { label: MANUAL_MARKER_TYPES.comb, color: "#ca8a04", priority: 3 },
+  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#7c3aed", priority: 4 },
+  drink: { label: MANUAL_MARKER_TYPES.drink, color: "#0891b2", priority: 5 },
+  [MANUAL_MARKER_CUSTOM_TYPE]: { label: "Custom marker", color: "#64748b", priority: 6 },
+  noteOnly: { label: "Note only", color: "#cbd5e1", priority: 7 }
 };
 const SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY = "sheartracker.sheepLogColumnWidths.v1";
 const SHEEP_LOG_COLUMN_MIN_WIDTHS = [58, 72, 112, 112, 126, 126, 116, 220];
@@ -11018,7 +11020,10 @@ function formatRunPacePointDetail(point, requiredCycle) {
     ["Total Time", formatRunPaceGraphSeconds(point.fullCycle)]
   ];
   if (markerText) rows.push(["Markers", markerText]);
-  if (noteText) rows.push(["Note", noteText]);
+  if (noteText) {
+    const hasStitchMarker = getConfirmedManualMarkersForEntry(entry).some((marker) => marker?.type === "stitch");
+    rows.push([hasStitchMarker ? "Stitch detail" : "Note", noteText]);
+  }
   if (mergedNumbers.length) rows.push(["Merged from", mergedNumbers.join(" + ")]);
 
   const totalTimeClass = getSheepLogTimingGradeClass(point.fullCycle, requiredCycle);
@@ -11717,14 +11722,36 @@ function createSheepLogMarkerNoteEditor(entry, manualMarkers, noteText) {
   customInputWrap.append(customInputLabel, customInput);
   editor.appendChild(customInputWrap);
 
+  const noteInputWrap = document.createElement("label");
+  noteInputWrap.className = "sheep-log-marker-note-field";
+
+  const noteInputLabel = document.createElement("span");
+  noteInputLabel.dataset.role = "note-label";
+
   const noteInput = document.createElement("textarea");
   noteInput.className = "sheep-log-marker-note-input";
   noteInput.dataset.role = "note";
   noteInput.maxLength = SHEEP_NOTE_MAX_LENGTH;
   noteInput.rows = 2;
-  noteInput.placeholder = `Note/details (optional, max ${SHEEP_NOTE_MAX_LENGTH} chars)`;
   noteInput.value = noteText;
-  editor.appendChild(noteInput);
+
+  const updateNoteInputWording = () => {
+    const stitchSelected = [...markerGroup.querySelectorAll('[data-role="marker-checkbox"]')]
+      .some((checkbox) => checkbox instanceof HTMLInputElement && checkbox.value === "stitch" && checkbox.checked);
+    noteInputLabel.textContent = stitchSelected ? "Stitch location / detail" : "Note/details";
+    noteInput.placeholder = stitchSelected
+      ? `Describe where the stitch was needed (optional, max ${SHEEP_NOTE_MAX_LENGTH} chars)`
+      : `Note/details (optional, max ${SHEEP_NOTE_MAX_LENGTH} chars)`;
+  };
+  markerGroup.addEventListener("change", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.dataset.role === "marker-checkbox") {
+      updateNoteInputWording();
+    }
+  });
+  updateNoteInputWording();
+
+  noteInputWrap.append(noteInputLabel, noteInput);
+  editor.appendChild(noteInputWrap);
 
   const validation = document.createElement("div");
   validation.className = "sheep-log-marker-note-validation";

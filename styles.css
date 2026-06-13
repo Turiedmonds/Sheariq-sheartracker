@@ -1656,9 +1656,15 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-pill-pen-refill {
-  border-color: #db2777;
-  background: #fce7f3;
-  color: #9d174d;
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1e3a8a;
+}
+
+#panel-log .sheep-log-marker-pill-stitch {
+  border-color: #f97316;
+  background: #ffedd5;
+  color: #9a3412;
 }
 
 #panel-log .sheep-log-marker-pill-custom {
@@ -1856,6 +1862,15 @@ button:disabled {
 #panel-log .sheep-log-marker-custom-input {
   min-height: 1.85rem;
   padding: 0.3rem 0.5rem;
+}
+
+
+#panel-log .sheep-log-marker-note-field {
+  display: grid;
+  gap: 0.18rem;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 #panel-log .sheep-log-marker-note-input {
@@ -4347,6 +4362,15 @@ td.pace-neutral {
 .sheep-log-marker-note-popover .sheep-log-marker-custom-input {
   min-height: 1.85rem;
   padding: 0.3rem 0.5rem;
+}
+
+
+.sheep-log-marker-note-popover .sheep-log-marker-note-field {
+  display: grid;
+  gap: 0.18rem;
+  color: #475569;
+  font-size: 0.72rem;
+  font-weight: 800;
 }
 
 .sheep-log-marker-note-popover .sheep-log-marker-note-input {
