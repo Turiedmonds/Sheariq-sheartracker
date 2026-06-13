@@ -166,11 +166,11 @@ const MANUAL_MARKER_TYPES = {
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 const RUN_PACE_MARKER_DOT_STYLES = {
-  stitch: { label: MANUAL_MARKER_TYPES.stitch, color: "#f97316", priority: 1 },
-  penRefill: { label: "Pen refill", color: "#2563eb", priority: 2 },
+  stitch: { label: MANUAL_MARKER_TYPES.stitch, color: "#111827", priority: 1 },
+  penRefill: { label: "Pen refill", color: "#f9c7d8", borderColor: "#d87093", shape: "square", priority: 2 },
   comb: { label: MANUAL_MARKER_TYPES.comb, color: "#ca8a04", priority: 3 },
-  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#7c3aed", priority: 4 },
-  drink: { label: MANUAL_MARKER_TYPES.drink, color: "#0891b2", priority: 5 },
+  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#7f1d1d", priority: 4 },
+  drink: { label: MANUAL_MARKER_TYPES.drink, color: "#93c5fd", borderColor: "#3b82f6", priority: 5 },
   [MANUAL_MARKER_CUSTOM_TYPE]: { label: "Custom marker", color: "#64748b", priority: 6 },
   noteOnly: { label: "Note only", color: "#cbd5e1", priority: 7 }
 };
@@ -10893,7 +10893,11 @@ function updateRunPaceGraphLegend() {
   if (!elements.trendGraphLegend) return;
   const markerItems = Object.values(RUN_PACE_MARKER_DOT_STYLES)
     .sort((a, b) => a.priority - b.priority)
-    .map((style) => `<span><i class="run-pace-legend-dot run-pace-legend-dot-marker" style="--run-pace-marker-color: ${escapeTrendFlagHtml(style.color)}" aria-hidden="true"></i>${escapeTrendFlagHtml(style.label)}</span>`)
+    .map((style) => {
+      const shapeClass = style.shape === "square" ? " run-pace-legend-dot-square" : "";
+      const borderColor = style.borderColor || "rgba(15, 23, 42, 0.12)";
+      return `<span><i class="run-pace-legend-dot run-pace-legend-dot-marker${shapeClass}" style="--run-pace-marker-color: ${escapeTrendFlagHtml(style.color)}; --run-pace-marker-border-color: ${escapeTrendFlagHtml(borderColor)}" aria-hidden="true"></i>${escapeTrendFlagHtml(style.label)}</span>`;
+    })
     .join("");
   elements.trendGraphLegend.innerHTML = `<span><i class="run-pace-legend-dot run-pace-legend-dot-fast" aria-hidden="true"></i>Green: On or faster than target</span><span><i class="run-pace-legend-dot run-pace-legend-dot-slow" aria-hidden="true"></i>Red: Slower than target</span><span><i class="run-pace-legend-line" aria-hidden="true"></i>Target line: Required average</span><span><i class="run-pace-legend-band" aria-hidden="true"></i>Shaded: 3+ sheep in a row</span>${markerItems}`;
 }
@@ -11244,7 +11248,7 @@ function drawRunPaceGraph() {
     ctx.stroke();
   }
 
-  const normalRadius = veryDenseView ? 2.1 : (denseView ? 2.45 : (points.length > 45 ? 2.9 : 3.3));
+  const normalRadius = veryDenseView ? 3 : (denseView ? 3.35 : (points.length > 45 ? 3.8 : 4.2));
   const normalAlpha = veryDenseView ? 0.78 : (denseView ? 0.88 : 0.95);
   const hitRadius = veryDenseView ? 18 : (denseView ? 20 : 24);
   points.forEach((point) => {
@@ -11256,15 +11260,21 @@ function drawRunPaceGraph() {
     const radius = selected ? 5.7 : normalRadius;
     if (markerDotStyle) {
       ctx.fillStyle = markerDotStyle.color;
-      ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.78)" : "rgba(255, 255, 255, 0.95)");
-      ctx.lineWidth = selected ? 1.8 : (denseView ? 0.9 : 1.15);
+      ctx.strokeStyle = selected ? "#0f172a" : (markerDotStyle.borderColor || (denseView ? "rgba(255, 255, 255, 0.78)" : "rgba(255, 255, 255, 0.95)"));
+      ctx.lineWidth = selected ? 1.8 : (markerDotStyle.borderColor ? (denseView ? 0.75 : 0.95) : (denseView ? 0.9 : 1.15));
     } else {
       ctx.fillStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
       ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.92)");
       ctx.lineWidth = selected ? 2.2 : (denseView ? 0.8 : 1.1);
     }
-    ctx.beginPath();
-    ctx.arc(px, py, markerDotStyle && !selected ? radius + 0.9 : radius, 0, Math.PI * 2);
+    if (markerDotStyle?.shape === "square") {
+      const side = (selected ? radius : normalRadius) * 2;
+      ctx.beginPath();
+      ctx.rect(px - side / 2, py - side / 2, side, side);
+    } else {
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+    }
     ctx.fill();
     ctx.stroke();
     if (selected) {

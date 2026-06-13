@@ -1638,15 +1638,15 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-pill-drink {
-  border-color: #38bdf8;
-  background: #e0f2fe;
-  color: #075985;
+  border-color: #3b82f6;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 #panel-log .sheep-log-marker-pill-cutter {
-  border-color: #8b5cf6;
-  background: #ede9fe;
-  color: #5b21b6;
+  border-color: #7f1d1d;
+  background: #fee2e2;
+  color: #7f1d1d;
 }
 
 #panel-log .sheep-log-marker-pill-comb {
@@ -1656,15 +1656,15 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-pill-pen-refill {
-  border-color: #2563eb;
-  background: #dbeafe;
-  color: #1e3a8a;
+  border-color: #d87093;
+  background: #fde7ef;
+  color: #9d174d;
 }
 
 #panel-log .sheep-log-marker-pill-stitch {
-  border-color: #f97316;
-  background: #ffedd5;
-  color: #9a3412;
+  border-color: #111827;
+  background: #e5e7eb;
+  color: #111827;
 }
 
 #panel-log .sheep-log-marker-pill-custom {
@@ -2126,7 +2126,11 @@ td {
 
 #panel-trend-graph .run-pace-legend-dot-marker {
   background: var(--run-pace-marker-color, #64748b);
-  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12);
+  box-shadow: 0 0 0 2px var(--run-pace-marker-border-color, rgba(15, 23, 42, 0.12));
+}
+
+#panel-trend-graph .run-pace-legend-dot-square {
+  border-radius: 0.12rem;
 }
 
 #panel-trend-graph .run-pace-legend-line {
