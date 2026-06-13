@@ -4394,6 +4394,10 @@ const appState = {
   trendBucketMinutes: 15,
   trendBuckets: {},
   runPaceGraphView: "full",
+  runPaceGraphCustomRange: {
+    startSeconds: null,
+    endSeconds: null
+  },
   reviewBlocks: [],
   nextReviewBlockIndex: 1,
   runReviewText: "Run review will be generated when you stop a run.",
@@ -4673,6 +4677,12 @@ const elements = {
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
   runPaceGraphView: document.getElementById("runPaceGraphView"),
+  runPaceCustomRangeControls: document.getElementById("runPaceCustomRangeControls"),
+  runPaceCustomRangeStart: document.getElementById("runPaceCustomRangeStart"),
+  runPaceCustomRangeEnd: document.getElementById("runPaceCustomRangeEnd"),
+  runPaceCustomRangeApply: document.getElementById("runPaceCustomRangeApply"),
+  runPaceCustomRangeReset: document.getElementById("runPaceCustomRangeReset"),
+  runPaceCustomRangeHelp: document.getElementById("runPaceCustomRangeHelp"),
   runPaceTargetChip: document.getElementById("runPaceTargetChip"),
   runPaceGraphSummary: document.getElementById("runPaceGraphSummary"),
   runPaceGraphDetail: document.getElementById("runPaceGraphDetail"),
@@ -10418,6 +10428,91 @@ function formatRunPaceGraphSeconds(seconds) {
   return Number.isFinite(value) && value >= 0 ? formatSeconds(value) : "—";
 }
 
+function parseRunPaceRangeTime(value) {
+  const text = String(value || "").trim();
+  if (!text) return NaN;
+  const parts = text.split(":");
+  if (parts.length !== 2 && parts.length !== 3) return NaN;
+  const numbers = parts.map((part) => {
+    if (!/^\d+$/.test(part.trim())) return NaN;
+    return Number(part);
+  });
+  if (numbers.some((number) => !Number.isFinite(number))) return NaN;
+  const [hours, minutes, seconds] = parts.length === 3
+    ? numbers
+    : [0, numbers[0], numbers[1]];
+  if (minutes >= 60 || seconds >= 60) return NaN;
+  return (hours * 3600) + (minutes * 60) + seconds;
+}
+
+function formatRunPaceRangeInput(seconds) {
+  const value = Math.max(Math.floor(Number(seconds) || 0), 0);
+  const hours = Math.floor(value / 3600);
+  const minutes = Math.floor((value % 3600) / 60);
+  const secs = value % 60;
+  const pad = (part) => String(part).padStart(2, "0");
+  return `${pad(hours)}:${pad(minutes)}:${pad(secs)}`;
+}
+
+function getRunPaceGraphMaxElapsedSeconds(points = getRunPaceGraphPoints()) {
+  return Math.max(getRunPaceGraphCurrentElapsedSeconds(), ...points.map((point) => point.elapsed), 60);
+}
+
+function sanitizeRunPaceGraphCustomRange(range = appState.runPaceGraphCustomRange, points = getRunPaceGraphPoints()) {
+  const maxElapsed = getRunPaceGraphMaxElapsedSeconds(points);
+  const start = Number(range?.startSeconds);
+  const end = Number(range?.endSeconds);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+    return { startSeconds: null, endSeconds: null };
+  }
+  const startSeconds = Math.min(Math.max(start, 0), maxElapsed);
+  const endSeconds = Math.min(Math.max(end, 0), maxElapsed);
+  if (endSeconds <= startSeconds) return { startSeconds: null, endSeconds: null };
+  return { startSeconds, endSeconds };
+}
+
+function setRunPaceCustomRangeMessage(message = "") {
+  if (!elements.runPaceCustomRangeHelp) return;
+  elements.runPaceCustomRangeHelp.textContent = message || "Use run time, for example 00:15:00 to 00:25:00.";
+}
+
+function updateRunPaceCustomRangeControls() {
+  const isCustom = appState.runPaceGraphView === "custom";
+  if (elements.runPaceCustomRangeControls) elements.runPaceCustomRangeControls.hidden = !isCustom;
+  if (!isCustom) return;
+  const range = sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange);
+  appState.runPaceGraphCustomRange = range;
+  if (elements.runPaceCustomRangeStart) {
+    elements.runPaceCustomRangeStart.value = Number.isFinite(range.startSeconds) ? formatRunPaceRangeInput(range.startSeconds) : "";
+  }
+  if (elements.runPaceCustomRangeEnd) {
+    elements.runPaceCustomRangeEnd.value = Number.isFinite(range.endSeconds) ? formatRunPaceRangeInput(range.endSeconds) : "";
+  }
+  setRunPaceCustomRangeMessage();
+}
+
+function applyRunPaceCustomRangeFromInputs() {
+  const start = parseRunPaceRangeTime(elements.runPaceCustomRangeStart?.value);
+  const end = parseRunPaceRangeTime(elements.runPaceCustomRangeEnd?.value);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    setRunPaceCustomRangeMessage("Enter a valid start and end time.");
+    return;
+  }
+  if (end <= start) {
+    setRunPaceCustomRangeMessage("End time must be after start time.");
+    return;
+  }
+  const range = sanitizeRunPaceGraphCustomRange({ startSeconds: start, endSeconds: end });
+  if (!Number.isFinite(range.startSeconds) || !Number.isFinite(range.endSeconds)) {
+    setRunPaceCustomRangeMessage("End time must be after start time.");
+    return;
+  }
+  appState.runPaceGraphCustomRange = range;
+  appState.selectedRunPaceSheepId = null;
+  updateRunPaceCustomRangeControls();
+  drawRunPaceGraph();
+}
+
 function getRunPaceGraphCurrentElapsedSeconds() {
   if (appState.runActive) return Math.max(Number(getEffectiveElapsedSeconds()) || 0, 0);
   return Math.max(...(Array.isArray(appState.sheep) ? appState.sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0) : []), 0);
@@ -10446,6 +10541,13 @@ function getRunPaceGraphPoints() {
 function getRunPaceGraphWindowDomain(points = getRunPaceGraphPoints()) {
   const currentElapsed = getRunPaceGraphCurrentElapsedSeconds();
   const view = appState.runPaceGraphView || "full";
+  if (view === "custom") {
+    const range = sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange, points);
+    appState.runPaceGraphCustomRange = range;
+    if (Number.isFinite(range.startSeconds) && Number.isFinite(range.endSeconds)) {
+      return { start: range.startSeconds, end: range.endSeconds, view };
+    }
+  }
   const windowMinutes = view === "full" ? 0 : Number(view);
   if (Number.isFinite(windowMinutes) && windowMinutes > 0) {
     const windowSeconds = windowMinutes * 60;
@@ -10660,7 +10762,9 @@ function drawRunPaceGraph() {
   let message = "";
   if (!Number.isFinite(requiredCycle) || requiredCycle <= 0) message = "Set a target to show the required pace line.";
   else if (!allPoints.length) message = "Complete a sheep to start the Run Pace Graph.";
-  else if (!points.length) message = "No sheep completed in this time window.";
+  else if (!points.length) message = domain.view === "custom"
+    ? "No sheep completed in this custom range."
+    : "No sheep completed in this time window.";
   if (elements.trendGraphMessage) {
     elements.trendGraphMessage.textContent = message;
     elements.trendGraphMessage.hidden = !message;
@@ -14337,6 +14441,8 @@ function getAutosavePayload() {
       dayClockPausedSecondsFromMidnight: appState.dayClockPausedSecondsFromMidnight,
       trendBucketMinutes: appState.trendBucketMinutes,
       trendBuckets: appState.trendBuckets,
+      runPaceGraphView: appState.runPaceGraphView,
+      runPaceGraphCustomRange: sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange),
       reviewBlocks: appState.reviewBlocks,
       nextReviewBlockIndex: appState.nextReviewBlockIndex,
       runReviewText: appState.runReviewText,
@@ -15552,11 +15658,13 @@ function restoreSessionPayload(raw, options = {}) {
   if (raw.layoutEditMode === true || raw.layoutEditMode === false) {
     appState.layoutEditMode = raw.layoutEditMode;
   }
-  appState.runPaceGraphView = ["full", "5", "15", "30", "60"].includes(String(appState.runPaceGraphView))
+  appState.runPaceGraphView = ["full", "5", "15", "30", "60", "custom"].includes(String(appState.runPaceGraphView))
     ? String(appState.runPaceGraphView)
     : "full";
+  appState.runPaceGraphCustomRange = sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange);
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
   if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView;
+  updateRunPaceCustomRangeControls();
   applyPanelState();
   applyPanelSizes();
   if (appState.layoutEditMode) ensureInitialPanelLayout();
@@ -16578,6 +16686,18 @@ function bindEvents() {
     elements.runPaceGraphView.addEventListener("change", () => {
       appState.runPaceGraphView = elements.runPaceGraphView.value || "full";
       appState.selectedRunPaceSheepId = null;
+      updateRunPaceCustomRangeControls();
+      drawRunPaceGraph();
+    });
+  }
+  if (elements.runPaceCustomRangeApply) {
+    elements.runPaceCustomRangeApply.addEventListener("click", applyRunPaceCustomRangeFromInputs);
+  }
+  if (elements.runPaceCustomRangeReset) {
+    elements.runPaceCustomRangeReset.addEventListener("click", () => {
+      appState.runPaceGraphCustomRange = { startSeconds: null, endSeconds: null };
+      appState.selectedRunPaceSheepId = null;
+      updateRunPaceCustomRangeControls();
       drawRunPaceGraph();
     });
   }
@@ -17255,6 +17375,7 @@ function initialize() {
   updateSimulationRunLengthControls();
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes);
   if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView || "full";
+  updateRunPaceCustomRangeControls();
 
   if (elements.blockMinutes) {
     renderBlock(Number(elements.blockMinutes.value) || 15);
