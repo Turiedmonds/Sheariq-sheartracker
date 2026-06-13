@@ -4674,6 +4674,7 @@ const elements = {
   trendBucketSize: document.getElementById("trendBucketSize"),
   runPaceGraphView: document.getElementById("runPaceGraphView"),
   runPaceTargetChip: document.getElementById("runPaceTargetChip"),
+  runPaceGraphSummary: document.getElementById("runPaceGraphSummary"),
   runPaceGraphDetail: document.getElementById("runPaceGraphDetail"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
   trendGraphMessage: document.getElementById("trendGraphMessage"),
@@ -10529,6 +10530,36 @@ function formatRunPaceGraphStatus(entry) {
   return "Accepted";
 }
 
+function formatRunPaceGraphSummary(points, requiredCycle) {
+  const visiblePoints = Array.isArray(points) ? points : [];
+  const total = visiblePoints.length;
+  const hasTarget = Number.isFinite(requiredCycle) && requiredCycle > 0;
+  const onPaceCount = hasTarget && total ? visiblePoints.filter((point) => Number(point?.fullCycle) <= requiredCycle).length : null;
+  const slowerCount = hasTarget && total ? total - onPaceCount : null;
+  const average = (metricKey) => {
+    const values = visiblePoints
+      .map((point) => Number(point?.entry?.[metricKey]))
+      .filter(Number.isFinite);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+  };
+  const summaryItems = [
+    ["Total", String(total)],
+    ["On/faster", onPaceCount === null ? "—" : String(onPaceCount)],
+    ["Slower", slowerCount === null ? "—" : String(slowerCount)],
+    ["Avg catch", total ? formatRunPaceGraphSeconds(average("catchDuration")) : "—"],
+    ["Avg shear", total ? formatRunPaceGraphSeconds(average("shearDuration")) : "—"],
+    ["Avg total", total ? formatRunPaceGraphSeconds(average("fullCycle")) : "—"]
+  ];
+  return summaryItems
+    .map(([label, value]) => `<span><strong>${escapeTrendFlagHtml(label)}:</strong> ${escapeTrendFlagHtml(value)}</span>`)
+    .join("");
+}
+
+function updateRunPaceGraphSummary(points, requiredCycle) {
+  if (!elements.runPaceGraphSummary) return;
+  elements.runPaceGraphSummary.innerHTML = formatRunPaceGraphSummary(points, requiredCycle);
+}
+
 function formatRunPacePointDetail(point, requiredCycle) {
   if (!point) return "Tap a sheep point to see details.";
   const entry = point.entry;
@@ -10556,7 +10587,7 @@ function formatRunPacePointDetail(point, requiredCycle) {
   if (mergedNumbers.length) rows.push(["Merged from", mergedNumbers.join(" + ")]);
 
   const detailRows = rows.map(([label, value]) => `<div><strong>${escapeTrendFlagHtml(label)}:</strong> ${escapeTrendFlagHtml(value)}</div>`).join("");
-  return `<div class="run-pace-detail-title">Sheep ${escapeTrendFlagHtml(point.sheepNumber)}</div><div class="run-pace-detail-grid">${detailRows}</div>`;
+  return `<div class="run-pace-detail-title-row"><div class="run-pace-detail-title">Sheep ${escapeTrendFlagHtml(point.sheepNumber)}</div><button type="button" class="run-pace-clear-selection" data-run-pace-clear-selection="true">Clear selection</button></div><div class="run-pace-detail-grid">${detailRows}</div>`;
 }
 
 function updateRunPaceGraphDetail(point = null, requiredCycle = calculateTargetMetrics().requiredCycle) {
@@ -10564,8 +10595,15 @@ function updateRunPaceGraphDetail(point = null, requiredCycle = calculateTargetM
   elements.runPaceGraphDetail.innerHTML = formatRunPacePointDetail(point, requiredCycle);
 }
 
+function clearRunPaceGraphSelection() {
+  if (!appState.selectedRunPaceSheepId) return;
+  appState.selectedRunPaceSheepId = null;
+  updateRunPaceGraphDetail(null);
+  drawRunPaceGraph();
+}
+
 function handleRunPaceGraphPointSelection(event) {
-  if (!elements.trendGraphCanvas || !appState.trendGraphRenderPoints.length) return;
+  if (!elements.trendGraphCanvas) return;
   const canvas = elements.trendGraphCanvas;
   const rect = canvas.getBoundingClientRect();
   const source = event.changedTouches && event.changedTouches.length ? event.changedTouches[0] : event;
@@ -10585,11 +10623,15 @@ function handleRunPaceGraphPointSelection(event) {
     }
   });
 
-  if (closest && minDistSq <= 28 * 28) {
+  const hitRadius = closest?.hitRadius || 28;
+  if (closest && minDistSq <= hitRadius * hitRadius) {
     appState.selectedRunPaceSheepId = closest.sheepId;
     updateRunPaceGraphDetail(closest, closest.requiredCycle);
     drawRunPaceGraph();
+    return;
   }
+
+  clearRunPaceGraphSelection();
 }
 
 function drawRunPaceGraph() {
@@ -10612,6 +10654,7 @@ function drawRunPaceGraph() {
   const domain = getRunPaceGraphWindowDomain(allPoints);
   const points = getRunPaceGraphVisiblePoints(allPoints, domain);
   const selectedPoint = points.find((point) => point.sheepId === appState.selectedRunPaceSheepId) || null;
+  updateRunPaceGraphSummary(points, requiredCycle);
   updateRunPaceGraphDetail(selectedPoint, requiredCycle);
 
   let message = "";
@@ -10623,7 +10666,7 @@ function drawRunPaceGraph() {
     elements.trendGraphMessage.hidden = !message;
   }
 
-  const margins = { left: 54, right: 22, top: 34, bottom: 50 };
+  const margins = { left: 58, right: 26, top: 36, bottom: 54 };
   const width = Math.max(cssWidth - margins.left - margins.right, 10);
   const height = Math.max(cssHeight - margins.top - margins.bottom, 10);
   const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
@@ -10634,16 +10677,16 @@ function drawRunPaceGraph() {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
-  ctx.font = "10.5px Arial";
+  ctx.font = "600 11px Arial";
   ctx.textBaseline = "middle";
   ctx.textAlign = "right";
-  ctx.strokeStyle = "#eef2f7";
-  ctx.fillStyle = "#64748b";
+  ctx.strokeStyle = "#e5eaf1";
+  ctx.fillStyle = "#475569";
   ctx.lineWidth = 1;
   const yTicks = 4;
   for (let index = 0; index <= yTicks; index += 1) {
     const value = yDomain.min + ((yDomain.max - yDomain.min) * index / yTicks);
-    const py = y(value);
+    const py = Math.round(y(value)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(margins.left, py);
     ctx.lineTo(margins.left + width, py);
@@ -10654,27 +10697,27 @@ function drawRunPaceGraph() {
   const xTicks = getRunPaceGraphTimeTicks(domain, width);
   ctx.textBaseline = "top";
   xTicks.forEach((elapsed, index) => {
-    const px = x(elapsed);
+    const px = Math.round(x(elapsed)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(px, margins.top);
     ctx.lineTo(px, margins.top + height);
-    ctx.strokeStyle = "#f5f7fb";
+    ctx.strokeStyle = "#f1f5f9";
     ctx.stroke();
     ctx.fillStyle = "#64748b";
     ctx.textAlign = index === 0 ? "left" : (index === xTicks.length - 1 ? "right" : "center");
-    ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 9);
+    ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 11);
   });
 
-  ctx.strokeStyle = "#94a3b8";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "#64748b";
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(margins.left, margins.top);
-  ctx.lineTo(margins.left, margins.top + height);
-  ctx.lineTo(margins.left + width, margins.top + height);
+  ctx.moveTo(Math.round(margins.left) + 0.5, margins.top);
+  ctx.lineTo(Math.round(margins.left) + 0.5, margins.top + height);
+  ctx.lineTo(margins.left + width, Math.round(margins.top + height) + 0.5);
   ctx.stroke();
 
-  ctx.fillStyle = "#475569";
-  ctx.font = "11px Arial";
+  ctx.fillStyle = "#334155";
+  ctx.font = "700 11.5px Arial";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
   ctx.fillText("Seconds per sheep", margins.left, 10);
@@ -10684,8 +10727,8 @@ function drawRunPaceGraph() {
 
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
     const targetY = y(requiredCycle);
-    ctx.strokeStyle = "#d97706";
-    ctx.lineWidth = 1.4;
+    ctx.strokeStyle = "#b45309";
+    ctx.lineWidth = 1.7;
     ctx.setLineDash([6, 5]);
     ctx.beginPath();
     ctx.moveTo(margins.left, targetY);
@@ -10693,34 +10736,38 @@ function drawRunPaceGraph() {
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.fillStyle = "#92400e";
-    ctx.font = "10.5px Arial";
+    ctx.font = "700 11px Arial";
     ctx.textAlign = "right";
     ctx.textBaseline = "bottom";
     const labelY = Math.max(margins.top + 12, Math.min(targetY - 5, margins.top + height - 6));
     ctx.fillText(`Target ${formatRunPaceGraphSeconds(requiredCycle)}`, margins.left + width - 4, labelY);
   }
 
+  const denseView = points.length > 90;
+  const veryDenseView = points.length > 160;
   for (let index = 1; index < points.length; index += 1) {
     const previousPoint = points[index - 1];
     const point = points[index];
     const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
-    ctx.strokeStyle = onPace ? "rgba(22, 163, 74, 0.72)" : "rgba(220, 38, 38, 0.72)";
-    ctx.lineWidth = points.length > 80 ? 1.35 : 1.8;
+    ctx.strokeStyle = onPace ? "rgba(22, 101, 52, 0.78)" : "rgba(185, 28, 28, 0.78)";
+    ctx.lineWidth = veryDenseView ? 1.45 : (denseView ? 1.65 : 2);
     ctx.beginPath();
     ctx.moveTo(x(previousPoint.elapsed), y(previousPoint.fullCycle));
     ctx.lineTo(x(point.elapsed), y(point.fullCycle));
     ctx.stroke();
   }
 
-  const normalRadius = points.length > 120 ? 2.1 : (points.length > 60 ? 2.5 : 3);
+  const normalRadius = veryDenseView ? 1.65 : (denseView ? 2.05 : (points.length > 45 ? 2.55 : 3.1));
+  const normalAlpha = veryDenseView ? 0.7 : (denseView ? 0.82 : 0.95);
+  const hitRadius = veryDenseView ? 18 : (denseView ? 20 : 24);
   points.forEach((point) => {
     const px = x(point.elapsed);
     const py = y(point.fullCycle);
     const selected = point.sheepId === appState.selectedRunPaceSheepId;
     const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
-    ctx.fillStyle = onPace ? "#16a34a" : "#dc2626";
-    ctx.strokeStyle = selected ? "#0f172a" : "rgba(255, 255, 255, 0.92)";
-    ctx.lineWidth = selected ? 2.2 : 1.2;
+    ctx.fillStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
+    ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.92)");
+    ctx.lineWidth = selected ? 2.2 : (denseView ? 0.8 : 1.1);
     ctx.beginPath();
     ctx.arc(px, py, selected ? 5.7 : normalRadius, 0, Math.PI * 2);
     ctx.fill();
@@ -10732,7 +10779,7 @@ function drawRunPaceGraph() {
       ctx.arc(px, py, 8, 0, Math.PI * 2);
       ctx.stroke();
     }
-    appState.trendGraphRenderPoints.push({ ...point, x: px, y: py, requiredCycle });
+    appState.trendGraphRenderPoints.push({ ...point, x: px, y: py, requiredCycle, hitRadius });
   });
 }
 
@@ -16532,6 +16579,13 @@ function bindEvents() {
       appState.runPaceGraphView = elements.runPaceGraphView.value || "full";
       appState.selectedRunPaceSheepId = null;
       drawRunPaceGraph();
+    });
+  }
+  if (elements.runPaceGraphDetail) {
+    elements.runPaceGraphDetail.addEventListener("click", (event) => {
+      if (event.target instanceof Element && event.target.closest("[data-run-pace-clear-selection]")) {
+        clearRunPaceGraphSelection();
+      }
     });
   }
   if (elements.trendGraphCanvas) {
