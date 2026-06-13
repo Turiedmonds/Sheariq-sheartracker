@@ -1996,6 +1996,36 @@ td {
   font-size: 0.84rem;
 }
 
+#panel-trend-graph .run-pace-custom-range {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+#panel-trend-graph .run-pace-custom-range[hidden] {
+  display: none;
+}
+
+#panel-trend-graph .run-pace-custom-range label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #475569;
+}
+
+#panel-trend-graph .run-pace-range-input {
+  width: 5.8rem;
+  min-height: 2rem;
+  padding: 0.25rem 0.45rem;
+  font-size: 0.82rem;
+}
+
+#panel-trend-graph .run-pace-range-help {
+  flex-basis: 100%;
+  color: #64748b;
+  font-size: 0.76rem;
+}
+
 #panel-trend-graph .run-pace-target-chip {
   display: inline-flex;
   align-items: center;
