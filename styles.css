@@ -1644,21 +1644,21 @@ button:disabled {
 }
 
 #panel-log .sheep-log-marker-pill-cutter {
-  border-color: #7f1d1d;
-  background: #fee2e2;
-  color: #7f1d1d;
+  border-color: var(--sheep-log-marker-pill-border, #a16207);
+  background: var(--sheep-log-marker-pill-bg, #facc15);
+  color: #422006;
 }
 
 #panel-log .sheep-log-marker-pill-comb {
-  border-color: #eab308;
-  background: #fef9c3;
-  color: #713f12;
+  border-color: var(--sheep-log-marker-pill-border, #c2410c);
+  background: var(--sheep-log-marker-pill-bg, #f97316);
+  color: #ffffff;
 }
 
 #panel-log .sheep-log-marker-pill-pen-refill {
-  border-color: #d87093;
-  background: #fde7ef;
-  color: #9d174d;
+  border-color: var(--sheep-log-marker-pill-border, #7e22ce);
+  background: var(--sheep-log-marker-pill-bg, #a855f7);
+  color: #ffffff;
 }
 
 #panel-log .sheep-log-marker-pill-stitch {
