@@ -167,9 +167,9 @@ const MANUAL_MARKER_TYPES = {
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 const RUN_PACE_MARKER_DOT_STYLES = {
   stitch: { label: MANUAL_MARKER_TYPES.stitch, color: "#111827", priority: 1 },
-  penRefill: { label: "Pen refill", color: "#f9c7d8", borderColor: "#d87093", shape: "square", priority: 2 },
-  comb: { label: MANUAL_MARKER_TYPES.comb, color: "#ca8a04", priority: 3 },
-  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#7f1d1d", priority: 4 },
+  penRefill: { label: "Pen refill", color: "#a855f7", borderColor: "#7e22ce", shape: "square", priority: 2 },
+  comb: { label: MANUAL_MARKER_TYPES.comb, color: "#f97316", borderColor: "#c2410c", priority: 3 },
+  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#facc15", borderColor: "#a16207", priority: 4 },
   drink: { label: MANUAL_MARKER_TYPES.drink, color: "#93c5fd", borderColor: "#3b82f6", priority: 5 },
   [MANUAL_MARKER_CUSTOM_TYPE]: { label: "Custom marker", color: "#64748b", priority: 6 },
   noteOnly: { label: "Note only", color: "#cbd5e1", priority: 7 }
@@ -10889,6 +10889,13 @@ function getRunPaceGraphMarkerDotStyle(entry) {
   return styleKey ? { key: styleKey, ...RUN_PACE_MARKER_DOT_STYLES[styleKey] } : null;
 }
 
+function getMarkerDisplayStyleForMarker(marker) {
+  const styleKey = marker?.source === "penFillEvent"
+    ? "penRefill"
+    : (RUN_PACE_MARKER_DOT_STYLES[marker?.type] ? marker.type : (marker?.type ? MANUAL_MARKER_CUSTOM_TYPE : ""));
+  return styleKey ? RUN_PACE_MARKER_DOT_STYLES[styleKey] : null;
+}
+
 function updateRunPaceGraphLegend() {
   if (!elements.trendGraphLegend) return;
   const markerItems = Object.values(RUN_PACE_MARKER_DOT_STYLES)
@@ -11579,6 +11586,11 @@ function createSheepLogMarkerPill(marker) {
     ? "pen-refill"
     : (marker?.type === MANUAL_MARKER_CUSTOM_TYPE ? "custom" : marker?.type);
   pill.className = `sheep-log-marker-pill sheep-log-marker-pill-${typeClass}`;
+  const markerStyle = getMarkerDisplayStyleForMarker(marker);
+  if (markerStyle) {
+    pill.style.setProperty("--sheep-log-marker-pill-bg", markerStyle.color);
+    pill.style.setProperty("--sheep-log-marker-pill-border", markerStyle.borderColor || markerStyle.color);
+  }
   pill.textContent = label;
   pill.title = label;
   return pill;
