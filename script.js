@@ -10431,17 +10431,18 @@ function formatRunPaceGraphSeconds(seconds) {
 function parseRunPaceRangeTime(value) {
   const text = String(value || "").trim();
   if (!text) return NaN;
-  const parts = text.split(":");
-  if (parts.length !== 2 && parts.length !== 3) return NaN;
+  const parts = text.split(":").map((part) => part.trim());
+  if (parts.length < 1 || parts.length > 3) return NaN;
   const numbers = parts.map((part) => {
-    if (!/^\d+$/.test(part.trim())) return NaN;
+    if (!/^\d+$/.test(part)) return NaN;
     return Number(part);
   });
   if (numbers.some((number) => !Number.isFinite(number))) return NaN;
   const [hours, minutes, seconds] = parts.length === 3
     ? numbers
-    : [0, numbers[0], numbers[1]];
-  if (minutes >= 60 || seconds >= 60) return NaN;
+    : (parts.length === 2 ? [0, numbers[0], numbers[1]] : [0, numbers[0], 0]);
+  if (minutes >= 60 && parts.length > 1) return NaN;
+  if (seconds >= 60) return NaN;
   return (hours * 3600) + (minutes * 60) + seconds;
 }
 
@@ -10473,7 +10474,7 @@ function sanitizeRunPaceGraphCustomRange(range = appState.runPaceGraphCustomRang
 
 function setRunPaceCustomRangeMessage(message = "") {
   if (!elements.runPaceCustomRangeHelp) return;
-  elements.runPaceCustomRangeHelp.textContent = message || "Use run time, for example 00:15:00 to 00:25:00.";
+  elements.runPaceCustomRangeHelp.textContent = message || "Enter run time, e.g. 15, 15:00, or 01:10:00.";
 }
 
 function updateRunPaceCustomRangeControls() {
@@ -10603,18 +10604,52 @@ function prepareSharpCanvas(canvas, ctx, fallbackWidth = 900, fallbackHeight = 3
   return { cssWidth, cssHeight, dpr };
 }
 
-function getRunPaceGraphTickCount(width, minCount = 2, maxCount = 5) {
-  if (!Number.isFinite(width) || width <= 0) return minCount;
-  return Math.max(minCount, Math.min(maxCount, Math.floor(width / 150)));
+function getRunPaceGraphTimeTickStep(domain) {
+  const xRange = Math.max(Number(domain?.end) - Number(domain?.start), 60);
+  if (xRange <= 15 * 60) return 60;
+  if (xRange <= 30 * 60) return 5 * 60;
+  if (xRange <= 60 * 60) return 10 * 60;
+  return 0;
 }
 
 function getRunPaceGraphTimeTicks(domain, width) {
-  const xRange = Math.max(domain.end - domain.start, 60);
-  const tickCount = getRunPaceGraphTickCount(width);
-  const ticks = [];
-  for (let index = 0; index <= tickCount; index += 1) {
-    ticks.push(domain.start + (xRange * index / tickCount));
+  const start = Number(domain?.start) || 0;
+  const end = Math.max(Number(domain?.end) || 0, start + 60);
+  const fixedStep = getRunPaceGraphTimeTickStep(domain);
+  if (!fixedStep) {
+    const tickCount = Math.max(2, Math.min(6, Math.floor((Number(width) || 0) / 150)));
+    return Array.from({ length: tickCount + 1 }, (_, index) => start + ((end - start) * index / tickCount));
   }
+  const firstTick = Math.ceil(start / fixedStep) * fixedStep;
+  const ticks = [start];
+  for (let tick = firstTick; tick < end; tick += fixedStep) {
+    if (tick > start) ticks.push(tick);
+  }
+  ticks.push(end);
+  return ticks.filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 1);
+}
+
+function getRunPaceGraphLabelEvery(ticks, width) {
+  const labelWidth = 58;
+  const maxLabels = Math.max(2, Math.floor((Number(width) || 0) / labelWidth));
+  return Math.max(1, Math.ceil(ticks.length / maxLabels));
+}
+
+function getRunPaceGraphYTicks(yDomain, height) {
+  const min = Number(yDomain?.min);
+  const max = Number(yDomain?.max);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  const targetCount = Math.max(5, Math.min(8, Math.floor((Number(height) || 0) / 48)));
+  const rawStep = (max - min) / targetCount;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const niceMultiplier = [1, 2, 2.5, 5, 10].find((multiplier) => rawStep <= multiplier * magnitude) || 10;
+  const step = niceMultiplier * magnitude;
+  const ticks = [];
+  for (let tick = Math.ceil(min / step) * step; tick <= max + step * 0.5; tick += step) {
+    ticks.push(Number(tick.toFixed(6)));
+  }
+  if (!ticks.length || ticks[0] > min) ticks.unshift(min);
+  if (ticks[ticks.length - 1] < max) ticks.push(max);
   return ticks;
 }
 
@@ -10787,18 +10822,18 @@ function drawRunPaceGraph() {
   ctx.strokeStyle = "#e5eaf1";
   ctx.fillStyle = "#475569";
   ctx.lineWidth = 1;
-  const yTicks = 4;
-  for (let index = 0; index <= yTicks; index += 1) {
-    const value = yDomain.min + ((yDomain.max - yDomain.min) * index / yTicks);
+  const yTicks = getRunPaceGraphYTicks(yDomain, height);
+  yTicks.forEach((value) => {
     const py = Math.round(y(value)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(margins.left, py);
     ctx.lineTo(margins.left + width, py);
     ctx.stroke();
     ctx.fillText(value.toFixed(1), margins.left - 8, py);
-  }
+  });
 
   const xTicks = getRunPaceGraphTimeTicks(domain, width);
+  const xLabelEvery = getRunPaceGraphLabelEvery(xTicks, width);
   ctx.textBaseline = "top";
   xTicks.forEach((elapsed, index) => {
     const px = Math.round(x(elapsed)) + 0.5;
@@ -10807,9 +10842,11 @@ function drawRunPaceGraph() {
     ctx.lineTo(px, margins.top + height);
     ctx.strokeStyle = "#f1f5f9";
     ctx.stroke();
-    ctx.fillStyle = "#64748b";
-    ctx.textAlign = index === 0 ? "left" : (index === xTicks.length - 1 ? "right" : "center");
-    ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 11);
+    if (index === 0 || index === xTicks.length - 1 || index % xLabelEvery === 0) {
+      ctx.fillStyle = "#64748b";
+      ctx.textAlign = index === 0 ? "left" : (index === xTicks.length - 1 ? "right" : "center");
+      ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 11);
+    }
   });
 
   ctx.strokeStyle = "#64748b";
@@ -10839,12 +10876,6 @@ function drawRunPaceGraph() {
     ctx.lineTo(margins.left + width, targetY);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "#92400e";
-    ctx.font = "700 11px Arial";
-    ctx.textAlign = "right";
-    ctx.textBaseline = "bottom";
-    const labelY = Math.max(margins.top + 12, Math.min(targetY - 5, margins.top + height - 6));
-    ctx.fillText(`Target ${formatRunPaceGraphSeconds(requiredCycle)}`, margins.left + width - 4, labelY);
   }
 
   const denseView = points.length > 90;
@@ -14357,6 +14388,7 @@ function movePanelResize(moveEvent) {
   resize.panel.style.height = `${height}px`;
   updatePanelScale(resize.panel, item);
   updateDashboardCanvasSize();
+  if (resize.panel.id === "panel-trend-graph") drawRunPaceGraph();
 }
 
 // Explicitly mark known panel metric fields so values visually stand out from labels.
@@ -17277,6 +17309,7 @@ function bindEvents() {
     if (appState.layoutEditMode) {
       updateDashboardCanvasSize();
     }
+    drawRunPaceGraph();
     if (sheepLogMarkerNotePopoverEl) positionSheepLogMarkerNotePopover();
   });
 }
