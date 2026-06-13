@@ -2109,6 +2109,11 @@ td {
   background: #dc2626;
 }
 
+#panel-trend-graph .run-pace-legend-dot-marker {
+  background: var(--run-pace-marker-color, #64748b);
+  box-shadow: 0 0 0 2px rgba(15, 23, 42, 0.12);
+}
+
 #panel-trend-graph .run-pace-legend-line {
   width: 1.25rem;
   height: 0;
@@ -2235,8 +2240,27 @@ td {
 }
 
 
+#panel-trend-graph .run-pace-detail-row {
+  display: grid;
+  grid-template-columns: minmax(8.8rem, max-content) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: 0.65rem;
+}
+
+#panel-trend-graph .run-pace-detail-label {
+  color: #475569;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+#panel-trend-graph .run-pace-detail-label::after {
+  content: ":";
+}
+
 #panel-trend-graph .run-pace-detail-value {
+  min-width: 0;
   font-weight: 650;
+  overflow-wrap: anywhere;
 }
 
 #panel-trend-graph .run-pace-total-time-value {
@@ -2272,8 +2296,8 @@ td {
 
 #panel-trend-graph .run-pace-detail-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 0.16rem 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.18rem 0.9rem;
 }
 
 @media (max-width: 640px) {
@@ -2287,6 +2311,10 @@ td {
 
   #panel-trend-graph .run-pace-toolbar {
     align-items: stretch;
+  }
+
+  #panel-trend-graph .run-pace-detail-row {
+    grid-template-columns: minmax(7.8rem, max-content) minmax(0, 1fr);
   }
 }
 
