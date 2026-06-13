@@ -7702,6 +7702,14 @@ function applyUndoLastSheepRestorePoint(restorePoint) {
       appState.runEndTimeMs += rewindSeconds * 1000;
     }
   }
+  if (Number.isFinite(appState.officialRunEndTimeMs)) {
+    const runDurationSeconds = getCurrentRunDurationSeconds();
+    if (Number.isFinite(runDurationSeconds) && runDurationSeconds > 0) {
+      appState.officialRunEndTimeMs = Date.now() + Math.max(runDurationSeconds - restoredElapsedSeconds, 0) * 1000;
+    } else if (rewindSeconds > 0) {
+      appState.officialRunEndTimeMs += rewindSeconds * 1000;
+    }
+  }
 
   const restoredDayClockSeconds = Number(restorePoint.dayClockSecondsFromMidnight);
   if (Number.isFinite(restoredDayClockSeconds)) {
@@ -7726,6 +7734,9 @@ function rewindSimulationTimingForUndoLastSheep(rewindSeconds, previousSheep = n
 
   if (Number.isFinite(appState.runEndTimeMs)) {
     appState.runEndTimeMs += rewindMs;
+  }
+  if (Number.isFinite(appState.officialRunEndTimeMs)) {
+    appState.officialRunEndTimeMs += rewindMs;
   }
 
   if (appState.paused && Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
@@ -7806,6 +7817,9 @@ function resetCurrentSheepTiming() {
     if (Number.isFinite(appState.runEndTimeMs)) {
       appState.runEndTimeMs += abandonedElapsedMs;
     }
+    if (Number.isFinite(appState.officialRunEndTimeMs)) {
+      appState.officialRunEndTimeMs += abandonedElapsedMs;
+    }
     if (appState.paused && Number.isFinite(appState.dayClockPausedSecondsFromMidnight)) {
       const dayClockFloor = Number.isFinite(appState.dayClockStartSecondsFromMidnight)
         ? appState.dayClockStartSecondsFromMidnight
@@ -7856,8 +7870,8 @@ function handleMotorOn() {
   if (!appState.simulationMode || !appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
-  const officialScheduledRunEndTimeMs = getOfficialScheduledRunEndTimeMs();
-  if (Number.isFinite(officialScheduledRunEndTimeMs) && now >= officialScheduledRunEndTimeMs) {
+  const runEndStatus = getScheduledRunEndStatus();
+  if (runEndStatus.ended) {
     maybeHandleRunEndExpired(now);
     return;
   }
