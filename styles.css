@@ -1954,18 +1954,26 @@ td {
 #trendGraphCanvas {
   width: 100%;
   max-width: 100%;
-  height: 340px;
+  height: 100%;
+  min-height: 300px;
   border: 1px solid #d1d5db;
   background: #fff;
   touch-action: manipulation;
   display: block;
 }
 
+#panel-trend-graph.run-pace-panel {
+  display: flex;
+  flex-direction: column;
+}
+
 #panel-trend-graph .panel-body.run-pace-body {
-  max-height: 640px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 0.55rem;
 }
 
@@ -2081,7 +2089,8 @@ td {
 
 #panel-trend-graph .run-pace-canvas-wrap {
   position: relative;
-  min-height: 340px;
+  flex: 1 1 340px;
+  min-height: 300px;
 }
 
 #panel-trend-graph .run-pace-message {
@@ -2159,11 +2168,11 @@ td {
 
 @media (max-width: 640px) {
   #trendGraphCanvas {
-    height: 300px;
+    min-height: 280px;
   }
 
   #panel-trend-graph .run-pace-canvas-wrap {
-    min-height: 300px;
+    min-height: 280px;
   }
 
   #panel-trend-graph .run-pace-toolbar {
