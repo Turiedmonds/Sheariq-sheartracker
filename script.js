@@ -10699,18 +10699,71 @@ function getRunPaceGraphYTickStep(rangeSeconds, height) {
   return preferredSteps.find((step) => (plotHeight / Math.max(range / step, 1)) >= 14) || preferredSteps[preferredSteps.length - 1];
 }
 
-function getRunPaceGraphYTicks(yDomain, height) {
+function getRunPaceGraphOuterYTickStep(extraRangeSeconds) {
+  return Math.max(Number(extraRangeSeconds) || 0, 0) > 20 ? 5 : 2;
+}
+
+function addRunPaceGraphYTick(ticks, value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return;
+  const rounded = Number(number.toFixed(6));
+  if (!ticks.some((tick) => Math.abs(tick - rounded) < 0.001)) ticks.push(rounded);
+}
+
+function getRunPaceGraphYTicks(yDomain, height, requiredCycle = calculateTargetMetrics().requiredCycle) {
   const min = Number(yDomain?.min);
   const max = Number(yDomain?.max);
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  const step = getRunPaceGraphYTickStep(max - min, height);
-  const ticks = [];
-  for (let tick = Math.ceil(min / step) * step; tick <= max + step * 0.5; tick += step) {
-    ticks.push(Number(tick.toFixed(6)));
+
+  const target = Number(requiredCycle);
+  if (!Number.isFinite(target) || target <= 0) {
+    const step = getRunPaceGraphYTickStep(max - min, height);
+    const fallbackTicks = [];
+    for (let tick = Math.ceil(min / step) * step; tick <= max + step * 0.5; tick += step) {
+      fallbackTicks.push(Number(tick.toFixed(6)));
+    }
+    if (!fallbackTicks.length || fallbackTicks[0] !== min) fallbackTicks.unshift(min);
+    if (fallbackTicks[fallbackTicks.length - 1] !== max) fallbackTicks.push(max);
+    return fallbackTicks.filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 0.001);
   }
-  if (!ticks.length || ticks[0] !== min) ticks.unshift(min);
-  if (ticks[ticks.length - 1] !== max) ticks.push(max);
-  return ticks.filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 0.001);
+
+  const focusMin = Math.floor(target - 7);
+  const focusMax = Math.ceil(target + 7);
+  const ticks = [];
+  addRunPaceGraphYTick(ticks, min);
+
+  if (min < focusMin) {
+    const lowerStep = getRunPaceGraphOuterYTickStep(focusMin - min);
+    for (let tick = Math.ceil(min / lowerStep) * lowerStep; tick < Math.min(focusMin, max); tick += lowerStep) {
+      addRunPaceGraphYTick(ticks, tick);
+    }
+  }
+
+  const denseStart = Math.max(Math.ceil(min), focusMin);
+  const denseEnd = Math.min(Math.floor(max), focusMax);
+  if (denseStart <= denseEnd) {
+    for (let tick = denseStart; tick <= denseEnd; tick += 1) addRunPaceGraphYTick(ticks, tick);
+  }
+
+  if (max > focusMax) {
+    const upperStep = getRunPaceGraphOuterYTickStep(max - focusMax);
+    for (let tick = Math.ceil((focusMax + 0.001) / upperStep) * upperStep; tick < max; tick += upperStep) {
+      addRunPaceGraphYTick(ticks, tick);
+    }
+  }
+
+  addRunPaceGraphYTick(ticks, max);
+  return ticks.sort((a, b) => a - b).filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 0.001);
+}
+
+function getRunPaceGraphMinCanvasHeight(yDomain, requiredCycle) {
+  const baseHeight = 340;
+  const maxHeight = 520;
+  const ticks = getRunPaceGraphYTicks(yDomain, baseHeight, requiredCycle);
+  if (!ticks.length) return baseHeight;
+  const focusTickCount = ticks.filter((tick) => Math.abs(tick - Number(requiredCycle)) <= 7.001).length;
+  const outerTickCount = Math.max(ticks.length - focusTickCount, 0);
+  return Math.min(maxHeight, Math.max(baseHeight, 90 + focusTickCount * 18 + outerTickCount * 10));
 }
 
 function getRunPaceGraphYLabelEvery(ticks, yScale, minLabelGap = 18) {
@@ -10960,7 +11013,6 @@ function drawRunPaceGraph() {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const { cssWidth, cssHeight } = prepareSharpCanvas(canvas, ctx);
   appState.trendGraphRenderPoints = [];
 
   const { requiredCycle } = calculateTargetMetrics();
@@ -10988,10 +11040,14 @@ function drawRunPaceGraph() {
     elements.trendGraphMessage.hidden = !message;
   }
 
+  const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
+  const minCanvasHeight = getRunPaceGraphMinCanvasHeight(yDomain, requiredCycle);
+  if (canvas.style.minHeight !== `${minCanvasHeight}px`) canvas.style.minHeight = `${minCanvasHeight}px`;
+  const { cssWidth, cssHeight } = prepareSharpCanvas(canvas, ctx, 900, minCanvasHeight);
+
   const margins = { left: 58, right: 26, top: 36, bottom: 54 };
   const width = Math.max(cssWidth - margins.left - margins.right, 10);
   const height = Math.max(cssHeight - margins.top - margins.bottom, 10);
-  const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
   const xRange = Math.max(domain.end - domain.start, 60);
   const x = (elapsed) => margins.left + ((elapsed - domain.start) / xRange) * width;
   const y = (seconds) => margins.top + height - ((seconds - yDomain.min) / (yDomain.max - yDomain.min)) * height;
@@ -11019,7 +11075,7 @@ function drawRunPaceGraph() {
   ctx.strokeStyle = "#e5eaf1";
   ctx.fillStyle = "#475569";
   ctx.lineWidth = 1;
-  const yTicks = getRunPaceGraphYTicks(yDomain, height);
+  const yTicks = getRunPaceGraphYTicks(yDomain, height, requiredCycle);
   const yLabelEvery = getRunPaceGraphYLabelEvery(yTicks, y);
   yTicks.forEach((value, index) => {
     const py = Math.round(y(value)) + 0.5;
