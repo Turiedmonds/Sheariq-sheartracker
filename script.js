@@ -4398,6 +4398,10 @@ const appState = {
     startSeconds: null,
     endSeconds: null
   },
+  runPaceComparePeriods: {
+    enabled: false,
+    result: null
+  },
   reviewBlocks: [],
   nextReviewBlockIndex: 1,
   runReviewText: "Run review will be generated when you stop a run.",
@@ -4683,8 +4687,18 @@ const elements = {
   runPaceCustomRangeApply: document.getElementById("runPaceCustomRangeApply"),
   runPaceCustomRangeReset: document.getElementById("runPaceCustomRangeReset"),
   runPaceCustomRangeHelp: document.getElementById("runPaceCustomRangeHelp"),
+  runPaceCompareToggle: document.getElementById("runPaceCompareToggle"),
+  runPaceComparePanel: document.getElementById("runPaceComparePanel"),
+  runPaceCompareAStart: document.getElementById("runPaceCompareAStart"),
+  runPaceCompareAEnd: document.getElementById("runPaceCompareAEnd"),
+  runPaceCompareBStart: document.getElementById("runPaceCompareBStart"),
+  runPaceCompareBEnd: document.getElementById("runPaceCompareBEnd"),
+  runPaceCompareApply: document.getElementById("runPaceCompareApply"),
+  runPaceCompareClear: document.getElementById("runPaceCompareClear"),
+  runPaceCompareHelp: document.getElementById("runPaceCompareHelp"),
   runPaceTargetChip: document.getElementById("runPaceTargetChip"),
   runPaceGraphSummary: document.getElementById("runPaceGraphSummary"),
+  runPaceCompareSummary: document.getElementById("runPaceCompareSummary"),
   runPaceGraphDetail: document.getElementById("runPaceGraphDetail"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
   trendGraphMessage: document.getElementById("trendGraphMessage"),
@@ -10737,6 +10751,106 @@ function updateRunPaceGraphSummary(points, requiredCycle) {
   elements.runPaceGraphSummary.innerHTML = formatRunPaceGraphSummary(points, requiredCycle);
 }
 
+
+function buildRunPaceRangeSummary(points, requiredCycle, startSeconds, endSeconds) {
+  const start = Number(startSeconds);
+  const end = Number(endSeconds);
+  const rangePoints = (Array.isArray(points) ? points : []).filter((point) => {
+    const elapsed = Number(point?.elapsed);
+    return Number.isFinite(elapsed) && elapsed >= start && elapsed <= end;
+  });
+  const total = rangePoints.length;
+  const hasTarget = Number.isFinite(requiredCycle) && requiredCycle > 0;
+  const onPaceCount = hasTarget ? rangePoints.filter((point) => Number(point?.fullCycle) <= requiredCycle).length : null;
+  const slowerCount = hasTarget ? total - onPaceCount : null;
+  const average = (metricKey) => {
+    const values = rangePoints.map((point) => Number(point?.entry?.[metricKey])).filter(Number.isFinite);
+    return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
+  };
+  return {
+    total,
+    onPaceCount,
+    slowerCount,
+    avgCatch: average("catchDuration"),
+    avgShear: average("shearDuration"),
+    avgTotal: average("fullCycle")
+  };
+}
+
+function setRunPaceCompareMessage(message = "") {
+  if (!elements.runPaceCompareHelp) return;
+  elements.runPaceCompareHelp.textContent = message || "Enter run time, e.g. 15, 15:00, or 01:10:00.";
+}
+
+function updateRunPaceCompareControls() {
+  if (!appState.runPaceComparePeriods || typeof appState.runPaceComparePeriods !== "object") {
+    appState.runPaceComparePeriods = { enabled: false, result: null };
+  }
+  const enabled = appState.runPaceComparePeriods.enabled === true;
+  if (elements.runPaceComparePanel) elements.runPaceComparePanel.hidden = !enabled;
+  if (elements.runPaceCompareToggle) elements.runPaceCompareToggle.setAttribute("aria-expanded", enabled ? "true" : "false");
+  if (!enabled) setRunPaceCompareSummary(null);
+}
+
+function formatRunPaceCompareDifference(periodBValue, periodAValue) {
+  const b = Number(periodBValue);
+  const a = Number(periodAValue);
+  if (!Number.isFinite(b) || !Number.isFinite(a)) return "—";
+  const delta = b - a;
+  if (Math.abs(delta) < 0.0005) return `${formatRunPaceGraphSeconds(0)} same`;
+  return `${formatRunPaceGraphSeconds(Math.abs(delta))} ${delta < 0 ? "faster" : "slower"}`;
+}
+
+function setRunPaceCompareSummary(result) {
+  if (!elements.runPaceCompareSummary) return;
+  if (!result) {
+    elements.runPaceCompareSummary.hidden = true;
+    elements.runPaceCompareSummary.innerHTML = "";
+    return;
+  }
+  const formatCount = (value) => value === null ? "—" : String(value);
+  const rows = [
+    ["Total Sheep", String(result.periodA.total), String(result.periodB.total), "—"],
+    ["On/faster", formatCount(result.periodA.onPaceCount), formatCount(result.periodB.onPaceCount), "—"],
+    ["Slower", formatCount(result.periodA.slowerCount), formatCount(result.periodB.slowerCount), "—"],
+    ["Avg catch", formatRunPaceGraphSeconds(result.periodA.avgCatch), formatRunPaceGraphSeconds(result.periodB.avgCatch), formatRunPaceCompareDifference(result.periodB.avgCatch, result.periodA.avgCatch)],
+    ["Avg shear", formatRunPaceGraphSeconds(result.periodA.avgShear), formatRunPaceGraphSeconds(result.periodB.avgShear), formatRunPaceCompareDifference(result.periodB.avgShear, result.periodA.avgShear)],
+    ["Avg total", formatRunPaceGraphSeconds(result.periodA.avgTotal), formatRunPaceGraphSeconds(result.periodB.avgTotal), formatRunPaceCompareDifference(result.periodB.avgTotal, result.periodA.avgTotal)]
+  ];
+  const body = rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeTrendFlagHtml(cell)}</td>`).join("")}</tr>`).join("");
+  const notes = [];
+  if (result.periodA.total === 0) notes.push("No sheep found in Period A.");
+  if (result.periodB.total === 0) notes.push("No sheep found in Period B.");
+  elements.runPaceCompareSummary.hidden = false;
+  elements.runPaceCompareSummary.innerHTML = `<table><thead><tr><th></th><th>Period A</th><th>Period B</th><th>Difference</th></tr></thead><tbody>${body}</tbody></table>${notes.length ? `<p class="run-pace-compare-note">${escapeTrendFlagHtml(notes.join(" "))}</p>` : ""}`;
+}
+
+function applyRunPaceCompareFromInputs() {
+  const aStart = parseRunPaceRangeTime(elements.runPaceCompareAStart?.value);
+  const aEnd = parseRunPaceRangeTime(elements.runPaceCompareAEnd?.value);
+  const bStart = parseRunPaceRangeTime(elements.runPaceCompareBStart?.value);
+  const bEnd = parseRunPaceRangeTime(elements.runPaceCompareBEnd?.value);
+  if (![aStart, aEnd, bStart, bEnd].every(Number.isFinite)) {
+    setRunPaceCompareMessage("Enter valid start and end times for both periods.");
+    return;
+  }
+  if (aEnd <= aStart || bEnd <= bStart) {
+    setRunPaceCompareMessage("Each period end time must be after its start time.");
+    return;
+  }
+  const { requiredCycle } = calculateTargetMetrics();
+  const points = getRunPaceGraphPoints();
+  const result = {
+    periodA: buildRunPaceRangeSummary(points, requiredCycle, aStart, aEnd),
+    periodB: buildRunPaceRangeSummary(points, requiredCycle, bStart, bEnd)
+  };
+  appState.runPaceComparePeriods.result = result;
+  setRunPaceCompareSummary(result);
+  if (result.periodA.total === 0) setRunPaceCompareMessage("No sheep found in Period A.");
+  else if (result.periodB.total === 0) setRunPaceCompareMessage("No sheep found in Period B.");
+  else setRunPaceCompareMessage();
+}
+
 function formatRunPacePointDetail(point, requiredCycle) {
   if (!point) return "Tap a sheep point to see details.";
   const entry = point.entry;
@@ -15766,9 +15880,11 @@ function restoreSessionPayload(raw, options = {}) {
     ? String(appState.runPaceGraphView)
     : "full";
   appState.runPaceGraphCustomRange = sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange);
+  appState.runPaceComparePeriods = { enabled: false, result: null };
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
   if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView;
   updateRunPaceCustomRangeControls();
+  updateRunPaceCompareControls();
   applyPanelState();
   applyPanelSizes();
   if (appState.layoutEditMode) ensureInitialPanelLayout();
@@ -16805,6 +16921,28 @@ function bindEvents() {
       drawRunPaceGraph();
     });
   }
+  if (elements.runPaceCompareToggle) {
+    elements.runPaceCompareToggle.addEventListener("click", () => {
+      appState.runPaceComparePeriods.enabled = appState.runPaceComparePeriods?.enabled !== true;
+      updateRunPaceCompareControls();
+    });
+  }
+  if (elements.runPaceCompareApply) {
+    elements.runPaceCompareApply.addEventListener("click", applyRunPaceCompareFromInputs);
+  }
+  if (elements.runPaceCompareClear) {
+    elements.runPaceCompareClear.addEventListener("click", () => {
+      appState.runPaceComparePeriods.result = null;
+      [
+        elements.runPaceCompareAStart,
+        elements.runPaceCompareAEnd,
+        elements.runPaceCompareBStart,
+        elements.runPaceCompareBEnd
+      ].forEach((input) => { if (input) input.value = ""; });
+      setRunPaceCompareMessage();
+      setRunPaceCompareSummary(null);
+    });
+  }
   if (elements.runPaceGraphDetail) {
     elements.runPaceGraphDetail.addEventListener("click", (event) => {
       if (event.target instanceof Element && event.target.closest("[data-run-pace-clear-selection]")) {
@@ -17480,6 +17618,7 @@ function initialize() {
   updateSimulationRunLengthControls();
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes);
   if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView || "full";
+  updateRunPaceCompareControls();
   updateRunPaceCustomRangeControls();
 
   if (elements.blockMinutes) {

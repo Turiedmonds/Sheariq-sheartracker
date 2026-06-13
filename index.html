@@ -889,7 +889,27 @@
             <button id="runPaceCustomRangeReset" class="secondary-btn compact-btn" type="button">Reset</button>
             <span id="runPaceCustomRangeHelp" class="run-pace-range-help">Enter run time, e.g. 15, 15:00, or 01:10:00.</span>
           </div>
+          <button id="runPaceCompareToggle" class="secondary-btn compact-btn" type="button" aria-expanded="false">Compare periods</button>
           <span id="runPaceTargetChip" class="run-pace-target-chip">Target: —</span>
+        </div>
+        <div id="runPaceComparePanel" class="run-pace-compare-panel" hidden>
+          <div class="run-pace-compare-period" aria-label="Period A">
+            <strong>Period A</strong>
+            <label for="runPaceCompareAStart">From</label>
+            <input id="runPaceCompareAStart" class="run-pace-range-input" type="text" inputmode="numeric" placeholder="0" autocomplete="off">
+            <label for="runPaceCompareAEnd">To</label>
+            <input id="runPaceCompareAEnd" class="run-pace-range-input" type="text" inputmode="numeric" placeholder="15" autocomplete="off">
+          </div>
+          <div class="run-pace-compare-period" aria-label="Period B">
+            <strong>Period B</strong>
+            <label for="runPaceCompareBStart">From</label>
+            <input id="runPaceCompareBStart" class="run-pace-range-input" type="text" inputmode="numeric" placeholder="60" autocomplete="off">
+            <label for="runPaceCompareBEnd">To</label>
+            <input id="runPaceCompareBEnd" class="run-pace-range-input" type="text" inputmode="numeric" placeholder="75" autocomplete="off">
+          </div>
+          <button id="runPaceCompareApply" class="secondary-btn compact-btn" type="button">Compare</button>
+          <button id="runPaceCompareClear" class="secondary-btn compact-btn" type="button">Clear comparison</button>
+          <span id="runPaceCompareHelp" class="run-pace-range-help">Enter run time, e.g. 15, 15:00, or 01:10:00.</span>
         </div>
         <div id="trendGraphLegend" class="run-pace-legend" aria-live="polite">
           <span><i class="run-pace-legend-dot run-pace-legend-dot-fast" aria-hidden="true"></i>Green: On or faster than target</span>
@@ -909,6 +929,7 @@
           <span><strong>Avg shear:</strong> —</span>
           <span><strong>Avg total:</strong> —</span>
         </div>
+        <div id="runPaceCompareSummary" class="run-pace-compare-summary" aria-live="polite" hidden></div>
         <div id="runPaceGraphDetail" class="run-pace-detail" aria-live="polite">Tap a sheep point to see details.</div>
       </div>
     </section>
