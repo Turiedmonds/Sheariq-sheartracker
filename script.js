@@ -10618,16 +10618,17 @@ function getRunPaceGraphYDomain(points, requiredCycle) {
   let min = Math.min(...values);
   let max = Math.max(...values);
   if (min === max) {
-    const spread = Math.max(min * 0.15, 5);
+    const spread = Math.max(min * 0.05, 1);
     min -= spread;
     max += spread;
   } else {
-    const padding = Math.max((max - min) * 0.18, 2);
+    const padding = Math.max((max - min) * 0.06, 1);
     min -= padding;
     max += padding;
   }
-  min = Math.max(0, min);
-  if (max <= min) max = min + 10;
+  min = Math.max(0, Math.floor(min));
+  max = Math.ceil(max);
+  if (max <= min) max = min + 2;
   return { min, max };
 }
 
@@ -10689,22 +10690,50 @@ function shouldDrawRunPaceGraphXLabel(labelBounds, previousLabelBounds, leftLimi
   return labelBounds.left - previousLabelBounds.right >= 6;
 }
 
+function getRunPaceGraphYTickStep(rangeSeconds, height) {
+  const range = Math.max(Number(rangeSeconds) || 0, 1);
+  const plotHeight = Math.max(Number(height) || 0, 1);
+  const preferredSteps = range <= 20
+    ? [1, 2, 5, 10]
+    : (range <= 40 ? [2, 5, 10] : (range <= 80 ? [5, 10] : [10, 20]));
+  return preferredSteps.find((step) => (plotHeight / Math.max(range / step, 1)) >= 14) || preferredSteps[preferredSteps.length - 1];
+}
+
 function getRunPaceGraphYTicks(yDomain, height) {
   const min = Number(yDomain?.min);
   const max = Number(yDomain?.max);
   if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  const targetCount = Math.max(5, Math.min(8, Math.floor((Number(height) || 0) / 48)));
-  const rawStep = (max - min) / targetCount;
-  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
-  const niceMultiplier = [1, 2, 2.5, 5, 10].find((multiplier) => rawStep <= multiplier * magnitude) || 10;
-  const step = niceMultiplier * magnitude;
+  const step = getRunPaceGraphYTickStep(max - min, height);
   const ticks = [];
   for (let tick = Math.ceil(min / step) * step; tick <= max + step * 0.5; tick += step) {
     ticks.push(Number(tick.toFixed(6)));
   }
-  if (!ticks.length || ticks[0] > min) ticks.unshift(min);
-  if (ticks[ticks.length - 1] < max) ticks.push(max);
-  return ticks;
+  if (!ticks.length || ticks[0] !== min) ticks.unshift(min);
+  if (ticks[ticks.length - 1] !== max) ticks.push(max);
+  return ticks.filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 0.001);
+}
+
+function getRunPaceGraphYLabelEvery(ticks, yScale, minLabelGap = 18) {
+  const safeTicks = Array.isArray(ticks) ? ticks : [];
+  if (safeTicks.length <= 2 || typeof yScale !== "function") return 1;
+  for (let every = 1; every <= safeTicks.length; every += 1) {
+    let previousY = null;
+    let hasCollision = false;
+    safeTicks.forEach((tick, index) => {
+      if (index !== 0 && index !== safeTicks.length - 1 && index % every !== 0) return;
+      const py = yScale(tick);
+      if (previousY !== null && Math.abs(py - previousY) < minLabelGap) hasCollision = true;
+      previousY = py;
+    });
+    if (!hasCollision) return every;
+  }
+  return safeTicks.length;
+}
+
+function formatRunPaceGraphYAxisLabel(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return Math.abs(number - Math.round(number)) < 0.001 ? String(Math.round(number)) : number.toFixed(1);
 }
 
 function formatRunPaceGraphClock(point) {
@@ -10991,13 +11020,17 @@ function drawRunPaceGraph() {
   ctx.fillStyle = "#475569";
   ctx.lineWidth = 1;
   const yTicks = getRunPaceGraphYTicks(yDomain, height);
-  yTicks.forEach((value) => {
+  const yLabelEvery = getRunPaceGraphYLabelEvery(yTicks, y);
+  yTicks.forEach((value, index) => {
     const py = Math.round(y(value)) + 0.5;
     ctx.beginPath();
     ctx.moveTo(margins.left, py);
     ctx.lineTo(margins.left + width, py);
     ctx.stroke();
-    ctx.fillText(value.toFixed(1), margins.left - 8, py);
+    const isEdgeTick = index === 0 || index === yTicks.length - 1;
+    if (isEdgeTick || index % yLabelEvery === 0) {
+      ctx.fillText(formatRunPaceGraphYAxisLabel(value), margins.left - 8, py);
+    }
   });
 
   const xTicks = getRunPaceGraphTimeTicks(domain, width);
