@@ -10972,7 +10972,7 @@ function formatRunPacePointDetail(point, requiredCycle) {
     ["Time of Day", formatRunPaceGraphClock(point)],
     ["Run time", formatRunPaceGraphElapsedTime(point.elapsed)],
     ["Target", Number.isFinite(requiredCycle) && requiredCycle > 0 ? formatRunPaceGraphSeconds(requiredCycle) : "—"],
-    ["Difference", differenceText],
+    ["Difference vs Target", differenceText],
     ["Catch Duration", formatRunPaceGraphSeconds(Number(entry?.catchDuration))],
     ["Shear Duration", formatRunPaceGraphSeconds(Number(entry?.shearDuration))],
     ["Total Time", formatRunPaceGraphSeconds(point.fullCycle)]
@@ -10982,7 +10982,15 @@ function formatRunPacePointDetail(point, requiredCycle) {
   rows.push(["Status", formatRunPaceGraphStatus(entry)]);
   if (mergedNumbers.length) rows.push(["Merged from", mergedNumbers.join(" + ")]);
 
-  const detailRows = rows.map(([label, value]) => `<div><strong>${escapeTrendFlagHtml(label)}:</strong> ${escapeTrendFlagHtml(value)}</div>`).join("");
+  const totalTimeClass = getSheepLogTimingGradeClass(point.fullCycle, requiredCycle);
+  const detailRows = rows.map(([label, value]) => {
+    const safeLabel = escapeTrendFlagHtml(label);
+    const safeValue = escapeTrendFlagHtml(value);
+    const valueHtml = label === "Total Time"
+      ? `<span class="run-pace-detail-value run-pace-total-time-value ${escapeTrendFlagHtml(totalTimeClass)}">${safeValue}</span>`
+      : `<span class="run-pace-detail-value">${safeValue}</span>`;
+    return `<div><strong>${safeLabel}:</strong> ${valueHtml}</div>`;
+  }).join("");
   return `<div class="run-pace-detail-title-row"><div class="run-pace-detail-title">Sheep ${escapeTrendFlagHtml(point.sheepNumber)}</div><button type="button" class="run-pace-clear-selection" data-run-pace-clear-selection="true">Clear selection</button></div><div class="run-pace-detail-grid">${detailRows}</div>`;
 }
 
@@ -11162,7 +11170,7 @@ function drawRunPaceGraph() {
   ctx.fillText("Seconds per sheep", margins.left, 10);
   ctx.textAlign = "center";
   ctx.textBaseline = "bottom";
-  ctx.fillText("Run time", margins.left + width / 2, cssHeight - 6);
+  ctx.fillText("Run time (minutes:seconds)", margins.left + width / 2, cssHeight - 6);
 
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
     const targetY = y(requiredCycle);
