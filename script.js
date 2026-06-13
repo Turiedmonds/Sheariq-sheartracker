@@ -10690,44 +10690,30 @@ function shouldDrawRunPaceGraphXLabel(labelBounds, previousLabelBounds, leftLimi
   return labelBounds.left - previousLabelBounds.right >= 6;
 }
 
-function getRunPaceGraphYTickStep(rangeSeconds, height) {
-  const range = Math.max(Number(rangeSeconds) || 0, 1);
-  const plotHeight = Math.max(Number(height) || 0, 1);
-  const preferredSteps = range <= 20
-    ? [1, 2, 5, 10]
-    : (range <= 40 ? [2, 5, 10] : (range <= 80 ? [5, 10] : [10, 20]));
-  return preferredSteps.find((step) => (plotHeight / Math.max(range / step, 1)) >= 14) || preferredSteps[preferredSteps.length - 1];
-}
+const RUN_PACE_GRAPH_MIN_HEIGHT = 340;
+const RUN_PACE_GRAPH_Y_TICK_LABEL_PX = 18;
 
-function getRunPaceGraphYTicks(yDomain, height) {
-  const min = Number(yDomain?.min);
-  const max = Number(yDomain?.max);
-  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
-  const step = getRunPaceGraphYTickStep(max - min, height);
+function getRunPaceGraphYTicks(yDomain) {
+  const min = Math.ceil(Number(yDomain?.min));
+  const max = Math.floor(Number(yDomain?.max));
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max < min) return [];
   const ticks = [];
-  for (let tick = Math.ceil(min / step) * step; tick <= max + step * 0.5; tick += step) {
-    ticks.push(Number(tick.toFixed(6)));
+  for (let tick = min; tick <= max; tick += 1) {
+    ticks.push(tick);
   }
-  if (!ticks.length || ticks[0] !== min) ticks.unshift(min);
-  if (ticks[ticks.length - 1] !== max) ticks.push(max);
-  return ticks.filter((tick, index, allTicks) => index === 0 || Math.abs(tick - allTicks[index - 1]) >= 0.001);
+  return ticks;
 }
 
-function getRunPaceGraphYLabelEvery(ticks, yScale, minLabelGap = 18) {
-  const safeTicks = Array.isArray(ticks) ? ticks : [];
-  if (safeTicks.length <= 2 || typeof yScale !== "function") return 1;
-  for (let every = 1; every <= safeTicks.length; every += 1) {
-    let previousY = null;
-    let hasCollision = false;
-    safeTicks.forEach((tick, index) => {
-      if (index !== 0 && index !== safeTicks.length - 1 && index % every !== 0) return;
-      const py = yScale(tick);
-      if (previousY !== null && Math.abs(py - previousY) < minLabelGap) hasCollision = true;
-      previousY = py;
-    });
-    if (!hasCollision) return every;
-  }
-  return safeTicks.length;
+function getRunPaceGraphYLabelEvery() {
+  return 1;
+}
+
+function getRunPaceGraphMinCanvasHeight(yDomain, margins) {
+  const min = Math.ceil(Number(yDomain?.min));
+  const max = Math.floor(Number(yDomain?.max));
+  const labelCount = Number.isFinite(min) && Number.isFinite(max) && max >= min ? max - min + 1 : 0;
+  const plotHeight = Math.max(labelCount - 1, 1) * RUN_PACE_GRAPH_Y_TICK_LABEL_PX;
+  return Math.max(RUN_PACE_GRAPH_MIN_HEIGHT, Math.ceil(plotHeight + margins.top + margins.bottom));
 }
 
 function formatRunPaceGraphYAxisLabel(value) {
@@ -10960,7 +10946,6 @@ function drawRunPaceGraph() {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const { cssWidth, cssHeight } = prepareSharpCanvas(canvas, ctx);
   appState.trendGraphRenderPoints = [];
 
   const { requiredCycle } = calculateTargetMetrics();
@@ -10989,9 +10974,15 @@ function drawRunPaceGraph() {
   }
 
   const margins = { left: 58, right: 26, top: 36, bottom: 54 };
+  const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
+  const minCanvasHeight = getRunPaceGraphMinCanvasHeight(yDomain, margins);
+  canvas.style.minHeight = `${minCanvasHeight}px`;
+  canvas.style.height = `${minCanvasHeight}px`;
+  if (canvas.parentElement) canvas.parentElement.style.minHeight = `${minCanvasHeight}px`;
+
+  const { cssWidth, cssHeight } = prepareSharpCanvas(canvas, ctx, 900, minCanvasHeight);
   const width = Math.max(cssWidth - margins.left - margins.right, 10);
   const height = Math.max(cssHeight - margins.top - margins.bottom, 10);
-  const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
   const xRange = Math.max(domain.end - domain.start, 60);
   const x = (elapsed) => margins.left + ((elapsed - domain.start) / xRange) * width;
   const y = (seconds) => margins.top + height - ((seconds - yDomain.min) / (yDomain.max - yDomain.min)) * height;
@@ -11019,8 +11010,8 @@ function drawRunPaceGraph() {
   ctx.strokeStyle = "#e5eaf1";
   ctx.fillStyle = "#475569";
   ctx.lineWidth = 1;
-  const yTicks = getRunPaceGraphYTicks(yDomain, height);
-  const yLabelEvery = getRunPaceGraphYLabelEvery(yTicks, y);
+  const yTicks = getRunPaceGraphYTicks(yDomain);
+  const yLabelEvery = getRunPaceGraphYLabelEvery();
   yTicks.forEach((value, index) => {
     const py = Math.round(y(value)) + 0.5;
     ctx.beginPath();
@@ -11057,13 +11048,15 @@ function drawRunPaceGraph() {
         Math.min(xLabelRightLimit - labelWidth / 2, px)
       );
       const labelBounds = { left: labelX - labelWidth / 2, right: labelX + labelWidth / 2 };
-      const isRequiredEdgeLabel = index === 0 || index === xTicks.length - 1;
-      const canDrawLabel = isRequiredEdgeLabel
-        || shouldDrawRunPaceGraphXLabel(labelBounds, previousXLabelBounds, xLabelLeftLimit, xLabelRightLimit);
+      const duplicatesPreviousLabel = previousXLabelBounds?.label === label
+        && Math.abs(previousXLabelBounds.left - labelBounds.left) < 1
+        && Math.abs(previousXLabelBounds.right - labelBounds.right) < 1;
+      const canDrawLabel = !duplicatesPreviousLabel
+        && shouldDrawRunPaceGraphXLabel(labelBounds, previousXLabelBounds, xLabelLeftLimit, xLabelRightLimit);
       if (canDrawLabel) {
         ctx.textAlign = "center";
         ctx.fillText(label, labelX, xLabelTop);
-        previousXLabelBounds = labelBounds;
+        previousXLabelBounds = { ...labelBounds, label };
       }
     }
   });
