@@ -2087,6 +2087,14 @@ td {
   display: inline-block;
 }
 
+#panel-trend-graph .run-pace-legend-band {
+  width: 1.25rem;
+  height: 0.58rem;
+  border-radius: 0.18rem;
+  background: linear-gradient(90deg, rgba(22, 163, 74, 0.14), rgba(220, 38, 38, 0.14));
+  display: inline-block;
+}
+
 #panel-trend-graph .run-pace-canvas-wrap {
   position: relative;
   flex: 1 1 340px;

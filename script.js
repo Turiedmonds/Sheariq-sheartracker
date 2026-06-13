@@ -10564,6 +10564,39 @@ function getRunPaceGraphVisiblePoints(points, domain) {
   return points.filter((point) => point.elapsed >= domain.start && point.elapsed <= domain.end);
 }
 
+function getRunPaceGraphPaceStretches(points, requiredCycle, minLength = 3) {
+  const visiblePoints = Array.isArray(points) ? points : [];
+  const requiredSeconds = Number(requiredCycle);
+  const requiredCount = Math.max(1, Number(minLength) || 3);
+  if (!Number.isFinite(requiredSeconds) || requiredSeconds <= 0 || visiblePoints.length < requiredCount) return [];
+
+  const stretches = [];
+  let current = null;
+  const finishStretch = () => {
+    if (current && current.count >= requiredCount) stretches.push({ ...current });
+    current = null;
+  };
+
+  visiblePoints.forEach((point) => {
+    const fullCycle = Number(point?.fullCycle);
+    const elapsed = Number(point?.elapsed);
+    if (!Number.isFinite(fullCycle) || !Number.isFinite(elapsed)) {
+      finishStretch();
+      return;
+    }
+    const type = fullCycle <= requiredSeconds ? "onPace" : "slower";
+    if (!current || current.type !== type) {
+      finishStretch();
+      current = { type, startElapsed: elapsed, endElapsed: elapsed, count: 1 };
+      return;
+    }
+    current.endElapsed = elapsed;
+    current.count += 1;
+  });
+  finishStretch();
+  return stretches;
+}
+
 function getRunPaceGraphYDomain(points, requiredCycle) {
   const values = points.map((point) => point.fullCycle).filter(Number.isFinite);
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) values.push(requiredCycle);
@@ -10633,6 +10666,13 @@ function getRunPaceGraphLabelEvery(ticks, width) {
   const labelWidth = 58;
   const maxLabels = Math.max(2, Math.floor((Number(width) || 0) / labelWidth));
   return Math.max(1, Math.ceil(ticks.length / maxLabels));
+}
+
+function shouldDrawRunPaceGraphXLabel(labelBounds, previousLabelBounds, leftLimit, rightLimit) {
+  if (!labelBounds) return false;
+  if (labelBounds.right < leftLimit || labelBounds.left > rightLimit) return false;
+  if (!previousLabelBounds) return true;
+  return labelBounds.left - previousLabelBounds.right >= 6;
 }
 
 function getRunPaceGraphYTicks(yDomain, height) {
@@ -10816,6 +10856,20 @@ function drawRunPaceGraph() {
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
 
+  const paceStretches = getRunPaceGraphPaceStretches(points, requiredCycle);
+  paceStretches.forEach((stretch) => {
+    const startElapsed = Math.max(Number(stretch.startElapsed), domain.start);
+    const endElapsed = Math.min(Number(stretch.endElapsed), domain.end);
+    if (!Number.isFinite(startElapsed) || !Number.isFinite(endElapsed) || endElapsed < startElapsed) return;
+    const startX = Math.max(margins.left, Math.min(margins.left + width, x(startElapsed)));
+    const endX = Math.max(margins.left, Math.min(margins.left + width, x(endElapsed)));
+    const bandWidth = Math.max(endX - startX, 1);
+    ctx.fillStyle = stretch.type === "onPace"
+      ? "rgba(22, 163, 74, 0.06)"
+      : "rgba(220, 38, 38, 0.06)";
+    ctx.fillRect(startX, margins.top, bandWidth, height);
+  });
+
   ctx.font = "600 11px Arial";
   ctx.textBaseline = "middle";
   ctx.textAlign = "right";
@@ -10835,6 +10889,11 @@ function drawRunPaceGraph() {
   const xTicks = getRunPaceGraphTimeTicks(domain, width);
   const xLabelEvery = getRunPaceGraphLabelEvery(xTicks, width);
   ctx.textBaseline = "top";
+  ctx.font = "600 11px Arial";
+  const xLabelTop = margins.top + height + 11;
+  const xLabelLeftLimit = margins.left;
+  const xLabelRightLimit = margins.left + width;
+  let previousXLabelBounds = null;
   xTicks.forEach((elapsed, index) => {
     const px = Math.round(x(elapsed)) + 0.5;
     ctx.beginPath();
@@ -10844,8 +10903,21 @@ function drawRunPaceGraph() {
     ctx.stroke();
     if (index === 0 || index === xTicks.length - 1 || index % xLabelEvery === 0) {
       ctx.fillStyle = "#64748b";
-      ctx.textAlign = index === 0 ? "left" : (index === xTicks.length - 1 ? "right" : "center");
-      ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 11);
+      const label = formatCountdown(elapsed);
+      const labelWidth = ctx.measureText(label).width;
+      const labelX = Math.max(
+        xLabelLeftLimit + labelWidth / 2,
+        Math.min(xLabelRightLimit - labelWidth / 2, px)
+      );
+      const labelBounds = { left: labelX - labelWidth / 2, right: labelX + labelWidth / 2 };
+      const isRequiredEdgeLabel = index === 0 || index === xTicks.length - 1;
+      const canDrawLabel = isRequiredEdgeLabel
+        || shouldDrawRunPaceGraphXLabel(labelBounds, previousXLabelBounds, xLabelLeftLimit, xLabelRightLimit);
+      if (canDrawLabel) {
+        ctx.textAlign = "center";
+        ctx.fillText(label, labelX, xLabelTop);
+        previousXLabelBounds = labelBounds;
+      }
     }
   });
 
