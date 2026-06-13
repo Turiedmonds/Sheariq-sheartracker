@@ -10413,9 +10413,9 @@ function updateTrendFlags() {
   elements.trendFlags.innerHTML = cards.join("");
 }
 
-function formatRunPaceGraphSeconds(seconds, digits = 1) {
+function formatRunPaceGraphSeconds(seconds) {
   const value = Number(seconds);
-  return Number.isFinite(value) && value >= 0 ? `${value.toFixed(digits)}s` : "—";
+  return Number.isFinite(value) && value >= 0 ? formatSeconds(value) : "—";
 }
 
 function getRunPaceGraphCurrentElapsedSeconds() {
@@ -10543,7 +10543,7 @@ function formatRunPaceGraphSummary(points, requiredCycle) {
     return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : NaN;
   };
   const summaryItems = [
-    ["Total", String(total)],
+    ["Total Sheep", String(total)],
     ["On/faster", onPaceCount === null ? "—" : String(onPaceCount)],
     ["Slower", slowerCount === null ? "—" : String(slowerCount)],
     ["Avg catch", total ? formatRunPaceGraphSeconds(average("catchDuration")) : "—"],
@@ -10565,9 +10565,9 @@ function formatRunPacePointDetail(point, requiredCycle) {
   const entry = point.entry;
   const delta = point.fullCycle - requiredCycle;
   const differenceText = Number.isFinite(requiredCycle) && requiredCycle > 0
-    ? (Math.abs(delta) <= 0.05
-      ? "0.0s on target"
-      : `${Math.abs(delta).toFixed(1)}s ${delta > 0 ? "slower" : "faster"}`)
+    ? (Math.abs(delta) < 0.0005
+      ? `${formatRunPaceGraphSeconds(0)} on target`
+      : `${formatRunPaceGraphSeconds(Math.abs(delta))} ${delta > 0 ? "slower" : "faster"}`)
     : "—";
   const markerText = getSheepLogDisplayMarkersLabel(getSheepLogDisplayMarkersForEntry(entry));
   const noteText = normalizeSheepNote(entry?.note);
@@ -10757,8 +10757,8 @@ function drawRunPaceGraph() {
     ctx.stroke();
   }
 
-  const normalRadius = veryDenseView ? 1.65 : (denseView ? 2.05 : (points.length > 45 ? 2.55 : 3.1));
-  const normalAlpha = veryDenseView ? 0.7 : (denseView ? 0.82 : 0.95);
+  const normalRadius = veryDenseView ? 2.1 : (denseView ? 2.45 : (points.length > 45 ? 2.9 : 3.3));
+  const normalAlpha = veryDenseView ? 0.78 : (denseView ? 0.88 : 0.95);
   const hitRadius = veryDenseView ? 18 : (denseView ? 20 : 24);
   points.forEach((point) => {
     const px = x(point.elapsed);
