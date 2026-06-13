@@ -859,57 +859,38 @@
       </div>
     </section>
 
-    <section id="panel-trend-graph" class="panel" aria-labelledby="trend-graph-title" draggable="true">
+    <section id="panel-trend-graph" class="panel run-pace-panel" aria-labelledby="trend-graph-title" draggable="true">
       <div class="panel-header" draggable="true">
-        <h2 id="trend-graph-title">Trend Graph</h2>
+        <h2 id="trend-graph-title">Run Pace Graph</h2>
         <div class="panel-header-actions">
           <button class="panel-move-up panel-icon-btn" type="button" aria-label="Move panel up">↑</button>
           <button class="panel-move-down panel-icon-btn" type="button" aria-label="Move panel down">↓</button>
           <button class="panel-collapse panel-icon-btn" type="button" aria-expanded="true" aria-label="Collapse panel">−</button>
         </div>
       </div>
-      <div class="panel-body">
-        <section class="panel-section" aria-labelledby="trend-graph-settings-title">
-          <header class="panel-section-header">
-            <h3 id="trend-graph-settings-title" class="panel-section-title">Graph Settings</h3>
-          </header>
-          <div class="panel-section-content">
-            <div class="form-grid single-row">
-              <label for="trendBucketSize">Bucket size</label>
-              <select id="trendBucketSize">
-                <option value="5">5 min</option>
-                <option value="15" selected>15 min</option>
-                <option value="30">30 min</option>
-              </select>
-            </div>
-          </div>
-        </section>
-
-        <section class="panel-section" aria-labelledby="trend-graph-summary-title">
-          <header class="panel-section-header">
-            <h3 id="trend-graph-summary-title" class="panel-section-title">Graph Summary</h3>
-          </header>
-          <div class="panel-section-content">
-            <div id="trendGraphLegend" class="trend-legend" aria-live="polite">
-              <span><strong>Blue</strong> Avg Total Time Per Sheep</span>
-              <span><strong>Green</strong> Avg catch</span>
-              <span><strong>Orange</strong> Target cycle</span>
-            </div>
-            <div id="trendLatestSummary" class="trend-latest-summary">Last 15 min: 0 sheep • Avg Total Time Per Sheep 0.000s • Target 0.000s • Set target for pace comparison.</div>
-            <button id="trendDetailsToggle" class="trend-details-toggle" type="button" aria-expanded="false">Details ▾</button>
-            <div id="trendGraphTooltip" class="trend-graph-tooltip" hidden>Tap a point to see bucket details.</div>
-          </div>
-        </section>
-
-        <section class="panel-section" aria-labelledby="trend-graph-canvas-title">
-          <header class="panel-section-header">
-            <h3 id="trend-graph-canvas-title" class="panel-section-title">Graph</h3>
-          </header>
-          <div class="panel-section-content trend-graph-canvas-section">
-            <div id="trendGraphMessage" class="status-box minimal-status">Set target and start run to see trend graph.</div>
-            <canvas id="trendGraphCanvas" width="800" height="280" aria-label="Trend graph"></canvas>
-          </div>
-        </section>
+      <div class="panel-body run-pace-body">
+        <p class="run-pace-help">Each dot is one sheep. Under the target line is faster; over it is slower.</p>
+        <div class="run-pace-toolbar" aria-label="Run pace graph controls">
+          <label class="run-pace-view-control" for="runPaceGraphView">View</label>
+          <select id="runPaceGraphView" class="run-pace-view-select">
+            <option value="full" selected>Full run</option>
+            <option value="5">Last 5 min</option>
+            <option value="15">Last 15 min</option>
+            <option value="30">Last 30 min</option>
+            <option value="60">Last 60 min</option>
+          </select>
+          <span id="runPaceTargetChip" class="run-pace-target-chip">Target: —</span>
+        </div>
+        <div id="trendGraphLegend" class="run-pace-legend" aria-live="polite">
+          <span><i class="run-pace-legend-dot run-pace-legend-dot-fast" aria-hidden="true"></i>Green: On or faster than target</span>
+          <span><i class="run-pace-legend-dot run-pace-legend-dot-slow" aria-hidden="true"></i>Red: Slower than target</span>
+          <span><i class="run-pace-legend-line" aria-hidden="true"></i>Target line: Required average</span>
+        </div>
+        <div class="run-pace-canvas-wrap">
+          <div id="trendGraphMessage" class="status-box minimal-status run-pace-message">Set a target to show the required pace line.</div>
+          <canvas id="trendGraphCanvas" width="900" height="340" aria-label="Run Pace Graph"></canvas>
+        </div>
+        <div id="runPaceGraphDetail" class="run-pace-detail" aria-live="polite">Tap a sheep point to see details.</div>
       </div>
     </section>
 

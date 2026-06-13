@@ -4393,6 +4393,7 @@ const appState = {
   discardedResetElapsedMs: 0,
   trendBucketMinutes: 15,
   trendBuckets: {},
+  runPaceGraphView: "full",
   reviewBlocks: [],
   nextReviewBlockIndex: 1,
   runReviewText: "Run review will be generated when you stop a run.",
@@ -4402,6 +4403,7 @@ const appState = {
   autosaveTimerId: null,
   trendGraphRenderPoints: [],
   selectedTrendBucketKey: null,
+  selectedRunPaceSheepId: null,
   trendDetailsExpanded: false,
   autosaveEnabled: true,
   autosaveIntervalSeconds: DEFAULT_AUTOSAVE_INTERVAL_SECONDS,
@@ -4670,6 +4672,9 @@ const elements = {
   importSessionFileInput: document.getElementById("importSessionFileInput"),
   currentSheepNumber: document.getElementById("currentSheepNumber"),
   trendBucketSize: document.getElementById("trendBucketSize"),
+  runPaceGraphView: document.getElementById("runPaceGraphView"),
+  runPaceTargetChip: document.getElementById("runPaceTargetChip"),
+  runPaceGraphDetail: document.getElementById("runPaceGraphDetail"),
   trendGraphCanvas: document.getElementById("trendGraphCanvas"),
   trendGraphMessage: document.getElementById("trendGraphMessage"),
   trendLatestSummary: document.getElementById("trendLatestSummary"),
@@ -6692,6 +6697,7 @@ function resetRunState() {
   appState.effectiveResumeRealMs = null;
   appState.discardedResetElapsedMs = 0;
   appState.trendBuckets = {};
+  appState.selectedRunPaceSheepId = null;
   appState.reviewBlocks = [];
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
@@ -6900,6 +6906,7 @@ function startRun(startedAtMs = Date.now()) {
   appState.effectiveResumeRealMs = appState.runStartTime;
   appState.discardedResetElapsedMs = 0;
   appState.trendBuckets = {};
+  appState.selectedRunPaceSheepId = null;
   appState.reviewBlocks = [];
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
@@ -10405,7 +10412,152 @@ function updateTrendFlags() {
   elements.trendFlags.innerHTML = cards.join("");
 }
 
-function drawTrendGraph() {
+function formatRunPaceGraphSeconds(seconds, digits = 1) {
+  const value = Number(seconds);
+  return Number.isFinite(value) && value >= 0 ? `${value.toFixed(digits)}s` : "—";
+}
+
+function getRunPaceGraphCurrentElapsedSeconds() {
+  if (appState.runActive) return Math.max(Number(getEffectiveElapsedSeconds()) || 0, 0);
+  return Math.max(...(Array.isArray(appState.sheep) ? appState.sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0) : []), 0);
+}
+
+function getRunPaceGraphPoints() {
+  if (!Array.isArray(appState.sheep)) return [];
+  return appState.sheep
+    .map((entry, index) => {
+      const fullCycle = Number(entry?.fullCycle);
+      const elapsed = Number(entry?.effectiveElapsedSeconds);
+      if (!Number.isFinite(fullCycle) || fullCycle < 0 || !Number.isFinite(elapsed) || elapsed < 0) return null;
+      return {
+        key: entry?.id || `sheep-${index}`,
+        sheepId: entry?.id || `sheep-${index}`,
+        entry,
+        sheepNumber: Number.isFinite(Number(entry?.number)) ? Number(entry.number) : index + 1,
+        elapsed,
+        fullCycle
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.elapsed - b.elapsed || a.sheepNumber - b.sheepNumber);
+}
+
+function getRunPaceGraphWindowDomain(points = getRunPaceGraphPoints()) {
+  const currentElapsed = getRunPaceGraphCurrentElapsedSeconds();
+  const view = appState.runPaceGraphView || "full";
+  const windowMinutes = view === "full" ? 0 : Number(view);
+  if (Number.isFinite(windowMinutes) && windowMinutes > 0) {
+    const windowSeconds = windowMinutes * 60;
+    const end = Math.max(currentElapsed, ...points.map((point) => point.elapsed), windowSeconds);
+    return { start: Math.max(end - windowSeconds, 0), end, view };
+  }
+  const maxPointElapsed = Math.max(...points.map((point) => point.elapsed), 0);
+  const end = Math.max(currentElapsed, maxPointElapsed, 60);
+  return { start: 0, end, view: "full" };
+}
+
+function getRunPaceGraphVisiblePoints(points, domain) {
+  return points.filter((point) => point.elapsed >= domain.start && point.elapsed <= domain.end);
+}
+
+function getRunPaceGraphYDomain(points, requiredCycle) {
+  const values = points.map((point) => point.fullCycle).filter(Number.isFinite);
+  if (Number.isFinite(requiredCycle) && requiredCycle > 0) values.push(requiredCycle);
+  if (!values.length) values.push(0, 10);
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  if (min === max) {
+    const spread = Math.max(min * 0.15, 5);
+    min -= spread;
+    max += spread;
+  } else {
+    const padding = Math.max((max - min) * 0.18, 2);
+    min -= padding;
+    max += padding;
+  }
+  min = Math.max(0, min);
+  if (max <= min) max = min + 10;
+  return { min, max };
+}
+
+function formatRunPaceGraphClock(point) {
+  const endDayClockSeconds = getSheepLogDayClockSeconds(point?.entry, "end");
+  if (Number.isFinite(endDayClockSeconds)) return formatSecondsFromMidnightClock(endDayClockSeconds);
+  if (Number.isFinite(Number(point?.entry?.endTime))) return formatClock(point.entry.endTime);
+  return "—";
+}
+
+function formatRunPaceGraphStatus(entry) {
+  const status = getSheepStatus(entry);
+  if (status === SHEEP_STATUS.REJECTED) return "Rejected";
+  if (status === SHEEP_STATUS.PENDING) return "Pending";
+  return "Accepted";
+}
+
+function formatRunPacePointDetail(point, requiredCycle) {
+  if (!point) return "Tap a sheep point to see details.";
+  const entry = point.entry;
+  const delta = point.fullCycle - requiredCycle;
+  const differenceText = Number.isFinite(requiredCycle) && requiredCycle > 0
+    ? (Math.abs(delta) <= 0.05
+      ? "0.0s on target"
+      : `${Math.abs(delta).toFixed(1)}s ${delta > 0 ? "slower" : "faster"}`)
+    : "—";
+  const markerText = getSheepLogDisplayMarkersLabel(getSheepLogDisplayMarkersForEntry(entry));
+  const noteText = normalizeSheepNote(entry?.note);
+  const mergedNumbers = Array.isArray(entry?.mergedFromNumbers) ? entry.mergedFromNumbers.filter((number) => Number.isFinite(Number(number))) : [];
+  const rows = [
+    ["Clock time", formatRunPaceGraphClock(point)],
+    ["Run time", formatCountdown(point.elapsed)],
+    ["Total Time", formatRunPaceGraphSeconds(point.fullCycle)],
+    ["Target", Number.isFinite(requiredCycle) && requiredCycle > 0 ? formatRunPaceGraphSeconds(requiredCycle) : "—"],
+    ["Difference", differenceText],
+    ["Catch", formatRunPaceGraphSeconds(Number(entry?.catchDuration))],
+    ["Shear", formatRunPaceGraphSeconds(Number(entry?.shearDuration))]
+  ];
+  if (markerText) rows.push(["Markers", markerText]);
+  if (noteText) rows.push(["Note", noteText]);
+  rows.push(["Status", formatRunPaceGraphStatus(entry)]);
+  if (mergedNumbers.length) rows.push(["Merged from", mergedNumbers.join(" + ")]);
+
+  const detailRows = rows.map(([label, value]) => `<div><strong>${escapeTrendFlagHtml(label)}:</strong> ${escapeTrendFlagHtml(value)}</div>`).join("");
+  return `<div class="run-pace-detail-title">Sheep ${escapeTrendFlagHtml(point.sheepNumber)}</div><div class="run-pace-detail-grid">${detailRows}</div>`;
+}
+
+function updateRunPaceGraphDetail(point = null, requiredCycle = calculateTargetMetrics().requiredCycle) {
+  if (!elements.runPaceGraphDetail) return;
+  elements.runPaceGraphDetail.innerHTML = formatRunPacePointDetail(point, requiredCycle);
+}
+
+function handleRunPaceGraphPointSelection(event) {
+  if (!elements.trendGraphCanvas || !appState.trendGraphRenderPoints.length) return;
+  const canvas = elements.trendGraphCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const source = event.changedTouches && event.changedTouches.length ? event.changedTouches[0] : event;
+  if (!source || typeof source.clientX !== "number" || typeof source.clientY !== "number") return;
+  const clickX = source.clientX - rect.left;
+  const clickY = source.clientY - rect.top;
+
+  let closest = null;
+  let minDistSq = Infinity;
+  appState.trendGraphRenderPoints.forEach((point) => {
+    const dx = point.x - clickX;
+    const dy = point.y - clickY;
+    const distSq = dx * dx + dy * dy;
+    if (distSq < minDistSq) {
+      minDistSq = distSq;
+      closest = point;
+    }
+  });
+
+  if (closest && minDistSq <= 28 * 28) {
+    appState.selectedRunPaceSheepId = closest.sheepId;
+    updateRunPaceGraphDetail(closest, closest.requiredCycle);
+    drawRunPaceGraph();
+  }
+}
+
+function drawRunPaceGraph() {
   if (!elements.trendGraphCanvas) return;
   const canvas = elements.trendGraphCanvas;
   const ctx = canvas.getContext("2d");
@@ -10414,57 +10566,71 @@ function drawTrendGraph() {
   if (rect.width > 0 && Math.round(rect.width) !== canvas.width) {
     canvas.width = Math.round(rect.width);
   }
-  canvas.height = 240;
+  const cssHeight = Math.max(Math.round(rect.height) || 340, 260);
+  if (canvas.height !== cssHeight) canvas.height = cssHeight;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   appState.trendGraphRenderPoints = [];
 
   const { requiredCycle } = calculateTargetMetrics();
-  const points = getSortedBucketSummaries(appState.trendBucketMinutes);
-  updateTrendLatestSummary(points, requiredCycle);
-
-  if (requiredCycle <= 0) {
-    if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = false;
-    updateTrendGraphTooltip(null);
-    return;
+  if (elements.runPaceTargetChip) {
+    elements.runPaceTargetChip.textContent = Number.isFinite(requiredCycle) && requiredCycle > 0
+      ? `Target: ${formatRunPaceGraphSeconds(requiredCycle)}`
+      : "Target: —";
   }
-  if (elements.trendGraphMessage) elements.trendGraphMessage.hidden = true;
 
-  const margins = { left: 46, right: 12, top: 12, bottom: 28 };
-  const width = canvas.width - margins.left - margins.right;
-  const height = canvas.height - margins.top - margins.bottom;
-  const maxX = Math.max(points.length ? points[points.length - 1].startElapsed / 60 : appState.trendBucketMinutes, appState.trendBucketMinutes);
-  const maxY = Math.max(requiredCycle, ...points.map((p) => p.avgCycle), ...points.map((p) => p.avgCatch), 1) * 1.2;
-  const x = (minute) => margins.left + (minute / maxX) * width;
-  const y = (sec) => margins.top + height - (sec / maxY) * height;
+  const allPoints = getRunPaceGraphPoints();
+  const domain = getRunPaceGraphWindowDomain(allPoints);
+  const points = getRunPaceGraphVisiblePoints(allPoints, domain);
+  const selectedPoint = points.find((point) => point.sheepId === appState.selectedRunPaceSheepId) || null;
+  updateRunPaceGraphDetail(selectedPoint, requiredCycle);
 
-  const yTickStep = maxY <= 30 ? 5 : 10;
-  const yMaxTick = Math.ceil(maxY / yTickStep) * yTickStep;
+  let message = "";
+  if (!Number.isFinite(requiredCycle) || requiredCycle <= 0) message = "Set a target to show the required pace line.";
+  else if (!allPoints.length) message = "Complete a sheep to start the Run Pace Graph.";
+  else if (!points.length) message = "No sheep completed in this time window.";
+  if (elements.trendGraphMessage) {
+    elements.trendGraphMessage.textContent = message;
+    elements.trendGraphMessage.hidden = !message;
+  }
+
+  const margins = { left: 64, right: 18, top: 18, bottom: 52 };
+  const width = Math.max(canvas.width - margins.left - margins.right, 10);
+  const height = Math.max(canvas.height - margins.top - margins.bottom, 10);
+  const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
+  const xRange = Math.max(domain.end - domain.start, 60);
+  const x = (elapsed) => margins.left + ((elapsed - domain.start) / xRange) * width;
+  const y = (seconds) => margins.top + height - ((seconds - yDomain.min) / (yDomain.max - yDomain.min)) * height;
+
+  ctx.font = "11px Arial";
+  ctx.textBaseline = "middle";
   ctx.strokeStyle = "#eef2f7";
   ctx.fillStyle = "#64748b";
-  ctx.font = "11px Arial";
-  for (let tick = 0; tick <= yMaxTick; tick += yTickStep) {
-    const py = y(tick);
+  const yTicks = 5;
+  for (let index = 0; index <= yTicks; index += 1) {
+    const value = yDomain.min + ((yDomain.max - yDomain.min) * index / yTicks);
+    const py = y(value);
     ctx.beginPath();
     ctx.moveTo(margins.left, py);
     ctx.lineTo(margins.left + width, py);
     ctx.stroke();
-    ctx.fillText(String(tick), 8, py + 3);
+    ctx.fillText(value.toFixed(1), 10, py);
   }
 
-  const xTickEvery = points.length > 8 ? 2 : 1;
-  const tickMinutes = points.length
-    ? points.filter((_, index) => index % xTickEvery === 0).map((p) => p.startElapsed / 60)
-    : [0, maxX];
-  tickMinutes.forEach((minute) => {
-    const px = x(minute);
+  const xTicks = 4;
+  for (let index = 0; index <= xTicks; index += 1) {
+    const elapsed = domain.start + (xRange * index / xTicks);
+    const px = x(elapsed);
     ctx.beginPath();
     ctx.moveTo(px, margins.top);
     ctx.lineTo(px, margins.top + height);
     ctx.strokeStyle = "#f5f7fb";
     ctx.stroke();
     ctx.fillStyle = "#64748b";
-    ctx.fillText(String(Math.round(minute)), px - 8, canvas.height - 10);
-  });
+    ctx.textAlign = index === 0 ? "left" : (index === xTicks ? "right" : "center");
+    const dayClockSeconds = getDayClockSecondsFromEffectiveElapsed(elapsed);
+    const label = Number.isFinite(dayClockSeconds) ? formatSecondsFromMidnightClock(dayClockSeconds) : formatCountdown(elapsed);
+    ctx.fillText(label, px, canvas.height - 30);
+  }
 
   ctx.strokeStyle = "#94a3b8";
   ctx.beginPath();
@@ -10472,75 +10638,54 @@ function drawTrendGraph() {
   ctx.lineTo(margins.left, margins.top + height);
   ctx.lineTo(margins.left + width, margins.top + height);
   ctx.stroke();
+
+  ctx.save();
   ctx.fillStyle = "#475569";
   ctx.font = "12px Arial";
-  ctx.fillText("sec", 14, margins.top + 10);
-  ctx.fillText("min", canvas.width - 34, canvas.height - 6);
+  ctx.textAlign = "center";
+  ctx.translate(18, margins.top + height / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText("Total Time Per Sheep (seconds)", 0, 0);
+  ctx.restore();
+  ctx.fillStyle = "#475569";
+  ctx.font = "12px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("Run time / clock time", margins.left + width / 2, canvas.height - 10);
 
-  ctx.strokeStyle = "#f59e0b";
-  ctx.beginPath();
-  ctx.moveTo(x(0), y(requiredCycle));
-  ctx.lineTo(x(maxX), y(requiredCycle));
-  ctx.stroke();
-
-  if (points.length) {
-    ctx.strokeStyle = "#2563eb";
+  if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
+    const targetY = y(requiredCycle);
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
     ctx.beginPath();
-    points.forEach((p, i) => {
-      const px = x(p.startElapsed / 60);
-      const py = y(p.avgCycle);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
+    ctx.moveTo(margins.left, targetY);
+    ctx.lineTo(margins.left + width, targetY);
     ctx.stroke();
-
-    ctx.strokeStyle = "#16a34a";
-    ctx.beginPath();
-    points.forEach((p, i) => {
-      const px = x(p.startElapsed / 60);
-      const py = y(p.avgCatch);
-      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-    });
-    ctx.stroke();
-
-    points.forEach((p) => {
-      const px = x(p.startElapsed / 60);
-      const cycleY = y(p.avgCycle);
-      const catchY = y(p.avgCatch);
-      ctx.fillStyle = "#2563eb";
-      ctx.beginPath();
-      ctx.arc(px, cycleY, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#16a34a";
-      ctx.beginPath();
-      ctx.arc(px, catchY, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "#334155";
-      ctx.font = "11px Arial";
-      ctx.fillText(`n=${p.count}`, px + 4, cycleY - 6);
-
-      appState.trendGraphRenderPoints.push({
-        key: p.key,
-        x: px,
-        cycleY,
-        count: p.count,
-        avgCycle: p.avgCycle,
-        avgCatch: p.avgCatch,
-        requiredCycle,
-        startElapsed: p.startElapsed
-      });
-    });
-
-    const selected = appState.trendGraphRenderPoints.find((item) => item.key === appState.selectedTrendBucketKey);
-    if (selected) {
-      updateTrendGraphTooltip(selected);
-    } else {
-      updateTrendGraphTooltip(appState.trendGraphRenderPoints[appState.trendGraphRenderPoints.length - 1]);
-    }
-  } else {
-    updateTrendGraphTooltip(null);
+    ctx.setLineDash([]);
+    ctx.lineWidth = 1;
+    ctx.fillStyle = "#92400e";
+    ctx.textAlign = "right";
+    ctx.fillText("Target", margins.left + width - 4, targetY - 10);
   }
+
+  points.forEach((point) => {
+    const px = x(point.elapsed);
+    const py = y(point.fullCycle);
+    const selected = point.sheepId === appState.selectedRunPaceSheepId;
+    const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
+    ctx.fillStyle = onPace ? "#16a34a" : "#dc2626";
+    ctx.strokeStyle = selected ? "#0f172a" : "#ffffff";
+    ctx.lineWidth = selected ? 2.4 : 1.6;
+    ctx.beginPath();
+    ctx.arc(px, py, selected ? 6 : 4.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    appState.trendGraphRenderPoints.push({ ...point, x: px, y: py, requiredCycle });
+  });
+}
+
+function drawTrendGraph() {
+  drawRunPaceGraph();
 }
 
 function getSheepLogAnomalyClass(value, average, minSampleSize = 2) {
@@ -11643,6 +11788,7 @@ function saveSheepLogMarkerNoteFromEditor(editor) {
   closeSheepLogMarkerNoteEditor({ skipFocus: true });
   autosaveState();
   renderLogTable();
+  drawTrendGraph();
   updateStatsPanel();
 }
 
@@ -15307,7 +15453,11 @@ function restoreSessionPayload(raw, options = {}) {
   if (raw.layoutEditMode === true || raw.layoutEditMode === false) {
     appState.layoutEditMode = raw.layoutEditMode;
   }
+  appState.runPaceGraphView = ["full", "5", "15", "30", "60"].includes(String(appState.runPaceGraphView))
+    ? String(appState.runPaceGraphView)
+    : "full";
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes || 15);
+  if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView;
   applyPanelState();
   applyPanelSizes();
   if (appState.layoutEditMode) ensureInitialPanelLayout();
@@ -16325,11 +16475,18 @@ function bindEvents() {
       drawTrendGraph();
     });
   }
+  if (elements.runPaceGraphView) {
+    elements.runPaceGraphView.addEventListener("change", () => {
+      appState.runPaceGraphView = elements.runPaceGraphView.value || "full";
+      appState.selectedRunPaceSheepId = null;
+      drawRunPaceGraph();
+    });
+  }
   if (elements.trendGraphCanvas) {
-    elements.trendGraphCanvas.addEventListener("click", handleTrendGraphPointSelection);
+    elements.trendGraphCanvas.addEventListener("click", handleRunPaceGraphPointSelection);
     elements.trendGraphCanvas.addEventListener("touchend", (event) => {
       event.preventDefault();
-      handleTrendGraphPointSelection(event);
+      handleRunPaceGraphPointSelection(event);
     }, { passive: false });
   }
   if (elements.trendDetailsToggle) {
@@ -16991,6 +17148,7 @@ function initialize() {
   setSimulationMode(false);
   updateSimulationRunLengthControls();
   if (elements.trendBucketSize) elements.trendBucketSize.value = String(appState.trendBucketMinutes);
+  if (elements.runPaceGraphView) elements.runPaceGraphView.value = appState.runPaceGraphView || "full";
 
   if (elements.blockMinutes) {
     renderBlock(Number(elements.blockMinutes.value) || 15);
