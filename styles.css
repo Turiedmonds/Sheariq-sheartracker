@@ -2034,6 +2034,35 @@ td {
   font-size: 0.76rem;
 }
 
+
+#panel-trend-graph .run-pace-compare-panel {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.55rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #dbe3ef;
+  background: #f8fbff;
+}
+
+#panel-trend-graph .run-pace-compare-panel[hidden] {
+  display: none;
+}
+
+#panel-trend-graph .run-pace-compare-period {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+#panel-trend-graph .run-pace-compare-period strong,
+#panel-trend-graph .run-pace-compare-period label {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #475569;
+}
+
 #panel-trend-graph .run-pace-target-chip {
   display: inline-flex;
   align-items: center;
@@ -2126,6 +2155,43 @@ td {
 #panel-trend-graph .run-pace-summary strong {
   color: #0f172a;
   font-weight: 900;
+}
+
+
+#panel-trend-graph .run-pace-compare-summary {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #dbe3ef;
+  background: #fff;
+  color: #334155;
+  font-size: 0.8rem;
+  overflow-x: auto;
+}
+
+#panel-trend-graph .run-pace-compare-summary[hidden] {
+  display: none;
+}
+
+#panel-trend-graph .run-pace-compare-summary table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#panel-trend-graph .run-pace-compare-summary th,
+#panel-trend-graph .run-pace-compare-summary td {
+  padding: 0.25rem 0.35rem;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  white-space: nowrap;
+}
+
+#panel-trend-graph .run-pace-compare-summary th {
+  color: #0f172a;
+  font-weight: 900;
+}
+
+#panel-trend-graph .run-pace-compare-note {
+  margin: 0.35rem 0 0;
+  color: #64748b;
 }
 
 #panel-trend-graph .run-pace-detail {
