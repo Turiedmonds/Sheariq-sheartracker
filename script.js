@@ -164,6 +164,14 @@ const MANUAL_MARKER_TYPES = {
   comb: "Comb"
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
+const RUN_PACE_MARKER_DOT_STYLES = {
+  penRefill: { label: "Pen refill", color: "#6366f1", priority: 1 },
+  comb: { label: MANUAL_MARKER_TYPES.comb, color: "#eab308", priority: 2 },
+  cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#8b5cf6", priority: 3 },
+  drink: { label: MANUAL_MARKER_TYPES.drink, color: "#38bdf8", priority: 4 },
+  [MANUAL_MARKER_CUSTOM_TYPE]: { label: "Custom marker", color: "#64748b", priority: 5 },
+  noteOnly: { label: "Note only", color: "#cbd5e1", priority: 6 }
+};
 const SHEEP_LOG_COLUMN_WIDTHS_STORAGE_KEY = "sheartracker.sheepLogColumnWidths.v1";
 const SHEEP_LOG_COLUMN_MIN_WIDTHS = [58, 72, 112, 112, 126, 126, 116, 220];
 const SHEEP_LOG_MARKER_NOTE_POPOVER_VIEWPORT_GAP = 10;
@@ -4697,6 +4705,7 @@ const elements = {
   runPaceCompareClear: document.getElementById("runPaceCompareClear"),
   runPaceCompareHelp: document.getElementById("runPaceCompareHelp"),
   runPaceTargetChip: document.getElementById("runPaceTargetChip"),
+  trendGraphLegend: document.getElementById("trendGraphLegend"),
   runPaceGraphSummary: document.getElementById("runPaceGraphSummary"),
   runPaceCompareSummary: document.getElementById("runPaceCompareSummary"),
   runPaceGraphDetail: document.getElementById("runPaceGraphDetail"),
@@ -10826,6 +10835,13 @@ function formatRunPaceGraphStatus(entry) {
   return "Accepted";
 }
 
+function formatRunPaceGraphPaceCount(count, total) {
+  if (!Number.isFinite(Number(count))) return "—";
+  const safeTotal = Number.isFinite(Number(total)) && Number(total) > 0 ? Number(total) : 0;
+  const percentage = safeTotal ? (Number(count) / safeTotal) * 100 : 0;
+  return `${count} (${percentage.toFixed(1)}%)`;
+}
+
 function formatRunPaceGraphSummary(points, requiredCycle) {
   const visiblePoints = Array.isArray(points) ? points : [];
   const total = visiblePoints.length;
@@ -10840,8 +10856,8 @@ function formatRunPaceGraphSummary(points, requiredCycle) {
   };
   const summaryItems = [
     ["Total Sheep", String(total)],
-    ["On/faster", onPaceCount === null ? "—" : String(onPaceCount)],
-    ["Slower", slowerCount === null ? "—" : String(slowerCount)],
+    ["On/faster", onPaceCount === null ? "—" : formatRunPaceGraphPaceCount(onPaceCount, total)],
+    ["Slower", slowerCount === null ? "—" : formatRunPaceGraphPaceCount(slowerCount, total)],
     ["Avg catch", total ? formatRunPaceGraphSeconds(average("catchDuration")) : "—"],
     ["Avg shear", total ? formatRunPaceGraphSeconds(average("shearDuration")) : "—"],
     ["Avg total", total ? formatRunPaceGraphSeconds(average("fullCycle")) : "—"]
@@ -10854,6 +10870,30 @@ function formatRunPaceGraphSummary(points, requiredCycle) {
 function updateRunPaceGraphSummary(points, requiredCycle) {
   if (!elements.runPaceGraphSummary) return;
   elements.runPaceGraphSummary.innerHTML = formatRunPaceGraphSummary(points, requiredCycle);
+}
+
+function getRunPaceGraphMarkerStyleKey(entry) {
+  const markers = getSheepLogDisplayMarkersForEntry(entry);
+  const markerStyle = markers
+    .map((marker) => RUN_PACE_MARKER_DOT_STYLES[marker?.type] ? marker.type : (marker?.type ? MANUAL_MARKER_CUSTOM_TYPE : ""))
+    .filter(Boolean)
+    .sort((a, b) => RUN_PACE_MARKER_DOT_STYLES[a].priority - RUN_PACE_MARKER_DOT_STYLES[b].priority)[0];
+  if (markerStyle) return markerStyle;
+  return normalizeSheepNote(entry?.note) ? "noteOnly" : "";
+}
+
+function getRunPaceGraphMarkerDotStyle(entry) {
+  const styleKey = getRunPaceGraphMarkerStyleKey(entry);
+  return styleKey ? { key: styleKey, ...RUN_PACE_MARKER_DOT_STYLES[styleKey] } : null;
+}
+
+function updateRunPaceGraphLegend() {
+  if (!elements.trendGraphLegend) return;
+  const markerItems = Object.values(RUN_PACE_MARKER_DOT_STYLES)
+    .sort((a, b) => a.priority - b.priority)
+    .map((style) => `<span><i class="run-pace-legend-dot run-pace-legend-dot-marker" style="--run-pace-marker-color: ${escapeTrendFlagHtml(style.color)}" aria-hidden="true"></i>${escapeTrendFlagHtml(style.label)}</span>`)
+    .join("");
+  elements.trendGraphLegend.innerHTML = `<span><i class="run-pace-legend-dot run-pace-legend-dot-fast" aria-hidden="true"></i>Green: On or faster than target</span><span><i class="run-pace-legend-dot run-pace-legend-dot-slow" aria-hidden="true"></i>Red: Slower than target</span><span><i class="run-pace-legend-line" aria-hidden="true"></i>Target line: Required average</span><span><i class="run-pace-legend-band" aria-hidden="true"></i>Shaded: 3+ sheep in a row</span>${markerItems}`;
 }
 
 
@@ -10979,7 +11019,6 @@ function formatRunPacePointDetail(point, requiredCycle) {
   ];
   if (markerText) rows.push(["Markers", markerText]);
   if (noteText) rows.push(["Note", noteText]);
-  rows.push(["Status", formatRunPaceGraphStatus(entry)]);
   if (mergedNumbers.length) rows.push(["Merged from", mergedNumbers.join(" + ")]);
 
   const totalTimeClass = getSheepLogTimingGradeClass(point.fullCycle, requiredCycle);
@@ -10989,7 +11028,7 @@ function formatRunPacePointDetail(point, requiredCycle) {
     const valueHtml = label === "Total Time"
       ? `<span class="run-pace-detail-value run-pace-total-time-value ${escapeTrendFlagHtml(totalTimeClass)}">${safeValue}</span>`
       : `<span class="run-pace-detail-value">${safeValue}</span>`;
-    return `<div><strong>${safeLabel}:</strong> ${valueHtml}</div>`;
+    return `<div class="run-pace-detail-row"><span class="run-pace-detail-label">${safeLabel}</span>${valueHtml}</div>`;
   }).join("");
   return `<div class="run-pace-detail-title-row"><div class="run-pace-detail-title">Sheep ${escapeTrendFlagHtml(point.sheepNumber)}</div><button type="button" class="run-pace-clear-selection" data-run-pace-clear-selection="true">Clear selection</button></div><div class="run-pace-detail-grid">${detailRows}</div>`;
 }
@@ -11052,6 +11091,8 @@ function drawRunPaceGraph() {
       ? `Target: ${formatRunPaceGraphSeconds(requiredCycle)}`
       : "Target: —";
   }
+
+  updateRunPaceGraphLegend();
 
   const allPoints = getRunPaceGraphPoints();
   const domain = getRunPaceGraphWindowDomain(allPoints);
@@ -11206,13 +11247,28 @@ function drawRunPaceGraph() {
     const py = y(point.fullCycle);
     const selected = point.sheepId === appState.selectedRunPaceSheepId;
     const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
-    ctx.fillStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
-    ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.92)");
-    ctx.lineWidth = selected ? 2.2 : (denseView ? 0.8 : 1.1);
+    const markerDotStyle = getRunPaceGraphMarkerDotStyle(point.entry);
+    const radius = selected ? 5.7 : normalRadius;
+    if (markerDotStyle) {
+      ctx.fillStyle = markerDotStyle.color;
+      ctx.strokeStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
+      ctx.lineWidth = selected ? 3.2 : (denseView ? 2.2 : 2.6);
+    } else {
+      ctx.fillStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
+      ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.92)");
+      ctx.lineWidth = selected ? 2.2 : (denseView ? 0.8 : 1.1);
+    }
     ctx.beginPath();
-    ctx.arc(px, py, selected ? 5.7 : normalRadius, 0, Math.PI * 2);
+    ctx.arc(px, py, markerDotStyle && !selected ? radius + 0.7 : radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    if (markerDotStyle) {
+      ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.9)");
+      ctx.lineWidth = selected ? 1.35 : 0.85;
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(radius - 1.4, 1.2), 0, Math.PI * 2);
+      ctx.stroke();
+    }
     if (selected) {
       ctx.strokeStyle = "rgba(15, 23, 42, 0.24)";
       ctx.lineWidth = 3.6;
