@@ -10480,6 +10480,41 @@ function getRunPaceGraphYDomain(points, requiredCycle) {
   return { min, max };
 }
 
+
+function getCanvasCssSize(canvas, fallbackWidth = 900, fallbackHeight = 340) {
+  const rect = canvas.getBoundingClientRect();
+  const cssWidth = Math.max(Math.round(rect.width) || Number(canvas.getAttribute("width")) || fallbackWidth, 320);
+  const cssHeight = Math.max(Math.round(rect.height) || Number(canvas.getAttribute("height")) || fallbackHeight, 260);
+  return { cssWidth, cssHeight };
+}
+
+function prepareSharpCanvas(canvas, ctx, fallbackWidth = 900, fallbackHeight = 340) {
+  const { cssWidth, cssHeight } = getCanvasCssSize(canvas, fallbackWidth, fallbackHeight);
+  const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 1), 2);
+  const pixelWidth = Math.round(cssWidth * dpr);
+  const pixelHeight = Math.round(cssHeight * dpr);
+  if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+  if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+  return { cssWidth, cssHeight, dpr };
+}
+
+function getRunPaceGraphTickCount(width, minCount = 2, maxCount = 5) {
+  if (!Number.isFinite(width) || width <= 0) return minCount;
+  return Math.max(minCount, Math.min(maxCount, Math.floor(width / 150)));
+}
+
+function getRunPaceGraphTimeTicks(domain, width) {
+  const xRange = Math.max(domain.end - domain.start, 60);
+  const tickCount = getRunPaceGraphTickCount(width);
+  const ticks = [];
+  for (let index = 0; index <= tickCount; index += 1) {
+    ticks.push(domain.start + (xRange * index / tickCount));
+  }
+  return ticks;
+}
+
 function formatRunPaceGraphClock(point) {
   const endDayClockSeconds = getSheepLogDayClockSeconds(point?.entry, "end");
   if (Number.isFinite(endDayClockSeconds)) return formatSecondsFromMidnightClock(endDayClockSeconds);
@@ -10562,13 +10597,8 @@ function drawRunPaceGraph() {
   const canvas = elements.trendGraphCanvas;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  const rect = canvas.getBoundingClientRect();
-  if (rect.width > 0 && Math.round(rect.width) !== canvas.width) {
-    canvas.width = Math.round(rect.width);
-  }
-  const cssHeight = Math.max(Math.round(rect.height) || 340, 260);
-  if (canvas.height !== cssHeight) canvas.height = cssHeight;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const { cssWidth, cssHeight } = prepareSharpCanvas(canvas, ctx);
   appState.trendGraphRenderPoints = [];
 
   const { requiredCycle } = calculateTargetMetrics();
@@ -10593,19 +10623,24 @@ function drawRunPaceGraph() {
     elements.trendGraphMessage.hidden = !message;
   }
 
-  const margins = { left: 64, right: 18, top: 18, bottom: 52 };
-  const width = Math.max(canvas.width - margins.left - margins.right, 10);
-  const height = Math.max(canvas.height - margins.top - margins.bottom, 10);
+  const margins = { left: 54, right: 22, top: 34, bottom: 50 };
+  const width = Math.max(cssWidth - margins.left - margins.right, 10);
+  const height = Math.max(cssHeight - margins.top - margins.bottom, 10);
   const yDomain = getRunPaceGraphYDomain(points, requiredCycle);
   const xRange = Math.max(domain.end - domain.start, 60);
   const x = (elapsed) => margins.left + ((elapsed - domain.start) / xRange) * width;
   const y = (seconds) => margins.top + height - ((seconds - yDomain.min) / (yDomain.max - yDomain.min)) * height;
 
-  ctx.font = "11px Arial";
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  ctx.font = "10.5px Arial";
   ctx.textBaseline = "middle";
+  ctx.textAlign = "right";
   ctx.strokeStyle = "#eef2f7";
   ctx.fillStyle = "#64748b";
-  const yTicks = 5;
+  ctx.lineWidth = 1;
+  const yTicks = 4;
   for (let index = 0; index <= yTicks; index += 1) {
     const value = yDomain.min + ((yDomain.max - yDomain.min) * index / yTicks);
     const py = y(value);
@@ -10613,12 +10648,12 @@ function drawRunPaceGraph() {
     ctx.moveTo(margins.left, py);
     ctx.lineTo(margins.left + width, py);
     ctx.stroke();
-    ctx.fillText(value.toFixed(1), 10, py);
+    ctx.fillText(value.toFixed(1), margins.left - 8, py);
   }
 
-  const xTicks = 4;
-  for (let index = 0; index <= xTicks; index += 1) {
-    const elapsed = domain.start + (xRange * index / xTicks);
+  const xTicks = getRunPaceGraphTimeTicks(domain, width);
+  ctx.textBaseline = "top";
+  xTicks.forEach((elapsed, index) => {
     const px = x(elapsed);
     ctx.beginPath();
     ctx.moveTo(px, margins.top);
@@ -10626,60 +10661,77 @@ function drawRunPaceGraph() {
     ctx.strokeStyle = "#f5f7fb";
     ctx.stroke();
     ctx.fillStyle = "#64748b";
-    ctx.textAlign = index === 0 ? "left" : (index === xTicks ? "right" : "center");
-    const dayClockSeconds = getDayClockSecondsFromEffectiveElapsed(elapsed);
-    const label = Number.isFinite(dayClockSeconds) ? formatSecondsFromMidnightClock(dayClockSeconds) : formatCountdown(elapsed);
-    ctx.fillText(label, px, canvas.height - 30);
-  }
+    ctx.textAlign = index === 0 ? "left" : (index === xTicks.length - 1 ? "right" : "center");
+    ctx.fillText(formatCountdown(elapsed), px, margins.top + height + 9);
+  });
 
   ctx.strokeStyle = "#94a3b8";
+  ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(margins.left, margins.top);
   ctx.lineTo(margins.left, margins.top + height);
   ctx.lineTo(margins.left + width, margins.top + height);
   ctx.stroke();
 
-  ctx.save();
   ctx.fillStyle = "#475569";
-  ctx.font = "12px Arial";
+  ctx.font = "11px Arial";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "top";
+  ctx.fillText("Seconds per sheep", margins.left, 10);
   ctx.textAlign = "center";
-  ctx.translate(18, margins.top + height / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.fillText("Total Time Per Sheep (seconds)", 0, 0);
-  ctx.restore();
-  ctx.fillStyle = "#475569";
-  ctx.font = "12px Arial";
-  ctx.textAlign = "center";
-  ctx.fillText("Run time / clock time", margins.left + width / 2, canvas.height - 10);
+  ctx.textBaseline = "bottom";
+  ctx.fillText("Run time", margins.left + width / 2, cssHeight - 6);
 
   if (Number.isFinite(requiredCycle) && requiredCycle > 0) {
     const targetY = y(requiredCycle);
-    ctx.strokeStyle = "#f59e0b";
-    ctx.lineWidth = 2;
-    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = "#d97706";
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([6, 5]);
     ctx.beginPath();
     ctx.moveTo(margins.left, targetY);
     ctx.lineTo(margins.left + width, targetY);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.lineWidth = 1;
     ctx.fillStyle = "#92400e";
+    ctx.font = "10.5px Arial";
     ctx.textAlign = "right";
-    ctx.fillText("Target", margins.left + width - 4, targetY - 10);
+    ctx.textBaseline = "bottom";
+    const labelY = Math.max(margins.top + 12, Math.min(targetY - 5, margins.top + height - 6));
+    ctx.fillText(`Target ${formatRunPaceGraphSeconds(requiredCycle)}`, margins.left + width - 4, labelY);
   }
 
+  for (let index = 1; index < points.length; index += 1) {
+    const previousPoint = points[index - 1];
+    const point = points[index];
+    const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
+    ctx.strokeStyle = onPace ? "rgba(22, 163, 74, 0.72)" : "rgba(220, 38, 38, 0.72)";
+    ctx.lineWidth = points.length > 80 ? 1.35 : 1.8;
+    ctx.beginPath();
+    ctx.moveTo(x(previousPoint.elapsed), y(previousPoint.fullCycle));
+    ctx.lineTo(x(point.elapsed), y(point.fullCycle));
+    ctx.stroke();
+  }
+
+  const normalRadius = points.length > 120 ? 2.1 : (points.length > 60 ? 2.5 : 3);
   points.forEach((point) => {
     const px = x(point.elapsed);
     const py = y(point.fullCycle);
     const selected = point.sheepId === appState.selectedRunPaceSheepId;
     const onPace = Number.isFinite(requiredCycle) && requiredCycle > 0 && point.fullCycle <= requiredCycle;
     ctx.fillStyle = onPace ? "#16a34a" : "#dc2626";
-    ctx.strokeStyle = selected ? "#0f172a" : "#ffffff";
-    ctx.lineWidth = selected ? 2.4 : 1.6;
+    ctx.strokeStyle = selected ? "#0f172a" : "rgba(255, 255, 255, 0.92)";
+    ctx.lineWidth = selected ? 2.2 : 1.2;
     ctx.beginPath();
-    ctx.arc(px, py, selected ? 6 : 4.6, 0, Math.PI * 2);
+    ctx.arc(px, py, selected ? 5.7 : normalRadius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
+    if (selected) {
+      ctx.strokeStyle = "rgba(15, 23, 42, 0.24)";
+      ctx.lineWidth = 3.6;
+      ctx.beginPath();
+      ctx.arc(px, py, 8, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     appState.trendGraphRenderPoints.push({ ...point, x: px, y: py, requiredCycle });
   });
 }
