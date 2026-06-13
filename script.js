@@ -165,7 +165,7 @@ const MANUAL_MARKER_TYPES = {
 };
 const MANUAL_MARKER_CUSTOM_TYPE = "custom";
 const RUN_PACE_MARKER_DOT_STYLES = {
-  penRefill: { label: "Pen refill", color: "#6366f1", priority: 1 },
+  penRefill: { label: "Pen refill", color: "#db2777", priority: 1 },
   comb: { label: MANUAL_MARKER_TYPES.comb, color: "#eab308", priority: 2 },
   cutter: { label: MANUAL_MARKER_TYPES.cutter, color: "#8b5cf6", priority: 3 },
   drink: { label: MANUAL_MARKER_TYPES.drink, color: "#38bdf8", priority: 4 },
@@ -11251,24 +11251,17 @@ function drawRunPaceGraph() {
     const radius = selected ? 5.7 : normalRadius;
     if (markerDotStyle) {
       ctx.fillStyle = markerDotStyle.color;
-      ctx.strokeStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
-      ctx.lineWidth = selected ? 3.2 : (denseView ? 2.2 : 2.6);
+      ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.78)" : "rgba(255, 255, 255, 0.95)");
+      ctx.lineWidth = selected ? 1.8 : (denseView ? 0.9 : 1.15);
     } else {
       ctx.fillStyle = onPace ? `rgba(22, 163, 74, ${normalAlpha})` : `rgba(220, 38, 38, ${normalAlpha})`;
       ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.72)" : "rgba(255, 255, 255, 0.92)");
       ctx.lineWidth = selected ? 2.2 : (denseView ? 0.8 : 1.1);
     }
     ctx.beginPath();
-    ctx.arc(px, py, markerDotStyle && !selected ? radius + 0.7 : radius, 0, Math.PI * 2);
+    ctx.arc(px, py, markerDotStyle && !selected ? radius + 0.9 : radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
-    if (markerDotStyle) {
-      ctx.strokeStyle = selected ? "#0f172a" : (denseView ? "rgba(255, 255, 255, 0.7)" : "rgba(255, 255, 255, 0.9)");
-      ctx.lineWidth = selected ? 1.35 : 0.85;
-      ctx.beginPath();
-      ctx.arc(px, py, Math.max(radius - 1.4, 1.2), 0, Math.PI * 2);
-      ctx.stroke();
-    }
     if (selected) {
       ctx.strokeStyle = "rgba(15, 23, 42, 0.24)";
       ctx.lineWidth = 3.6;
