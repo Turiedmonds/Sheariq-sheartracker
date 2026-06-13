@@ -10791,9 +10791,32 @@ function formatRunPaceGraphYAxisLabel(value) {
 
 function formatRunPaceGraphClock(point) {
   const endDayClockSeconds = getSheepLogDayClockSeconds(point?.entry, "end");
-  if (Number.isFinite(endDayClockSeconds)) return formatSecondsFromMidnightClock(endDayClockSeconds);
-  if (Number.isFinite(Number(point?.entry?.endTime))) return formatClock(point.entry.endTime);
+  if (Number.isFinite(endDayClockSeconds)) return formatSecondsFromMidnightClockAmPm(endDayClockSeconds);
+  if (Number.isFinite(Number(point?.entry?.endTime))) {
+    const elapsedSecondsFromRunStart = Number.isFinite(appState.runStartTime)
+      && Number.isFinite(appState.dayClockStartSecondsFromMidnight)
+      ? (Number(point.entry.endTime) - appState.runStartTime) / 1000
+      : NaN;
+    if (Number.isFinite(elapsedSecondsFromRunStart)) {
+      return formatSecondsFromMidnightClockAmPm(appState.dayClockStartSecondsFromMidnight + elapsedSecondsFromRunStart);
+    }
+    return new Date(Number(point.entry.endTime)).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true });
+  }
   return "—";
+}
+
+function formatRunPaceGraphElapsedTime(totalSeconds) {
+  const numericSeconds = Number(totalSeconds);
+  if (!Number.isFinite(numericSeconds)) return "—";
+  const safeSeconds = Math.max(Math.floor(numericSeconds), 0);
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+  const parts = [];
+  if (hours > 0) parts.push(`${hours} hr`);
+  if (minutes > 0) parts.push(`${minutes} min`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds} sec`);
+  return parts.join(" ");
 }
 
 function formatRunPaceGraphStatus(entry) {
@@ -10946,13 +10969,13 @@ function formatRunPacePointDetail(point, requiredCycle) {
   const noteText = normalizeSheepNote(entry?.note);
   const mergedNumbers = Array.isArray(entry?.mergedFromNumbers) ? entry.mergedFromNumbers.filter((number) => Number.isFinite(Number(number))) : [];
   const rows = [
-    ["Clock time", formatRunPaceGraphClock(point)],
-    ["Run time", formatCountdown(point.elapsed)],
-    ["Total Time", formatRunPaceGraphSeconds(point.fullCycle)],
+    ["Time of Day", formatRunPaceGraphClock(point)],
+    ["Run time", formatRunPaceGraphElapsedTime(point.elapsed)],
     ["Target", Number.isFinite(requiredCycle) && requiredCycle > 0 ? formatRunPaceGraphSeconds(requiredCycle) : "—"],
     ["Difference", differenceText],
-    ["Catch", formatRunPaceGraphSeconds(Number(entry?.catchDuration))],
-    ["Shear", formatRunPaceGraphSeconds(Number(entry?.shearDuration))]
+    ["Catch Duration", formatRunPaceGraphSeconds(Number(entry?.catchDuration))],
+    ["Shear Duration", formatRunPaceGraphSeconds(Number(entry?.shearDuration))],
+    ["Total Time", formatRunPaceGraphSeconds(point.fullCycle)]
   ];
   if (markerText) rows.push(["Markers", markerText]);
   if (noteText) rows.push(["Note", noteText]);
