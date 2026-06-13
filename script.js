@@ -8418,6 +8418,16 @@ function buildCompletedRunKeyValueRows(pairs) {
   return pairs.map(([label, value]) => [label, value === undefined || value === null || value === "" ? "—" : String(value)]);
 }
 
+const REMOVED_DYNAMIC_TARGET_PACE_LABELS = new Set([
+  `Required ${"Remaining"} Average`,
+  `Live ${"Target"} Time Per Sheep`
+]);
+
+function filterRemovedDynamicTargetPaceRows(rows) {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(([label]) => !REMOVED_DYNAMIC_TARGET_PACE_LABELS.has(String(label)));
+}
+
 function getCompletedRunPerformanceRows() {
   return buildCompletedRunKeyValueRows([
     ["Total sheep shorn", getSafeText("totalSheep")],
@@ -8442,7 +8452,6 @@ function getCompletedRunPerformanceRows() {
 function getCompletedRunTargetPaceRows() {
   return buildCompletedRunKeyValueRows([
     ["Required average total time per sheep", getSafeText("requiredCycle")],
-    ["Live Target Time Per Sheep", getSafeText("requiredCycleRemaining")],
     ["Required 15-minute total", getSafeText("requiredQuarterTotal")],
     ["Required sheep per hour", getSafeText("requiredRate")],
     ["Required run total", getSafeText("requiredRunTotalSheep")],
@@ -9608,7 +9617,7 @@ function renderReviewRunModal(snapshot) {
   }
 
   const targetPace = appendReviewRunSection(elements.reviewRunModalContent, "Target / Pace");
-  appendReviewRunKeyValueTable(targetPace, snapshot.display?.targetPaceRows || []);
+  appendReviewRunKeyValueTable(targetPace, filterRemovedDynamicTargetPaceRows(snapshot.display?.targetPaceRows || []));
 
   const timing = appendReviewRunSection(elements.reviewRunModalContent, "Timing / Alerts");
   appendReviewRunKeyValueTable(timing, snapshot.display?.timingRows || []);
