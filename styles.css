@@ -3200,16 +3200,24 @@ td {
   padding: 0.08rem 0.3rem;
 }
 
-#quarterSheepCount.quarter-sheep-neutral {
+#quarterSheepCount.quarter-sheep-neutral,
+#quarterCurrentProgress.quarter-sheep-neutral,
+#quarterProgressStatus.quarter-sheep-neutral {
   color: #374151;
 }
 
 #quarterSheepCount.quarter-sheep-ahead,
-#quarterSheepCount.quarter-sheep-on {
+#quarterSheepCount.quarter-sheep-on,
+#quarterCurrentProgress.quarter-sheep-ahead,
+#quarterCurrentProgress.quarter-sheep-on,
+#quarterProgressStatus.quarter-sheep-ahead,
+#quarterProgressStatus.quarter-sheep-on {
   color: #166534;
 }
 
-#quarterSheepCount.quarter-sheep-behind {
+#quarterSheepCount.quarter-sheep-behind,
+#quarterCurrentProgress.quarter-sheep-behind,
+#quarterProgressStatus.quarter-sheep-behind {
   color: #991b1b;
 }
 
