@@ -13473,8 +13473,8 @@ function updatePenFullnessCatchAnalysisDisplay() {
     setText(elements.penFullnessCatchAfterAvg, formatPenFullnessCatchSeconds(primaryComparison.afterAverage));
     setText(elements.penFullnessCatchDifference, formatPenFullnessCatchDifference(primaryComparison.difference));
   } else {
-    setText(elements.penFullnessCatchBeforeAvg, "Not enough clean catch time before confirmed refills yet.");
-    setText(elements.penFullnessCatchAfterAvg, "Not enough clean catch time after confirmed refills yet.");
+    setText(elements.penFullnessCatchBeforeAvg, "Not enough data yet");
+    setText(elements.penFullnessCatchAfterAvg, "Not enough data yet");
     setText(elements.penFullnessCatchDifference, "Not enough data yet.");
   }
 
