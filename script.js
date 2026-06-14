@@ -8693,7 +8693,7 @@ function getCompletedRunPerformanceRows() {
 function getCompletedRunTargetPaceRows() {
   return buildCompletedRunKeyValueRows([
     ["Required average total time per sheep", getSafeText("requiredCycle")],
-    ["Required 15-minute total", getSafeText("requiredQuarterTotal")],
+    ["Required 15-min average", getSafeText("requiredQuarterTotal")],
     ["Required sheep per hour", getSafeText("requiredRate")],
     ["Required run total", getSafeText("requiredRunTotalSheep")],
     ["Required daily total", getSafeText("requiredDayTotalSheep")],
@@ -12756,7 +12756,7 @@ function findScrollableParent(startElement, boundaryElement = null) {
 function calculateQuarterTotals(targetMetrics) {
   const quarterSeconds = 900;
   const hasRunStarted = appState.runStartTime !== null || appState.runActive || appState.effectiveElapsedBeforePauseMs > 0;
-  if (!hasRunStarted) return { required: null, predicted: null };
+  if (!hasRunStarted) return { required: null, requiredExact: null, predicted: null };
 
   const runDurationSeconds = Math.max(getCurrentRunDurationSeconds(), 0);
   const elapsedSeconds = Math.max(getEffectiveElapsedSeconds(), 0);
@@ -12765,11 +12765,12 @@ function calculateQuarterTotals(targetMetrics) {
   const quarterEndSeconds = Math.min(quarterStartSeconds + quarterSeconds, runDurationSeconds);
   const quarterLengthSeconds = Math.max(quarterEndSeconds - quarterStartSeconds, 0);
 
-  const required = runDurationSeconds > 0 && targetMetrics.requiredRunSheep > 0
-    ? Math.max(Math.round((targetMetrics.requiredRunSheep * quarterLengthSeconds) / runDurationSeconds), 0)
+  const requiredExact = runDurationSeconds > 0 && targetMetrics.requiredRunSheep > 0
+    ? Math.max((targetMetrics.requiredRunSheep * quarterLengthSeconds) / runDurationSeconds, 0)
     : null;
+  const required = requiredExact === null ? null : Math.round(requiredExact);
 
-  if (quarterLengthSeconds <= 0 || appState.currentStats.avgCycle <= 0) return { required, predicted: null };
+  if (quarterLengthSeconds <= 0 || appState.currentStats.avgCycle <= 0) return { required, requiredExact, predicted: null };
 
   const sheepDoneByQuarterStart = appState.sheep.filter((entry) => (Number(entry?.effectiveElapsedSeconds) || 0) <= quarterStartSeconds).length;
   const completedInQuarter = Math.max(appState.sheep.length - sheepDoneByQuarterStart, 0);
@@ -12777,7 +12778,7 @@ function calculateQuarterTotals(targetMetrics) {
   const projectedAdditional = Math.floor(remainingQuarterSeconds / appState.currentStats.avgCycle);
   const predicted = Math.max(completedInQuarter + projectedAdditional, 0);
 
-  return { required, predicted };
+  return { required, requiredExact, predicted };
 }
 
 function getCurrentQuarterWindow() {
@@ -14099,7 +14100,7 @@ function updateStatsPanel() {
   setText(elements.requiredDayTotalSheep, requiredDayTotalSheep === null ? "—" : String(requiredDayTotalSheep));
   setText(elements.requiredRunTotalSheep, requiredRunTotalSheep === null ? "—" : String(requiredRunTotalSheep));
   const quarterTotals = calculateQuarterTotals(target);
-  setText(elements.requiredQuarterTotal, quarterTotals.required === null ? "—" : String(quarterTotals.required));
+  setText(elements.requiredQuarterTotal, quarterTotals.requiredExact === null ? "—" : `${quarterTotals.requiredExact.toFixed(3)} sheep`);
   const livePredictions = getLiveTargetPacePredictions(target, quarterTotals);
   const displayPredictions = appState.currentCycle.motorOn && appState.targetPacePredictionSnapshot
     ? appState.targetPacePredictionSnapshot
@@ -15389,7 +15390,7 @@ function getPdfExportSnapshot() {
     ["Predicted hour total", "predictedHourTotal"],
     ["Required day total", "requiredDayTotalSheep"],
     ["Required run total", "requiredRunTotalSheep"],
-    ["Required quarter total", "requiredQuarterTotal"],
+    ["Required 15-min average", "requiredQuarterTotal"],
     ["Estimated last catch", "estimatedLastCatchTime"],
     ["Time spare to bell", "timeSpareToBell"],
     ["Current sheep time left", "currentSheepTimeLeft"],
