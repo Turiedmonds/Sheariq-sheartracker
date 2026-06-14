@@ -12908,28 +12908,47 @@ function getActiveQuarterPartialSheep(elapsedSeconds, window = getCurrentQuarter
   return Math.min(Math.max(activeShearElapsedInsideCurrentBlock / avgShear, 0), 0.999);
 }
 
-function getQuarterProgressStatus(requiredExact, currentProgress, quarterElapsedSeconds, quarterLengthSeconds) {
+function getLockedQuarterProjection(quarterWindow, quarterLengthSeconds, requiredExact) {
+  const startSeconds = Number(quarterWindow?.startSeconds);
+  const endSeconds = Number(quarterWindow?.endSeconds);
   if (
-    !Number.isFinite(requiredExact)
-    || requiredExact < 0
-    || !Number.isFinite(currentProgress)
-    || !Number.isFinite(quarterElapsedSeconds)
+    !Array.isArray(appState.sheep)
+    || !Number.isFinite(startSeconds)
+    || !Number.isFinite(endSeconds)
     || !Number.isFinite(quarterLengthSeconds)
     || quarterLengthSeconds <= 0
   ) {
     return { text: "—", className: "quarter-sheep-neutral" };
   }
 
-  if (quarterElapsedSeconds < 60) {
-    return { text: "Building projection…", className: "quarter-sheep-neutral" };
-  }
+  const completedSheepInQuarter = appState.sheep
+    .map((entry) => Number(entry?.effectiveElapsedSeconds))
+    .filter((effectiveElapsedSeconds) => Number.isFinite(effectiveElapsedSeconds)
+      && effectiveElapsedSeconds > startSeconds
+      && effectiveElapsedSeconds <= endSeconds)
+    .sort((a, b) => a - b);
 
-  const elapsedRatio = quarterElapsedSeconds / quarterLengthSeconds;
-  if (!Number.isFinite(elapsedRatio) || elapsedRatio <= 0) {
+  const completedSheepCount = completedSheepInQuarter.length;
+  if (completedSheepCount <= 0) {
     return { text: "—", className: "quarter-sheep-neutral" };
   }
 
-  const projectedQuarterResult = currentProgress / elapsedRatio;
+  const lastCompletedElapsedSeconds = completedSheepInQuarter[completedSheepCount - 1];
+  const elapsedSecondsInsideQuarter = lastCompletedElapsedSeconds - startSeconds;
+  if (!Number.isFinite(elapsedSecondsInsideQuarter) || elapsedSecondsInsideQuarter <= 0) {
+    return { text: "—", className: "quarter-sheep-neutral" };
+  }
+
+  if (elapsedSecondsInsideQuarter < 60) {
+    return { text: "Building projection…", className: "quarter-sheep-neutral" };
+  }
+
+  const elapsedRatioAtLastCompletion = elapsedSecondsInsideQuarter / quarterLengthSeconds;
+  if (!Number.isFinite(elapsedRatioAtLastCompletion) || elapsedRatioAtLastCompletion <= 0) {
+    return { text: "—", className: "quarter-sheep-neutral" };
+  }
+
+  const projectedQuarterResult = completedSheepCount / elapsedRatioAtLastCompletion;
   if (!Number.isFinite(projectedQuarterResult)) {
     return { text: "—", className: "quarter-sheep-neutral" };
   }
@@ -12967,11 +12986,10 @@ function updateQuarterDisplay() {
   const quarterElapsedSeconds = Math.min(Math.max(elapsedSeconds - startSeconds, 0), quarterLengthSeconds);
   const actualQuarterSheep = getCurrentQuarterSheepCount();
   const currentQuarterProgress = actualQuarterSheep + getActiveQuarterPartialSheep(elapsedSeconds, quarterWindow);
-  const quarterStatus = getQuarterProgressStatus(
-    quarterTotals.requiredExact,
-    currentQuarterProgress,
-    quarterElapsedSeconds,
-    quarterLengthSeconds
+  const quarterStatus = getLockedQuarterProjection(
+    quarterWindow,
+    quarterLengthSeconds,
+    quarterTotals.requiredExact
   );
 
   setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
