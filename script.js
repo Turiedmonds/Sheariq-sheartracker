@@ -4661,6 +4661,7 @@ const elements = {
   simulationRunLengthIndicator: document.getElementById("simulationRunLengthIndicator"),
   simMotorOnBtn: document.getElementById("simMotorOnBtn"),
   simMotorOffBtn: document.getElementById("simMotorOffBtn"),
+  skipBreakForTestingBtn: document.getElementById("skipBreakForTestingBtn"),
   resetCurrentSheepBtn: document.getElementById("resetCurrentSheepBtn"),
   undoLastSheepBtn: document.getElementById("undoLastSheepBtn"),
   shortcutMessage: document.getElementById("shortcutMessage"),
@@ -7230,6 +7231,64 @@ function maybeAutoStartNextRunAfterBreak(now = Date.now()) {
   return true;
 }
 
+function getOfficialNextRunStartTimeMsForCurrentBreak() {
+  if (!Number.isFinite(appState.breakStartedAtMs)) return null;
+  const breakInfo = getBreakInfoForCompletedRun(appState.currentRunIndex);
+  const durationSeconds = Number(breakInfo?.durationSeconds);
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) return null;
+  return appState.breakStartedAtMs + (durationSeconds * 1000);
+}
+
+function canSkipBreakForTesting() {
+  if (!appState.simulationMode) return false;
+  if (!isPreparedForNextRunBreak()) return false;
+  if (appState.breakActive !== true) return false;
+  if (appState.runActive) return false;
+  if (appState.pendingBreakAfterCurrentSheep) return false;
+  if (appState.dayComplete) return false;
+  if (isEndOfDayBreak(appState.currentRunIndex)) return false;
+  return Number.isFinite(getOfficialNextRunStartTimeMsForCurrentBreak());
+}
+
+function updateSkipBreakForTestingButtonUI() {
+  if (!elements.skipBreakForTestingBtn) return;
+  const simulationEnabled = Boolean(appState.simulationMode);
+  elements.skipBreakForTestingBtn.hidden = !simulationEnabled;
+  elements.skipBreakForTestingBtn.disabled = !canSkipBreakForTesting();
+}
+
+function skipBreakForTesting() {
+  if (!canSkipBreakForTesting()) {
+    console.warn("Skip Break for Testing ignored; current state is not a skippable simulation break.");
+    updateSkipBreakForTestingButtonUI();
+    return false;
+  }
+
+  const officialNextRunStartMs = getOfficialNextRunStartTimeMsForCurrentBreak();
+  const officialNextRunStartDayClockSeconds = getDayClockSecondsForTimestamp(officialNextRunStartMs);
+  if (!Number.isFinite(officialNextRunStartDayClockSeconds)) {
+    console.warn("Skip Break for Testing ignored; official next run day-clock time could not be resolved.");
+    updateSkipBreakForTestingButtonUI();
+    return false;
+  }
+
+  const testingRunStartRealMs = Date.now();
+  const dayClockStartSeconds = getFiniteClockNumber(appState.dayClockStartSecondsFromMidnight);
+  if (Number.isFinite(dayClockStartSeconds)) {
+    appState.runStartTime = testingRunStartRealMs - Math.max(
+      (officialNextRunStartDayClockSeconds - dayClockStartSeconds) * 1000,
+      0
+    );
+  }
+
+  startRun(testingRunStartRealMs);
+  updateSkipBreakForTestingButtonUI();
+  if (typeof autosaveState === "function") {
+    autosaveState();
+  }
+  return true;
+}
+
 function isCountingPaused() {
   return appState.paused || isCountingPausedForBreak();
 }
@@ -7258,6 +7317,7 @@ function canResetCurrentSheepTiming() {
 function updateSimulationActionButtonsUI() {
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.disabled = !canRunSimulationMotorOnShortcut();
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.disabled = !canRunSimulationMotorOffShortcut();
+  updateSkipBreakForTestingButtonUI();
 }
 
 function updateResetCurrentSheepButtonUI() {
@@ -17357,6 +17417,7 @@ function bindEvents() {
   }
 
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.addEventListener("click", handleMotorOn);
+  if (elements.skipBreakForTestingBtn) elements.skipBreakForTestingBtn.addEventListener("click", skipBreakForTesting);
   if (elements.startNewDayBtn) elements.startNewDayBtn.addEventListener("click", confirmStartNewDay);
   if (elements.resetCurrentSheepBtn) elements.resetCurrentSheepBtn.addEventListener("click", resetCurrentSheepTiming);
   if (elements.undoLastSheepBtn) elements.undoLastSheepBtn.addEventListener("click", undoLastSheep);
