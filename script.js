@@ -8678,7 +8678,7 @@ function getCompletedRunPerformanceRows() {
     ["Average catch time", getSafeText("avgCatch")],
     ["Average shear time", getSafeText("avgShear")],
     ["Average Total Time Per Sheep", getSafeText("avgCycle")],
-    ["Sheep per hour", getSafeText("sheepPerHour")],
+    ["Current average sheep/hour", getSafeText("sheepPerHour")],
     ["Drink average", getSafeText("markerAvgDrink")],
     ["Cutter change average", getSafeText("markerAvgCutter")],
     ["Comb/handpiece change average", getSafeText("markerAvgComb")],
@@ -15557,7 +15557,7 @@ function exportPdf() {
     ["Average shear", `${formatPdfNumber(snapshot.currentStats.avgShear)}s`],
     ["Average catch", `${formatPdfNumber(snapshot.currentStats.avgCatch)}s`],
     ["Average cycle", `${formatPdfNumber(snapshot.currentStats.avgCycle)}s`],
-    ["Sheep per hour", formatPdfNumber(snapshot.currentStats.sheepPerHour, 1)],
+    ["Current average sheep/hour", formatPdfNumber(snapshot.currentStats.sheepPerHour, 1)],
     ["Current catch", snapshot.live.currentCatch],
     ["Current shear", snapshot.live.currentShear],
     ["Current total sheep time", snapshot.live.currentTotalSheepTime]
