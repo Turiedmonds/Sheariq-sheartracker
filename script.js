@@ -2114,8 +2114,56 @@ function buildPenFullnessCatchAnalysis(options = {}) {
   return result;
 }
 
-function validatePenFillAmount(amount, penState, rule) {
+function validatePenFillAmountInput(amount) {
   const numericAmount = Number(amount);
+  const result = {
+    valid: false,
+    amount: numericAmount,
+    reason: ""
+  };
+
+  if (!Number.isInteger(numericAmount)) {
+    return { ...result, reason: "Refill amount must be a whole number." };
+  }
+  if (numericAmount <= 0) {
+    return { ...result, reason: "Refill amount must be greater than 0." };
+  }
+
+  return { ...result, valid: true, reason: "" };
+}
+
+function validatePenFillAmountForOverride(amount, penState, rule) {
+  const basicValidation = validatePenFillAmountInput(amount);
+  const numericAmount = basicValidation.amount;
+  const currentRule = rule || penState?.rule || null;
+  const fullFillAmount = Number(currentRule?.defaultRefillAmount);
+  const currentPenCount = Number(penState?.currentPenCount ?? penState?.sheepLeftInPen);
+  const resultingPenCount = Number.isFinite(currentPenCount) && Number.isFinite(numericAmount)
+    ? currentPenCount + numericAmount
+    : null;
+  const reductionAmount = Number.isFinite(fullFillAmount) && Number.isFinite(numericAmount)
+    ? fullFillAmount - numericAmount
+    : null;
+  const result = {
+    ...basicValidation,
+    resultingPenCount,
+    reductionAmount
+  };
+
+  if (!basicValidation.valid) return result;
+  if (!currentRule || !Number.isFinite(fullFillAmount) || fullFillAmount <= 0) {
+    return { ...result, valid: false, reason: "Missing pen rule." };
+  }
+  if (!Number.isFinite(currentPenCount)) {
+    return { ...result, valid: false, reason: "Missing current pen count." };
+  }
+
+  return { ...result, valid: true, reason: "" };
+}
+
+function validatePenFillAmount(amount, penState, rule) {
+  const basicValidation = validatePenFillAmountInput(amount);
+  const numericAmount = basicValidation.amount;
   const currentRule = rule || penState?.rule || null;
   const maxPen = Number(currentRule?.maxPen);
   const fullFillAmount = Number(currentRule?.defaultRefillAmount);
@@ -2147,11 +2195,8 @@ function validatePenFillAmount(amount, penState, rule) {
   if (!currentRule || !Number.isFinite(maxPen) || !Number.isFinite(fullFillAmount) || fullFillAmount <= 0) {
     return { ...result, reason: "Missing pen rule." };
   }
-  if (!Number.isInteger(numericAmount)) {
-    return { ...result, reason: "Refill amount must be a whole number." };
-  }
-  if (numericAmount <= 0) {
-    return { ...result, reason: "Refill amount must be greater than 0." };
+  if (!basicValidation.valid) {
+    return { ...result, reason: basicValidation.reason };
   }
   if (!Number.isFinite(currentPenCount)) {
     return { ...result, reason: "Missing current pen count." };
@@ -2267,7 +2312,9 @@ function createPenFillEventDraft(options = {}) {
     ? options.source
     : PEN_FILL_EVENT_SOURCE.CUSTOM;
   const actualFillAmount = Number(options.actualFillAmount);
-  const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+  const validation = options.allowPenFillAmountOverride
+    ? validatePenFillAmountForOverride(actualFillAmount, penState, rule)
+    : validatePenFillAmount(actualFillAmount, penState, rule);
   if (!validation.valid) {
     return { error: validation.reason, validation };
   }
@@ -2308,6 +2355,13 @@ function createPenFillEventDraft(options = {}) {
     mode: appState.simulationMode ? "simulation" : "real",
     simulationRunLengthMode: appState.simulationMode ? appState.simulationRunLengthMode : "real",
     cycleSnapshot,
+    ...(options.penFillOverride ? {
+      penFillOverride: true,
+      penFillOverrideReason: options.penFillOverrideReason || "refill-not-due",
+      penFillOverrideMode: appState.simulationMode ? "simulation" : "live",
+      penFillOverrideCreatedAt: createdAt,
+      penFillOverrideNormalValidationMessage: options.penFillOverrideNormalValidationMessage || ""
+    } : {}),
     createdAt,
     updatedAt: createdAt
   };
@@ -2465,6 +2519,27 @@ function getDefaultPenFillAmountForSheepEntry(entry, penState = getHistoricalPen
   return null;
 }
 
+function getPenFillOverrideReason(normalValidationMessage = "") {
+  const message = String(normalValidationMessage || "").toLowerCase();
+  if (message.includes("capacity") || message.includes("exceed")) return "capacity-override";
+  if (message.includes("amount") || message.includes("recommended") || message.includes("full refill")) {
+    return "amount-outside-normal-rule";
+  }
+  return "refill-not-due";
+}
+
+function getPenFillOverrideConfirmationMessage(normalValidationMessage = "") {
+  const prefix = appState.simulationMode
+    ? "This Pen refill is outside the normal refill rule. Save it anyway to match the video and resync the Pen Refill Planner?"
+    : "This Pen refill is outside the normal refill rule. Live mode would normally block this because it may affect pen count and future refill forecasts. If this matches what actually happened, you can override and save it.";
+  const detail = normalValidationMessage ? `\n\nNormal validation: ${normalValidationMessage}` : "";
+  return `${prefix}${detail}`;
+}
+
+function confirmPenFillOverride(normalValidationMessage = "") {
+  return window.confirm(`${getPenFillOverrideConfirmationMessage(normalValidationMessage)}\n\nCancel = do not save\nOK = Override and Save`);
+}
+
 function getSheepEntryWallClockTime(entry) {
   const endTime = Number(entry?.endTime);
   if (Number.isFinite(endTime) && endTime > 0) return endTime;
@@ -2543,10 +2618,14 @@ function recordPenFillEventForSheepEntry(entry, options = {}) {
   });
 
   if (!penState) return fail("Could not calculate historical pen state for this row.");
-  if (!penState.refillAllowedNow) return fail("Pen refill is not allowed at this sheep count yet.");
+  const allowOverride = Boolean(options.penFillOverride);
+  const normalValidationMessage = options.penFillOverrideNormalValidationMessage || "Pen refill is not allowed at this sheep count yet.";
+  if (!penState.refillAllowedNow && !allowOverride) return fail("Pen refill is not allowed at this sheep count yet.");
 
   const actualFillAmount = Number(options.actualFillAmount);
-  const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+  const validation = allowOverride
+    ? validatePenFillAmountForOverride(actualFillAmount, penState, rule)
+    : validatePenFillAmount(actualFillAmount, penState, rule);
   if (!validation.valid) {
     return fail(getPenFillAmountErrorMessage(validation.reason), validation.reason);
   }
@@ -2563,6 +2642,12 @@ function recordPenFillEventForSheepEntry(entry, options = {}) {
     sheepId: sheepId || null,
     actualFillAmount: validation.amount,
     recommendedFillAmount: options.recommendedFillAmount,
+    allowPenFillAmountOverride: allowOverride,
+    penFillOverride: allowOverride,
+    penFillOverrideReason: allowOverride
+      ? (options.penFillOverrideReason || getPenFillOverrideReason(normalValidationMessage))
+      : undefined,
+    penFillOverrideNormalValidationMessage: allowOverride ? normalValidationMessage : undefined,
     source: PEN_FILL_EVENT_SOURCE.CUSTOM,
     effectiveElapsedSeconds: Number.isFinite(effectiveElapsedSeconds) ? effectiveElapsedSeconds : undefined,
     wallClockTime: getSheepEntryWallClockTime(entry)
@@ -2662,12 +2747,13 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
     rule,
     ...(assumedEvent ? { events: getCurrentRunPenFillEvents().filter((event) => event.id !== assumedEvent.id) } : {})
   });
-  if (!penState?.refillAllowedNow) {
-    const message = "Pen refill is not allowed at this sheep count yet.";
+  if (!penState) {
+    const message = "Could not calculate historical pen state for this row.";
     setValidation(message);
     window.alert(message);
     return { success: false, error: message };
   }
+  const refillRuleMessage = penState.refillAllowedNow ? "" : "Pen refill is not allowed at this sheep count yet.";
 
   const defaultAmount = getDefaultPenFillAmountForSheepEntry(entry, penState, rule);
   const rawAmount = window.prompt(
@@ -2686,9 +2772,29 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   }
 
   const actualFillAmount = Number(rawAmount.trim());
+  const basicValidation = validatePenFillAmountInput(actualFillAmount);
+  if (!basicValidation.valid) {
+    const message = basicValidation.reason;
+    setValidation(message);
+    window.alert(message);
+    return { success: false, error: message };
+  }
+  const normalAmountValidation = validatePenFillAmount(actualFillAmount, penState, rule);
+  const normalValidationMessage = refillRuleMessage || (normalAmountValidation.valid ? "" : normalAmountValidation.reason);
+  const shouldOverride = Boolean(normalValidationMessage);
+  if (shouldOverride && !confirmPenFillOverride(normalValidationMessage)) {
+    setValidation("Pen refill add cancelled.");
+    return { success: false, error: "Pen refill add cancelled." };
+  }
+
   const result = recordPenFillEventForSheepEntry(entry, {
     actualFillAmount,
-    recommendedFillAmount: Number.isInteger(defaultAmount) && defaultAmount > 0 ? defaultAmount : actualFillAmount
+    recommendedFillAmount: Number.isInteger(defaultAmount) && defaultAmount > 0 ? defaultAmount : actualFillAmount,
+    ...(shouldOverride ? {
+      penFillOverride: true,
+      penFillOverrideReason: getPenFillOverrideReason(normalValidationMessage),
+      penFillOverrideNormalValidationMessage: normalValidationMessage
+    } : {})
   });
 
   if (!result.success) {
@@ -2722,6 +2828,9 @@ function createSheepLogPenFillEventStatusBlock(entry) {
   const actualFillAmount = Number(status.event?.actualFillAmount);
   const sheepLeftBeforeFill = Number(status.historicalPenState?.currentPenCount);
   if (eventSource) detailParts.push(`source: ${eventSource}`);
+  if (status.event?.penFillOverride) {
+    detailParts.push(status.event.penFillOverrideMode === "simulation" ? "simulation override" : "live override");
+  }
   if (Number.isFinite(actualFillAmount)) detailParts.push(`amount: ${actualFillAmount}`);
   if (Number.isFinite(sheepLeftBeforeFill)) detailParts.push(`estimated before fill: ${sheepLeftBeforeFill}`);
 
