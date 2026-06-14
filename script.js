@@ -4537,6 +4537,7 @@ const appState = {
     result: null
   },
   reviewBlocks: [],
+  quarterSnapshots: [],
   nextReviewBlockIndex: 1,
   runReviewText: "Run review will be generated when you stop a run.",
   trendFlags: ["Set a target to enable trend flags."],
@@ -6863,6 +6864,7 @@ function resetRunState() {
   appState.trendBuckets = {};
   appState.selectedRunPaceSheepId = null;
   appState.reviewBlocks = [];
+  appState.quarterSnapshots = [];
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
@@ -7072,6 +7074,7 @@ function startRun(startedAtMs = Date.now()) {
   appState.trendBuckets = {};
   appState.selectedRunPaceSheepId = null;
   appState.reviewBlocks = [];
+  appState.quarterSnapshots = [];
   appState.nextReviewBlockIndex = 1;
   appState.runReviewText = "Run review will be generated when you stop a run.";
   appState.trendFlags = ["Set a target to enable trend flags."];
@@ -7706,6 +7709,7 @@ function markAffectedAssumedPenFillEventsUndone(events, now = Date.now()) {
 function rebuildGeneratedCorrectionData() {
   appState.trendBuckets = {};
   appState.reviewBlocks = [];
+  appState.quarterSnapshots = [];
   appState.nextReviewBlockIndex = 1;
   const effectiveElapsedSeconds = Math.max(...appState.sheep.map((entry) => Number(entry?.effectiveElapsedSeconds) || 0), 0);
   const blockSeconds = 15 * 60;
@@ -8494,6 +8498,11 @@ function getSortedBucketSummaries(bucketMinutes = appState.trendBucketMinutes) {
 
 function renderReviewList() {
   if (!elements.reviewList) return;
+  const quarterSnapshots = Array.isArray(appState.quarterSnapshots) ? appState.quarterSnapshots : [];
+  if (quarterSnapshots.length) {
+    elements.reviewList.innerHTML = quarterSnapshots.map((snapshot, index) => renderQuarterSnapshotReviewEntry(snapshot, index)).join("");
+    return;
+  }
   if (!appState.reviewBlocks.length) {
     elements.reviewList.innerHTML = '<div class="review-entry">No quarter reviews yet.</div>';
     return;
@@ -8517,6 +8526,47 @@ function renderReviewList() {
   }).join("");
 }
 
+function formatSnapshotNumber(value, decimals = 3, suffix = "") {
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number.toFixed(decimals)}${suffix}` : "—";
+}
+
+function formatSnapshotSignedSeconds(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "—";
+  if (Math.abs(seconds) < 0.0005) return "On pace";
+  return seconds < 0
+    ? `Gained ${Math.abs(seconds).toFixed(3)}s`
+    : `Lost ${seconds.toFixed(3)}s`;
+}
+
+function renderQuarterSnapshotReviewEntry(snapshot, index) {
+  const quarterNumber = Number.isFinite(Number(snapshot?.quarterNumber))
+    ? Number(snapshot.quarterNumber)
+    : index + 1;
+  const projectedQuarterResult = Number(snapshot?.projectedQuarterResult);
+  const projectedText = Number.isFinite(projectedQuarterResult)
+    ? `${projectedQuarterResult.toFixed(3)} sheep`
+    : "—";
+  return `
+    <div class="review-entry">
+      <div class="review-entry-title"><strong>Quarter ${quarterNumber}</strong></div>
+      <div class="review-entry-row"><span>Time:</span><strong>${snapshot?.range || "—"}</strong></div>
+      <div class="review-entry-row"><span>Required 15-min average:</span><strong>${formatSnapshotNumber(snapshot?.requiredExact, 3, " sheep")}</strong></div>
+      <div class="review-entry-row"><span>Sheep completed this quarter:</span><strong>${Number.isFinite(Number(snapshot?.sheepCompleted)) ? Number(snapshot.sheepCompleted) : "—"}</strong></div>
+      <div class="review-entry-row"><span>Live 15-min progress at finish:</span><strong>${formatSnapshotNumber(snapshot?.liveProgress, 3, " sheep")}</strong></div>
+      <div class="review-entry-row"><span>Projected quarter result:</span><strong>${projectedText}</strong></div>
+      <div class="review-entry-row"><span>Average total time per sheep:</span><strong>${formatSnapshotNumber(snapshot?.avgCycle, 3, "s")}</strong></div>
+      <div class="review-entry-row"><span>Average shear time:</span><strong>${formatSnapshotNumber(snapshot?.avgShear, 3, "s")}</strong></div>
+      <div class="review-entry-row"><span>Average catch time:</span><strong>${formatSnapshotNumber(snapshot?.avgCatch, 3, "s")}</strong></div>
+      <div class="review-entry-row"><span>Required average total time per sheep:</span><strong>${formatSnapshotNumber(snapshot?.requiredCycle, 3, "s")}</strong></div>
+      <div class="review-entry-row"><span>Gained/lost per completed sheep:</span><strong>${formatSnapshotSignedSeconds(snapshot?.gainedLostSecondsPerSheep)}</strong></div>
+      <div class="review-entry-row"><span>Total gained/lost this quarter:</span><strong>${formatSnapshotSignedSeconds(snapshot?.totalGainedLostSeconds)}</strong></div>
+      <div class="review-entry-row"><span>Recovery:</span><strong>${snapshot?.recoveryStatus || "—"}</strong></div>
+    </div>
+  `;
+}
+
 function buildRangeLabel(startSec, endSec) {
   if (appState.dayClockStartRealMs !== null) {
     const base = appState.dayClockStartSecondsFromMidnight;
@@ -8527,10 +8577,132 @@ function buildRangeLabel(startSec, endSec) {
   return `${formatElapsedMMSS(startSec)}–${formatElapsedMMSS(endSec)}`;
 }
 
+function getQuarterSnapshotPartialSheepAtBoundary(startSec, endSec, currentElapsedSeconds = getEffectiveElapsedSeconds()) {
+  if (!appState.runActive || !appState.currentCycle?.motorOn) return 0;
+
+  const shearStartMs = Number(appState.currentCycle?.shearStart);
+  const avgShear = Number(appState.currentStats?.avgShear);
+  if (!Number.isFinite(shearStartMs) || !Number.isFinite(avgShear) || avgShear <= 0) return 0;
+
+  const displayNowMs = getLiveDisplayNowMs();
+  const activeShearElapsedNow = Math.max((displayNowMs - shearStartMs) / 1000, 0);
+  if (!Number.isFinite(activeShearElapsedNow) || activeShearElapsedNow <= 0) return 0;
+
+  const activeShearStartElapsed = currentElapsedSeconds - activeShearElapsedNow;
+  if (!Number.isFinite(activeShearStartElapsed)) return 0;
+
+  const activeShearElapsedInsideQuarterAtBoundary = Math.max(
+    0,
+    endSec - Math.max(activeShearStartElapsed, startSec)
+  );
+
+  return Math.min(Math.max(activeShearElapsedInsideQuarterAtBoundary / avgShear, 0), 0.999);
+}
+
+function getLockedQuarterProjectionValue(quarterWindow, quarterLengthSeconds) {
+  const startSeconds = Number(quarterWindow?.startSeconds);
+  const endSeconds = Number(quarterWindow?.endSeconds);
+  if (
+    !Array.isArray(appState.sheep)
+    || !Number.isFinite(startSeconds)
+    || !Number.isFinite(endSeconds)
+    || !Number.isFinite(quarterLengthSeconds)
+    || quarterLengthSeconds <= 0
+  ) {
+    return null;
+  }
+
+  const completedSheepInQuarter = appState.sheep
+    .map((entry) => Number(entry?.effectiveElapsedSeconds))
+    .filter((effectiveElapsedSeconds) => Number.isFinite(effectiveElapsedSeconds)
+      && effectiveElapsedSeconds > startSeconds
+      && effectiveElapsedSeconds <= endSeconds)
+    .sort((a, b) => a - b);
+
+  const completedSheepCount = completedSheepInQuarter.length;
+  if (completedSheepCount <= 0) return null;
+
+  const lastCompletedElapsedSeconds = completedSheepInQuarter[completedSheepCount - 1];
+  const elapsedSecondsInsideQuarter = lastCompletedElapsedSeconds - startSeconds;
+  if (!Number.isFinite(elapsedSecondsInsideQuarter) || elapsedSecondsInsideQuarter < 60) return null;
+
+  const elapsedRatioAtLastCompletion = elapsedSecondsInsideQuarter / quarterLengthSeconds;
+  if (!Number.isFinite(elapsedRatioAtLastCompletion) || elapsedRatioAtLastCompletion <= 0) return null;
+
+  const projectedQuarterResult = completedSheepCount / elapsedRatioAtLastCompletion;
+  return Number.isFinite(projectedQuarterResult) ? projectedQuarterResult : null;
+}
+
+function buildQuarterSnapshot(blockIndex, startSec, endSec, requiredCycle, currentElapsedSeconds = getEffectiveElapsedSeconds()) {
+  const runDurationSeconds = Math.max(Number(getCurrentRunDurationSeconds()) || 0, 0);
+  const quarterLengthSeconds = Math.max(endSec - startSec, 0);
+  const requiredRunSheep = Number(calculateTargetMetrics().requiredRunSheep);
+  const requiredExact = runDurationSeconds > 0 && requiredRunSheep > 0
+    ? Math.max((requiredRunSheep * quarterLengthSeconds) / runDurationSeconds, 0)
+    : null;
+  const items = Array.isArray(appState.sheep)
+    ? appState.sheep.filter((item) => {
+      const effectiveElapsedSeconds = Number(item?.effectiveElapsedSeconds);
+      return Number.isFinite(effectiveElapsedSeconds)
+        && effectiveElapsedSeconds > startSec
+        && effectiveElapsedSeconds <= endSec;
+    })
+    : [];
+  const sheepCompleted = items.length;
+  const avgCycle = sheepCompleted ? items.reduce((sum, item) => sum + (Number(item.fullCycle) || 0), 0) / sheepCompleted : null;
+  const avgShear = sheepCompleted ? items.reduce((sum, item) => sum + (Number(item.shearDuration) || 0), 0) / sheepCompleted : null;
+  const avgCatch = sheepCompleted ? items.reduce((sum, item) => sum + (Number(item.catchDuration) || 0), 0) / sheepCompleted : null;
+  const activePartialSheep = getQuarterSnapshotPartialSheepAtBoundary(startSec, endSec, currentElapsedSeconds);
+  const gainedLostSecondsPerSheep = Number.isFinite(requiredCycle) && requiredCycle > 0 && Number.isFinite(avgCycle)
+    ? avgCycle - requiredCycle
+    : null;
+  const totalGainedLostSeconds = Number.isFinite(gainedLostSecondsPerSheep)
+    ? gainedLostSecondsPerSheep * sheepCompleted
+    : null;
+  let recoveryStatus = "On pace";
+  if (Number.isFinite(gainedLostSecondsPerSheep)) {
+    if (gainedLostSecondsPerSheep > 0.4) recoveryStatus = `Lost ${gainedLostSecondsPerSheep.toFixed(3)}s per sheep`;
+    else if (gainedLostSecondsPerSheep < -0.4) recoveryStatus = "Strong recovery";
+  } else if (!(Number.isFinite(requiredCycle) && requiredCycle > 0)) {
+    recoveryStatus = "Set target for pace comparison.";
+  }
+
+  return {
+    quarterIndex: blockIndex,
+    quarterNumber: blockIndex + 1,
+    startSec,
+    endSec,
+    range: buildRangeLabel(startSec, endSec),
+    requiredExact,
+    requiredCycle: Number.isFinite(requiredCycle) && requiredCycle > 0 ? requiredCycle : null,
+    sheepCompleted,
+    liveProgress: sheepCompleted + activePartialSheep,
+    activePartialSheep,
+    projectedQuarterResult: getLockedQuarterProjectionValue({ startSeconds: startSec, endSeconds: endSec }, quarterLengthSeconds),
+    avgCycle,
+    avgShear,
+    avgCatch,
+    gainedLostSecondsPerSheep,
+    totalGainedLostSeconds,
+    recoveryStatus,
+    capturedAtElapsedSeconds: endSec,
+    capturedAtMs: Date.now(),
+    source: "quarter-boundary-snapshot"
+  };
+}
+
+function captureQuarterSnapshot(blockIndex, startSec, endSec, requiredCycle, currentElapsedSeconds = getEffectiveElapsedSeconds()) {
+  appState.quarterSnapshots = Array.isArray(appState.quarterSnapshots) ? appState.quarterSnapshots : [];
+  const alreadyCaptured = appState.quarterSnapshots.some((snapshot) => Number(snapshot?.quarterIndex) === blockIndex);
+  if (alreadyCaptured) return;
+  appState.quarterSnapshots.push(buildQuarterSnapshot(blockIndex, startSec, endSec, requiredCycle, currentElapsedSeconds));
+}
+
 function maybeGenerate15MinuteReviews() {
   const blockSeconds = 15 * 60;
   const { requiredCycle } = calculateTargetMetrics();
-  while (getEffectiveElapsedSeconds() >= appState.nextReviewBlockIndex * blockSeconds) {
+  const currentElapsedSeconds = getEffectiveElapsedSeconds();
+  while (currentElapsedSeconds >= appState.nextReviewBlockIndex * blockSeconds) {
     const blockIndex = appState.nextReviewBlockIndex - 1;
     const startSec = blockIndex * blockSeconds;
     const endSec = appState.nextReviewBlockIndex * blockSeconds;
@@ -8547,6 +8719,7 @@ function maybeGenerate15MinuteReviews() {
       ? (delta <= 0 ? `Gained ${Math.abs(delta).toFixed(3)}s per sheep vs target.` : `Lost ${delta.toFixed(3)}s per sheep vs target.`)
       : "Set target for pace comparison.";
     appState.reviewBlocks.push({ range: buildRangeLabel(startSec, endSec), count, avgCycle, deltaText, status, startSec, endSec });
+    captureQuarterSnapshot(blockIndex, startSec, endSec, requiredCycle, currentElapsedSeconds);
     appState.nextReviewBlockIndex += 1;
   }
   renderReviewList();
@@ -8839,6 +9012,7 @@ function buildCompletedRunSnapshot() {
     qualityRatings: cloneSnapshotValue(sanitizeQualityRatings(appState.qualityRatings), []),
     officialRejectedAdjustment: getOfficialRejectedAdjustmentCount(),
     reviewBlocks: cloneSnapshotValue(appState.reviewBlocks, []),
+    quarterSnapshots: cloneSnapshotValue(appState.quarterSnapshots, []),
     trendBuckets: cloneSnapshotValue(trendBucketSummaries, []),
     trendFlags: Array.isArray(appState.trendFlags) ? [...appState.trendFlags] : [],
     runReviewText: appState.runReviewText || "",
@@ -15180,6 +15354,7 @@ function getAutosavePayload() {
       runPaceGraphView: appState.runPaceGraphView,
       runPaceGraphCustomRange: sanitizeRunPaceGraphCustomRange(appState.runPaceGraphCustomRange),
       reviewBlocks: appState.reviewBlocks,
+      quarterSnapshots: appState.quarterSnapshots,
       nextReviewBlockIndex: appState.nextReviewBlockIndex,
       runReviewText: appState.runReviewText,
       trendFlags: appState.trendFlags,
@@ -16349,6 +16524,8 @@ function restoreSessionPayload(raw, options = {}) {
   sanitizeManualMarkersOnSheepEntries(appState.daySheep);
   appState.penFillEvents = Array.isArray(appState.penFillEvents) ? appState.penFillEvents : [];
   appState.qualityRatings = sanitizeQualityRatings(appState.qualityRatings);
+  appState.reviewBlocks = Array.isArray(appState.reviewBlocks) ? appState.reviewBlocks : [];
+  appState.quarterSnapshots = Array.isArray(appState.quarterSnapshots) ? appState.quarterSnapshots : [];
   appState.latestCompletedRunSnapshot = Object.prototype.hasOwnProperty.call(raw.state, "latestCompletedRunSnapshot")
     && appState.latestCompletedRunSnapshot
     && typeof appState.latestCompletedRunSnapshot === "object"
