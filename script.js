@@ -8495,17 +8495,26 @@ function getSortedBucketSummaries(bucketMinutes = appState.trendBucketMinutes) {
 function renderReviewList() {
   if (!elements.reviewList) return;
   if (!appState.reviewBlocks.length) {
-    elements.reviewList.innerHTML = '<div class="review-entry">No 15-minute reviews yet.</div>';
+    elements.reviewList.innerHTML = '<div class="review-entry">No quarter reviews yet.</div>';
     return;
   }
-  elements.reviewList.innerHTML = appState.reviewBlocks.map((block) => `
-    <div class="review-entry">
-      <div><strong>${block.range}</strong></div>
-      <div>Sheep: ${block.count} • Avg Total Time Per Sheep: ${block.avgCycle.toFixed(3)}s</div>
-      <div>${block.deltaText}</div>
-      <div>${block.status}</div>
-    </div>
-  `).join("");
+  elements.reviewList.innerHTML = appState.reviewBlocks.map((block, index) => {
+    const quarterNumber = Number.isFinite(Number(block.startSec))
+      ? Math.floor(Number(block.startSec) / (15 * 60)) + 1
+      : index + 1;
+    const avgCycleText = Number.isFinite(Number(block.avgCycle)) ? `${Number(block.avgCycle).toFixed(3)}s` : "—";
+    const countText = Number.isFinite(Number(block.count)) ? Number(block.count) : "—";
+    return `
+      <div class="review-entry">
+        <div class="review-entry-title"><strong>Quarter ${quarterNumber}</strong></div>
+        <div class="review-entry-row"><span>Time:</span><strong>${block.range || "—"}</strong></div>
+        <div class="review-entry-row"><span>Sheep completed:</span><strong>${countText}</strong></div>
+        <div class="review-entry-row"><span>Average total time per sheep:</span><strong>${avgCycleText}</strong></div>
+        <div class="review-entry-row"><span>Gained/lost seconds per sheep versus target:</span><strong>${block.deltaText || "—"}</strong></div>
+        <div class="review-entry-row"><span>Recovery:</span><strong>${block.status || "—"}</strong></div>
+      </div>
+    `;
+  }).join("");
 }
 
 function buildRangeLabel(startSec, endSec) {
@@ -12925,17 +12934,7 @@ function getQuarterProgressStatus(requiredExact, currentProgress, quarterElapsed
     return { text: "—", className: "quarter-sheep-neutral" };
   }
 
-  const difference = projectedQuarterResult - requiredExact;
-  const tolerance = 0.005;
-  const projectedText = `${projectedQuarterResult.toFixed(3)} sheep`;
-
-  if (difference > tolerance) {
-    return { text: `${projectedText} — on track by ${difference.toFixed(3)}`, className: "quarter-sheep-ahead" };
-  }
-  if (difference < -tolerance) {
-    return { text: `${projectedText} — behind by ${Math.abs(difference).toFixed(3)}`, className: "quarter-sheep-behind" };
-  }
-  return { text: `${projectedText} — on target`, className: "quarter-sheep-on" };
+  return { text: `${projectedQuarterResult.toFixed(3)} sheep`, className: "quarter-sheep-neutral" };
 }
 
 function updateQuarterDisplay() {
