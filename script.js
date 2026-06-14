@@ -2407,6 +2407,21 @@ function getActivePenFillMarkerEventsForCurrentRun(events = appState.penFillEven
   ));
 }
 
+function getPenFillDisplaySheepNumber(event) {
+  const sheepId = typeof event?.sheepId === "string" ? event.sheepId : "";
+  if (sheepId && Array.isArray(appState.sheep)) {
+    const linkedEntry = appState.sheep.find((entry) => entry?.id === sheepId);
+    const linkedSheepNumber = Number(linkedEntry?.number);
+    if (Number.isFinite(linkedSheepNumber)) return linkedSheepNumber;
+  }
+
+  const sheepNumber = Number(event?.sheepNumber);
+  if (Number.isFinite(sheepNumber)) return sheepNumber;
+
+  const physicalSheepTakenFromPen = Number(event?.physicalSheepTakenFromPen);
+  return Number.isFinite(physicalSheepTakenFromPen) ? physicalSheepTakenFromPen : null;
+}
+
 function formatPenFillMarkerLabel() {
   return "Pen refill";
 }
@@ -13453,7 +13468,7 @@ function formatPenStateRefillStatus(penState) {
 function formatPenStateLastConfirmedFill(penState) {
   const lastFillEvent = penState?.lastFillEvent;
   if (!lastFillEvent) return "—";
-  const sheepNumber = Number(lastFillEvent.physicalSheepTakenFromPen);
+  const sheepNumber = getPenFillDisplaySheepNumber(lastFillEvent);
   if (!Number.isFinite(sheepNumber)) return "—";
   if (isManualCurrentPenCountCorrectionEvent(lastFillEvent)) {
     const correctedCount = Number(lastFillEvent.correctedCurrentPenCount);
