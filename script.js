@@ -12900,24 +12900,42 @@ function getActiveQuarterPartialSheep(elapsedSeconds, window = getCurrentQuarter
 }
 
 function getQuarterProgressStatus(requiredExact, currentProgress, quarterElapsedSeconds, quarterLengthSeconds) {
-  if (!Number.isFinite(requiredExact) || requiredExact < 0 || !Number.isFinite(currentProgress)) {
+  if (
+    !Number.isFinite(requiredExact)
+    || requiredExact < 0
+    || !Number.isFinite(currentProgress)
+    || !Number.isFinite(quarterElapsedSeconds)
+    || !Number.isFinite(quarterLengthSeconds)
+    || quarterLengthSeconds <= 0
+  ) {
     return { text: "—", className: "quarter-sheep-neutral" };
   }
 
-  const progressRatio = Number.isFinite(quarterLengthSeconds) && quarterLengthSeconds > 0
-    ? Math.min(Math.max(quarterElapsedSeconds / quarterLengthSeconds, 0), 1)
-    : 0;
-  const expectedProgressNow = requiredExact * progressRatio;
-  const difference = currentProgress - expectedProgressNow;
+  if (quarterElapsedSeconds < 60) {
+    return { text: "Building projection…", className: "quarter-sheep-neutral" };
+  }
+
+  const elapsedRatio = quarterElapsedSeconds / quarterLengthSeconds;
+  if (!Number.isFinite(elapsedRatio) || elapsedRatio <= 0) {
+    return { text: "—", className: "quarter-sheep-neutral" };
+  }
+
+  const projectedQuarterResult = currentProgress / elapsedRatio;
+  if (!Number.isFinite(projectedQuarterResult)) {
+    return { text: "—", className: "quarter-sheep-neutral" };
+  }
+
+  const difference = projectedQuarterResult - requiredExact;
   const tolerance = 0.005;
+  const projectedText = `${projectedQuarterResult.toFixed(3)} sheep`;
 
   if (difference > tolerance) {
-    return { text: `On track by ${difference.toFixed(3)} sheep`, className: "quarter-sheep-ahead" };
+    return { text: `${projectedText} — on track by ${difference.toFixed(3)}`, className: "quarter-sheep-ahead" };
   }
   if (difference < -tolerance) {
-    return { text: `Behind by ${Math.abs(difference).toFixed(3)} sheep`, className: "quarter-sheep-behind" };
+    return { text: `${projectedText} — behind by ${Math.abs(difference).toFixed(3)}`, className: "quarter-sheep-behind" };
   }
-  return { text: "On target", className: "quarter-sheep-on" };
+  return { text: `${projectedText} — on target`, className: "quarter-sheep-on" };
 }
 
 function updateQuarterDisplay() {
@@ -12957,7 +12975,7 @@ function updateQuarterDisplay() {
     quarterLengthSeconds
   );
 
-  setText(elements.currentQuarter, `Block ${currentQuarterNumber} of ${totalQuarters}`);
+  setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
   setText(elements.quarterSheepCount, String(actualQuarterSheep));
   setText(elements.quarterCurrentProgress, `${currentQuarterProgress.toFixed(3)} sheep`);
