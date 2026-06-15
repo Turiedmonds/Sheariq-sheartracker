@@ -19,6 +19,46 @@ body {
   zoom: var(--app-zoom);
 }
 
+/* Hide intrusive scrollbars while preserving scrolling behavior across browsers. */
+:where(
+  html,
+  body,
+  .dashboard,
+  .connection-help-modal,
+  .farm-dropdown-menu,
+  .table-wrap,
+  .sheep-log-scroll,
+  #panel-trend-graph .panel-body.run-pace-body,
+  #panel-trend-graph .run-pace-compare-summary,
+  .scroll-list,
+  #panel-sim.panel-docked,
+  .manual-session-list,
+  .review-run-table-wrap,
+  .sheep-log-marker-note-popover
+) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+:where(
+  html,
+  body,
+  .dashboard,
+  .connection-help-modal,
+  .farm-dropdown-menu,
+  .table-wrap,
+  .sheep-log-scroll,
+  #panel-trend-graph .panel-body.run-pace-body,
+  #panel-trend-graph .run-pace-compare-summary,
+  .scroll-list,
+  #panel-sim.panel-docked,
+  .manual-session-list,
+  .review-run-table-wrap,
+  .sheep-log-marker-note-popover
+)::-webkit-scrollbar {
+  display: none;
+}
+
 .app-header {
   padding: 0.5rem 0.85rem 0.4rem;
   border-bottom: 1px solid #080808;
