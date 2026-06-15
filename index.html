@@ -480,12 +480,8 @@
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Live sheep timing</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Timing motor state:</span>
+              <span class="metric-label panel-metric-label">Motor state:</span>
               <strong id="motorState" class="panel-metric-value">OFF</strong>
-            </div>
-            <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Raw Shelly motor:</span>
-              <strong id="rawShellyMotorState" class="panel-metric-value">Unknown</strong>
             </div>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Current catch time:</span>
@@ -1249,8 +1245,7 @@
         <p><strong>Run controls:</strong><br />Start Run, Pause, Stop Run, Finish Run / Break, and other run controls are app controls, not physical motor controls.</p>
 
         <h4 class="connection-help-title">Live sheep timing</h4>
-        <p><strong>Timing motor state:</strong><br />Shows the app timing state. In Real Shelly Mode, ON/OFF timing comes only from the physical Shelly/Evo cord. In Simulation Mode, the Motor ON/OFF buttons and shortcuts simulate that cord.</p>
-        <p><strong>Raw Shelly motor:</strong><br />Shows the latest raw Shelly/Evo state when available: ON, OFF, Unknown, or Paused in Simulation.</p>
+        <p><strong>Motor state:</strong><br />Shows whether the app is currently timing shear time. ON means shear timing is active. OFF means the app is in catch/waiting state. In Real Shelly Mode, this state is driven by the physical Shelly/Evo cord. In Simulation Mode, this state is driven by the simulation Motor ON/OFF buttons and shortcuts.</p>
         <p><strong>Current catch time:</strong><br />Shows how long it has been since the last sheep finished and the next sheep started.</p>
         <p><strong>Current shear time:</strong><br />Shows how long the current sheep has been getting shorn while the motor is ON.</p>
         <p><strong>Total time per sheep:</strong><br />Shows the live running total for the current sheep while it is being shorn, using the current catch time plus the current shear time. Before there is valid timing data it shows —. After a sheep is logged it shows the final Total Time Per Sheep for the last logged sheep.</p>

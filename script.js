@@ -4790,7 +4790,6 @@ const elements = {
   modeStatus: document.getElementById("modeStatus"),
   motorInputSource: document.getElementById("motorInputSource"),
   simulationMotorHelp: document.getElementById("simulationMotorHelp"),
-  rawShellyMotorState: document.getElementById("rawShellyMotorState"),
   simulationControls: document.getElementById("simulationControls"),
   simulationRunLengthMode: document.getElementById("simulationRunLengthMode"),
   simulationCustomMinutes: document.getElementById("simulationCustomMinutes"),
@@ -7481,11 +7480,8 @@ function updateModeStatusUI() {
   }
 }
 
-function getRawShellyMotorDisplay() {
-  if (appState.simulationMode) return 'Paused in Simulation';
-  if (appState.lastMotorState === true) return 'ON';
-  if (appState.lastMotorState === false) return 'OFF';
-  return 'Unknown';
+function getMotorStateDisplay() {
+  return appState.currentCycle.motorOn ? "ON" : "OFF";
 }
 
 function updateSimulationActionButtonsUI() {
@@ -14356,8 +14352,7 @@ function updateLivePanel() {
     countdownSeconds = schedule[nextRunIndex] || getCurrentRunDurationSeconds();
   }
 
-  setText(elements.motorState, appState.currentMotorDisplay);
-  setText(elements.rawShellyMotorState, getRawShellyMotorDisplay());
+  setText(elements.motorState, getMotorStateDisplay());
   updateModeStatusUI();
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
@@ -16669,7 +16664,7 @@ function restoreSessionPayload(raw, options = {}) {
   updateTrendFlags();
   updateTrendDetailsVisibility();
   if (options.source === "manual") {
-    setText(elements.motorState, appState.currentMotorDisplay);
+    setText(elements.motorState, getMotorStateDisplay());
     setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
     setText(elements.runCountdown, formatCountdown(getRunCountdownSeconds()));
     setText(elements.totalSheep, String(appState.daySheep.length));
