@@ -12925,22 +12925,35 @@ function refreshAfterSheepStatusChange(message = "") {
   autosaveState();
 }
 
-function promptRejectSheepById(sheepId) {
+async function promptRejectSheepById(sheepId) {
   const entry = getSheepLogEntryById(sheepId);
   if (!entry) {
-    window.alert("Could not find this sheep row. Refresh and try again.");
+    await showInfoModal({
+      title: "Sheep row not found",
+      message: "Could not find this sheep row. Refresh and try again."
+    });
     return { success: false, error: "Sheep entry not found." };
   }
 
-  const reason = window.prompt(
-    `Reject sheep ${entry.number} from the official count? It will stay in the physical log and timing history, but will not count toward the official total.\n\nOptional reason:`,
-    ""
-  );
+  const reason = await showInputModal({
+    title: "Reject sheep from official count?",
+    message: `Reject sheep ${entry.number} from the official count? It will stay in the physical log and timing history, but will not count toward the official total.`,
+    label: "Optional reason",
+    defaultValue: "",
+    confirmText: "Reject Sheep",
+    cancelText: "Cancel",
+    required: false,
+    type: "warning"
+  });
   if (reason === null) return { success: false, error: "Reject cancelled." };
 
-  const result = rejectSheepById(sheepId, { reason });
+  const result = rejectSheepById(sheepId, { reason: reason.trim() });
   if (!result.success) {
-    window.alert(result.error || "Could not reject this sheep.");
+    await showInfoModal({
+      title: "Could not reject sheep",
+      message: result.error || "Could not reject this sheep.",
+      type: "warning"
+    });
     return result;
   }
 
@@ -12948,19 +12961,35 @@ function promptRejectSheepById(sheepId) {
   return result;
 }
 
-function promptRestoreSheepById(sheepId) {
+async function promptRestoreSheepById(sheepId) {
   const entry = getSheepLogEntryById(sheepId);
   if (!entry) {
-    window.alert("Could not find this sheep row. Refresh and try again.");
+    await showInfoModal({
+      title: "Sheep row not found",
+      message: "Could not find this sheep row. Refresh and try again."
+    });
     return { success: false, error: "Sheep entry not found." };
   }
 
-  const reason = window.prompt(`Restore sheep ${entry.number} to the official count?\n\nOptional restore reason:`, "");
+  const reason = await showInputModal({
+    title: "Restore sheep to official count?",
+    message: `Restore sheep ${entry.number} to the official count?`,
+    label: "Optional restore reason",
+    defaultValue: "",
+    confirmText: "Restore Sheep",
+    cancelText: "Cancel",
+    required: false,
+    type: "info"
+  });
   if (reason === null) return { success: false, error: "Restore cancelled." };
 
-  const result = restoreSheepById(sheepId, { reason });
+  const result = restoreSheepById(sheepId, { reason: reason.trim() });
   if (!result.success) {
-    window.alert(result.error || "Could not restore this sheep.");
+    await showInfoModal({
+      title: "Could not restore sheep",
+      message: result.error || "Could not restore this sheep.",
+      type: "warning"
+    });
     return result;
   }
 
@@ -18039,6 +18068,34 @@ async function handleSheepLogMarkerNoteAction(actionTarget) {
     if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = true;
     try {
       await promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
+    } finally {
+      if (document.contains(actionTarget)) {
+        delete actionTarget.dataset.actionPending;
+        if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = false;
+      }
+    }
+    return true;
+  }
+  if (action === "reject-sheep") {
+    if (actionTarget.dataset.actionPending === "true") return true;
+    actionTarget.dataset.actionPending = "true";
+    if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = true;
+    try {
+      await promptRejectSheepById(actionTarget.dataset.sheepId || "");
+    } finally {
+      if (document.contains(actionTarget)) {
+        delete actionTarget.dataset.actionPending;
+        if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = false;
+      }
+    }
+    return true;
+  }
+  if (action === "restore-sheep") {
+    if (actionTarget.dataset.actionPending === "true") return true;
+    actionTarget.dataset.actionPending = "true";
+    if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = true;
+    try {
+      await promptRestoreSheepById(actionTarget.dataset.sheepId || "");
     } finally {
       if (document.contains(actionTarget)) {
         delete actionTarget.dataset.actionPending;
