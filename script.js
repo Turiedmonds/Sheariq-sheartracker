@@ -17119,10 +17119,14 @@ function ensureConfirmModal() {
   overlay.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       resolveConfirmModal(false);
     }
     if (event.key === "Enter") {
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       resolveConfirmModal(true);
     }
   });
