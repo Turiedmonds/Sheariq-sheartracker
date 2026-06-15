@@ -4506,6 +4506,23 @@ const appState = {
     resolver: null,
     returnFocusEl: null
   },
+  appModal: {
+    open: false,
+    overlay: null,
+    dialog: null,
+    title: null,
+    message: null,
+    label: null,
+    input: null,
+    validation: null,
+    confirmBtn: null,
+    cancelBtn: null,
+    resolver: null,
+    returnFocusEl: null,
+    mode: null,
+    validator: null,
+    required: false
+  },
   penFillAdjustModalOpen: false,
   penFillAdjustModalReturnFocusEl: null,
   penFillPromptModal: {
@@ -15735,9 +15752,12 @@ function getPdfPenRefillPlannerRows() {
 function showPdfExportLibraryError(message) {
   const safeMessage = message || "PDF export libraries are not available. Please refresh while online so the app can cache the local PDF libraries.";
   console.error(safeMessage);
-  if (typeof alert === "function") {
-    alert(safeMessage);
-  }
+  showInfoModal({
+    title: "PDF export unavailable",
+    message: safeMessage,
+    confirmText: "OK",
+    type: "error"
+  });
 }
 
 function sanitizePdfFilenamePart(value) {
@@ -16234,8 +16254,21 @@ async function saveManualSessionAsNew() {
   payload.type = "manual";
   payload.savedAt = Date.now();
   const suggestedName = generateSuggestedManualSaveName(payload);
-  const enteredName = window.prompt("Save testing session as:", suggestedName);
-  const name = (enteredName || "").trim();
+  const enteredName = await showInputModal({
+    title: "Save testing session",
+    message: "Save testing session as:",
+    label: "Session name",
+    defaultValue: suggestedName,
+    confirmText: "Save Session",
+    cancelText: "Cancel",
+    required: true,
+    validate: (value) => value.trim() ? true : "Enter a session name to save."
+  });
+  if (enteredName === null) {
+    updateManualSessionStatus("Manual save cancelled");
+    return;
+  }
+  const name = enteredName.trim();
   if (!name) {
     updateManualSessionStatus("Manual save cancelled");
     return;
@@ -17215,6 +17248,222 @@ function penFillConfirmationModal({ recommendedFillAmount }) {
   });
 }
 
+
+function ensureAppModal() {
+  if (appState.appModal.overlay instanceof HTMLElement) return appState.appModal;
+
+  const overlay = document.createElement("div");
+  overlay.id = "appModalOverlay";
+  overlay.className = "modal-overlay";
+  overlay.hidden = true;
+
+  const dialog = document.createElement("div");
+  dialog.className = "modal-dialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "appModalTitle");
+  dialog.setAttribute("aria-describedby", "appModalMessage");
+  dialog.tabIndex = -1;
+
+  const title = document.createElement("h3");
+  title.id = "appModalTitle";
+
+  const message = document.createElement("p");
+  message.id = "appModalMessage";
+
+  const field = document.createElement("div");
+  field.className = "modal-input-field";
+
+  const label = document.createElement("label");
+  label.id = "appModalInputLabel";
+  label.setAttribute("for", "appModalInput");
+
+  const input = document.createElement("input");
+  input.id = "appModalInput";
+  input.type = "text";
+
+  const validation = document.createElement("div");
+  validation.id = "appModalValidation";
+  validation.className = "modal-validation-message";
+  validation.setAttribute("role", "alert");
+
+  field.append(label, input, validation);
+
+  const actions = document.createElement("div");
+  actions.className = "modal-actions";
+
+  const confirmBtn = document.createElement("button");
+  confirmBtn.id = "appModalConfirm";
+  confirmBtn.type = "button";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.id = "appModalCancel";
+  cancelBtn.type = "button";
+
+  actions.append(confirmBtn, cancelBtn);
+  dialog.append(title, message, field, actions);
+  overlay.appendChild(dialog);
+  document.body.appendChild(overlay);
+
+  Object.assign(appState.appModal, {
+    overlay,
+    dialog,
+    title,
+    message,
+    field,
+    label,
+    input,
+    validation,
+    confirmBtn,
+    cancelBtn
+  });
+
+  const closeAppModal = (value) => {
+    if (!appState.appModal.open) return;
+    const resolver = appState.appModal.resolver;
+    appState.appModal.open = false;
+    appState.appModal.resolver = null;
+    appState.appModal.mode = null;
+    appState.appModal.validator = null;
+    appState.appModal.required = false;
+    overlay.hidden = true;
+    setLayoutScrollLock(false);
+    if (appState.appModal.returnFocusEl instanceof HTMLElement) {
+      appState.appModal.returnFocusEl.focus();
+    }
+    appState.appModal.returnFocusEl = null;
+    if (typeof resolver === "function") resolver(value);
+  };
+
+  const submitAppModal = () => {
+    if (!appState.appModal.open) return;
+    if (appState.appModal.mode !== "input") {
+      closeAppModal(true);
+      return;
+    }
+    const rawValue = input.value;
+    const trimmedValue = rawValue.trim();
+    let validationMessage = "";
+    if (appState.appModal.required && !trimmedValue) {
+      validationMessage = "Enter a value to continue.";
+    } else if (typeof appState.appModal.validator === "function") {
+      const result = appState.appModal.validator(rawValue);
+      if (typeof result === "string") validationMessage = result;
+      else if (result === false) validationMessage = "Enter a valid value to continue.";
+    }
+    if (validationMessage) {
+      validation.textContent = validationMessage;
+      input.setAttribute("aria-invalid", "true");
+      input.focus();
+      return;
+    }
+    closeAppModal(rawValue);
+  };
+
+  input.addEventListener("input", () => {
+    validation.textContent = "";
+    input.removeAttribute("aria-invalid");
+  });
+  confirmBtn.addEventListener("click", submitAppModal);
+  cancelBtn.addEventListener("click", () => closeAppModal(null));
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeAppModal(null);
+  });
+  overlay.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeAppModal(null);
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submitAppModal();
+    }
+  });
+
+  return appState.appModal;
+}
+
+function closeOpenAppModalWithDefault() {
+  const modal = appState.appModal;
+  if (modal.open && typeof modal.resolver === "function") {
+    const previousResolver = modal.resolver;
+    modal.open = false;
+    modal.resolver = null;
+    modal.overlay.hidden = true;
+    setLayoutScrollLock(false);
+    previousResolver(modal.mode === "input" ? null : true);
+  }
+}
+
+function showInfoModal({ title, message, confirmText = "OK", type = "info" } = {}) {
+  const modal = ensureAppModal();
+  if (!modal.overlay || !modal.dialog || !modal.title || !modal.message || !modal.confirmBtn || !modal.cancelBtn) {
+    return Promise.resolve(true);
+  }
+
+  closeOpenAppModalWithDefault();
+  modal.mode = "info";
+  modal.title.textContent = title || "Information";
+  modal.message.textContent = message || "";
+  modal.dialog.dataset.modalType = type || "info";
+  modal.field.hidden = true;
+  modal.confirmBtn.textContent = confirmText || "OK";
+  modal.cancelBtn.hidden = true;
+  modal.returnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.open = true;
+  modal.overlay.hidden = false;
+  setLayoutScrollLock(true);
+  modal.confirmBtn.focus();
+
+  return new Promise((resolve) => {
+    modal.resolver = resolve;
+  });
+}
+
+function showInputModal({
+  title,
+  message,
+  label,
+  defaultValue = "",
+  placeholder = "",
+  confirmText = "OK",
+  cancelText = "Cancel",
+  required = false,
+  validate = null,
+  type = "info"
+} = {}) {
+  const modal = ensureAppModal();
+  if (!modal.overlay || !modal.dialog || !modal.title || !modal.message || !modal.input || !modal.confirmBtn || !modal.cancelBtn) {
+    return Promise.resolve(null);
+  }
+
+  closeOpenAppModalWithDefault();
+  modal.mode = "input";
+  modal.validator = validate;
+  modal.required = Boolean(required);
+  modal.title.textContent = title || "Enter value";
+  modal.message.textContent = message || "";
+  modal.dialog.dataset.modalType = type || "info";
+  modal.field.hidden = false;
+  modal.label.textContent = label || title || "Value";
+  modal.input.value = defaultValue || "";
+  modal.input.placeholder = placeholder || "";
+  modal.input.removeAttribute("aria-invalid");
+  modal.validation.textContent = "";
+  modal.confirmBtn.textContent = confirmText || "OK";
+  modal.cancelBtn.textContent = cancelText || "Cancel";
+  modal.cancelBtn.hidden = false;
+  modal.returnFocusEl = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  modal.open = true;
+  modal.overlay.hidden = false;
+  setLayoutScrollLock(true);
+  modal.input.focus();
+  modal.input.select();
+
+  return new Promise((resolve) => {
+    modal.resolver = resolve;
+  });
+}
 
 function confirmModal({ title, message, confirmText = "Confirm", cancelText = "Cancel" }) {
   const modal = ensureConfirmModal();

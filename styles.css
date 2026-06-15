@@ -2823,6 +2823,32 @@ td {
   white-space: pre-line;
 }
 
+.modal-input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0 0 1rem;
+}
+
+.modal-input-field label {
+  font-weight: 700;
+  color: #374151;
+}
+
+.modal-input-field input {
+  width: 100%;
+}
+
+.modal-input-field input[aria-invalid="true"] {
+  border-color: #dc2626;
+}
+
+.modal-validation-message {
+  min-height: 1.1rem;
+  color: #b91c1c;
+  font-size: 0.85rem;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;
