@@ -3382,10 +3382,40 @@ function savePenFillAdjustModal(event) {
   closePenFillAdjustModal();
 }
 
-function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
-  const fullFillAmount = Number(getPenRule(appState.recordType)?.defaultRefillAmount);
+async function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
+  const rule = getPenRule(appState.recordType);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
   const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
-  const rawAmount = window.prompt(`${message}${promptSuffix}`, "");
+  const rawAmount = await showInputModal({
+    title: "Different Pen refill amount",
+    message: `${message}${promptSuffix}`,
+    label: "Actual refill amount",
+    confirmText: "Record amount",
+    required: true,
+    validate: (value) => {
+      const trimmedValue = value.trim();
+      if (!/^\d+$/.test(trimmedValue)) return "Refill amount must be a whole number.";
+
+      const actualFillAmount = Number(trimmedValue);
+      const physicalSheepTakenFromPen = Number(getPhysicalSheepTakenFromPen());
+      const existingFillEvent = findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+      const shouldOverrideAssumedFill = Boolean(
+        existingFillEvent
+        && existingFillEvent.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL
+      );
+      const penStateEvents = shouldOverrideAssumedFill
+        ? getCurrentRunPenFillEvents().filter((event) => event.id !== existingFillEvent.id)
+        : undefined;
+      const penState = getCurrentPenStateFromEvents({
+        recordType: appState.recordType,
+        rule,
+        physicalSheepTakenFromPen,
+        ...(penStateEvents ? { events: penStateEvents } : {})
+      });
+      const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+      return validation.valid ? "" : getPenFillAmountErrorMessage(validation.reason);
+    }
+  });
   if (rawAmount === null) return null;
   return rawAmount.trim();
 }
@@ -3771,7 +3801,7 @@ async function maybeShowPenFillConfirmationPrompt() {
 async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey) {
   let promptMessage = "What amount was actually added to the pen?";
   while (appState.pendingPenFillPromptKey === promptKey) {
-    const rawAmount = promptForCustomPenFillAmount(promptMessage);
+    const rawAmount = await promptForCustomPenFillAmount(promptMessage);
     if (rawAmount === null) {
       appState.dismissedPenFillPromptKey = promptKey;
       clearPenRefillAlertLatch();
