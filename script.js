@@ -3434,14 +3434,37 @@ function savePenFillAdjustModal(event) {
 }
 
 async function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
-  const fullFillAmount = Number(getPenRule(appState.recordType)?.defaultRefillAmount);
+  const rule = getPenRule(appState.recordType);
+  const fullFillAmount = Number(rule?.defaultRefillAmount);
+  const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const penState = getCurrentPenStateFromEvents({
+    recordType: appState.recordType,
+    rule,
+    physicalSheepTakenFromPen
+  });
   const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
   const rawAmount = await showInputModal({
     title: "Record pen refill",
     message: `${message}${promptSuffix}`,
     label: "Amount added",
     confirmText: "Record refill",
-    placeholder: Number.isFinite(fullFillAmount) ? `1-${fullFillAmount}` : "Amount"
+    placeholder: Number.isFinite(fullFillAmount) ? `1-${fullFillAmount}` : "Amount",
+    required: true,
+    validate: (value) => {
+      const trimmedValue = value.trim();
+      if (!/^\d+$/.test(trimmedValue)) return "Refill amount must be a whole number.";
+
+      const actualFillAmount = Number(trimmedValue);
+      const basicValidation = validatePenFillAmountInput(actualFillAmount);
+      if (!basicValidation.valid) return getPenFillAmountErrorMessage(basicValidation.reason);
+
+      if (penState && rule) {
+        const validation = validatePenFillAmount(actualFillAmount, penState, rule);
+        return validation.valid ? true : getPenFillAmountErrorMessage(validation.reason);
+      }
+
+      return true;
+    }
   });
   if (rawAmount === null) return null;
   return rawAmount.trim();
