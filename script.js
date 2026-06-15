@@ -4789,7 +4789,6 @@ const elements = {
   simulationBanner: document.getElementById("simulationBanner"),
   modeStatus: document.getElementById("modeStatus"),
   motorInputSource: document.getElementById("motorInputSource"),
-  simulationMotorHelp: document.getElementById("simulationMotorHelp"),
   simulationControls: document.getElementById("simulationControls"),
   simulationRunLengthMode: document.getElementById("simulationRunLengthMode"),
   simulationCustomMinutes: document.getElementById("simulationCustomMinutes"),
@@ -4953,7 +4952,7 @@ const SHORTCUT_ACTIONS = [
   { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOnShortcut },
   { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOffShortcut },
   { key: "toggleSimulationMode", label: "Toggle Simulation Mode", elementKey: "shortcutToggleSimulationMode", handler: toggleSimulationModeShortcut, titleSuffix: "" },
-  { key: "resetCurrentSheep", label: "Reset Current Sheep", elementKey: "shortcutResetCurrentSheep", buttonKey: "resetCurrentSheepBtn", titleSuffix: " — Simulation Mode active run only", canRun: canResetCurrentSheepTiming }
+  { key: "resetCurrentSheep", label: "Reset Current Sheep", elementKey: "shortcutResetCurrentSheep", buttonKey: "resetCurrentSheepBtn", titleSuffix: "", canRun: canResetCurrentSheepTiming }
 ];
 
 const SPECIAL_SHORTCUT_KEYS = Object.freeze({
@@ -7013,7 +7012,18 @@ async function handleFinishRunBreakClick() {
   if (appState.breakActive || appState.preparedForNextRunBreak) return;
   if (!appState.runActive && appState.sheep.length === 0) return;
 
-  const confirmed = await confirmEarlyFinishRunBreak();
+  const earlyBreakDetails = getEarlyBreakConfirmationDetails();
+  let confirmed = true;
+  if (earlyBreakDetails) {
+    confirmed = await confirmEarlyFinishRunBreak();
+  } else if (!appState.simulationMode) {
+    confirmed = await confirmModal({
+      title: "Finish run and enter break?",
+      message: "Finish this run and enter the official break? Real Shelly timing will stop until the next run starts.",
+      confirmText: "Finish Run / Break",
+      cancelText: "Keep running"
+    });
+  }
   if (!confirmed) {
     clearPanelInteractionHighlights();
     return;
@@ -7459,8 +7469,7 @@ function toggleSimulationModeShortcut() {
 
 function canResetCurrentSheepTiming() {
   return Boolean(
-    appState.simulationMode
-    && appState.runActive
+    appState.runActive
     && !appState.breakActive
     && !appState.preparedForNextRunBreak
   );
@@ -7473,11 +7482,6 @@ function updateModeStatusUI() {
     : 'Current mode: <strong>Real Shelly Mode</strong> • Motor input: Shelly/Evo cord only';
   if (elements.modeStatus) elements.modeStatus.innerHTML = modeHtml;
   if (elements.motorInputSource) elements.motorInputSource.innerHTML = modeHtml;
-  if (elements.simulationMotorHelp) {
-    elements.simulationMotorHelp.textContent = simulationEnabled
-      ? 'Shelly polling is paused. Motor ON/OFF buttons simulate the cord.'
-      : 'Motor ON/OFF buttons only work in Simulation Mode.';
-  }
 }
 
 function getMotorStateDisplay() {
@@ -7499,8 +7503,7 @@ function updateResetCurrentSheepButtonUI() {
 
 function canUndoLastSheep() {
   return Boolean(
-    appState.simulationMode
-    && appState.runActive
+    appState.runActive
     && !appState.breakActive
     && !appState.preparedForNextRunBreak
     && appState.sheep.length > 0
@@ -7986,7 +7989,7 @@ function rewindSimulationTimingForUndoLastSheep(rewindSeconds, previousSheep = n
 }
 
 async function undoLastSheep() {
-  if (!canUndoLastSheep()) return { success: false, error: "Undo Last Sheep is only available during an active Simulation Mode run." };
+  if (!canUndoLastSheep()) return { success: false, error: "Undo Last Sheep is only available during an active run with sheep to undo." };
 
   const confirmed = await confirmModal({
     title: "Undo last completed sheep?",
@@ -8033,8 +8036,21 @@ async function undoLastSheep() {
   return { success: true, sheep: latestRunSheep };
 }
 
-function resetCurrentSheepTiming() {
+async function resetCurrentSheepTiming() {
   if (!canResetCurrentSheepTiming()) return;
+  if (!appState.simulationMode) {
+    const confirmed = await confirmModal({
+      title: "Reset current sheep timing?",
+      message: "Reset the current sheep timing? The app will return to catch/waiting state without forcing the real motor state.",
+      confirmText: "Reset Current Sheep",
+      cancelText: "Cancel"
+    });
+    if (!confirmed) {
+      clearPanelInteractionHighlights();
+      return;
+    }
+    if (!canResetCurrentSheepTiming()) return;
+  }
 
   const resetTimeMs = appState.paused && Number.isFinite(appState.pauseStartedAtMs)
     ? appState.pauseStartedAtMs
@@ -14880,8 +14896,20 @@ function setPaused(paused) {
   updatePenFillConfirmationControls();
 }
 
-function togglePauseRun() {
+async function togglePauseRun() {
   if (!appState.runActive) return;
+  if (!appState.paused && !appState.simulationMode) {
+    const confirmed = await confirmModal({
+      title: "Pause real-mode run?",
+      message: "Pause the active real-mode run? Shelly/Evo cord motor changes will not be counted while paused.",
+      confirmText: "Pause Run",
+      cancelText: "Keep running"
+    });
+    if (!confirmed) {
+      clearPanelInteractionHighlights();
+      return;
+    }
+  }
   setPaused(!appState.paused);
 }
 
