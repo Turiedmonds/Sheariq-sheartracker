@@ -997,14 +997,55 @@ body.layout-edit-on .panel:hover .resize-handle {
   font-size: 0.9rem;
 }
 
+#panel-sim .run-control-groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+#panel-sim .run-control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.6rem;
+  background: #f9fafb;
+}
+
+#panel-sim .run-control-group-title {
+  color: #374151;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
 #panel-sim .run-controls-main-row,
 #panel-sim .run-controls-secondary-row {
+  gap: 0.35rem;
   margin-top: 0;
 }
 
-#panel-sim .run-controls-secondary-row {
-  padding-top: 0.35rem;
-  border-top: 1px solid #e5e7eb;
+#panel-sim .run-control-group-primary {
+  grid-column: span 2;
+}
+
+#panel-sim .run-control-group-primary .button-row {
+  align-content: flex-start;
+}
+
+@media (max-width: 520px) {
+  #panel-sim .run-control-groups {
+    grid-template-columns: 1fr;
+  }
+
+  #panel-sim .run-control-group-primary {
+    grid-column: auto;
+  }
 }
 
 #panel-sim .btn-start-new-day {
