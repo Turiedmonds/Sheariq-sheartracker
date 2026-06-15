@@ -7481,6 +7481,10 @@ function updateModeStatusUI() {
   }
 }
 
+function getTimingMotorDisplay() {
+  return appState.currentCycle.motorOn ? 'ON' : 'OFF';
+}
+
 function getRawShellyMotorDisplay() {
   if (appState.simulationMode) return 'Paused in Simulation';
   if (appState.lastMotorState === true) return 'ON';
@@ -14356,7 +14360,7 @@ function updateLivePanel() {
     countdownSeconds = schedule[nextRunIndex] || getCurrentRunDurationSeconds();
   }
 
-  setText(elements.motorState, appState.currentMotorDisplay);
+  setText(elements.motorState, getTimingMotorDisplay());
   setText(elements.rawShellyMotorState, getRawShellyMotorDisplay());
   updateModeStatusUI();
   setText(elements.currentShear, formatSeconds(shearCurrent));
@@ -16669,7 +16673,7 @@ function restoreSessionPayload(raw, options = {}) {
   updateTrendFlags();
   updateTrendDetailsVisibility();
   if (options.source === "manual") {
-    setText(elements.motorState, appState.currentMotorDisplay);
+    setText(elements.motorState, getTimingMotorDisplay());
     setText(elements.runClock, formatCountdown(getEffectiveElapsedSeconds()));
     setText(elements.runCountdown, formatCountdown(getRunCountdownSeconds()));
     setText(elements.totalSheep, String(appState.daySheep.length));
