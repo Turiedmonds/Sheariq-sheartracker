@@ -3433,10 +3433,16 @@ function savePenFillAdjustModal(event) {
   closePenFillAdjustModal();
 }
 
-function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
+async function promptForCustomPenFillAmount(message = "What amount was actually added to the pen?") {
   const fullFillAmount = Number(getPenRule(appState.recordType)?.defaultRefillAmount);
   const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
-  const rawAmount = window.prompt(`${message}${promptSuffix}`, "");
+  const rawAmount = await showInputModal({
+    title: "Record pen refill",
+    message: `${message}${promptSuffix}`,
+    label: "Amount added",
+    confirmText: "Record refill",
+    placeholder: Number.isFinite(fullFillAmount) ? `1-${fullFillAmount}` : "Amount"
+  });
   if (rawAmount === null) return null;
   return rawAmount.trim();
 }
@@ -3822,7 +3828,7 @@ async function maybeShowPenFillConfirmationPrompt() {
 async function promptForDifferentPenFillAmount(recommendedFillAmount, promptKey) {
   let promptMessage = "What amount was actually added to the pen?";
   while (appState.pendingPenFillPromptKey === promptKey) {
-    const rawAmount = promptForCustomPenFillAmount(promptMessage);
+    const rawAmount = await promptForCustomPenFillAmount(promptMessage);
     if (rawAmount === null) {
       appState.dismissedPenFillPromptKey = promptKey;
       clearPenRefillAlertLatch();
