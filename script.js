@@ -3437,10 +3437,16 @@ async function promptForCustomPenFillAmount(message = "What amount was actually 
   const rule = getPenRule(appState.recordType);
   const fullFillAmount = Number(rule?.defaultRefillAmount);
   const physicalSheepTakenFromPen = getPhysicalSheepTakenFromPen();
+  const existingFillEvent = findActivePenFillEventAtCurrentPoint(physicalSheepTakenFromPen);
+  const shouldExcludeAssumedFill = existingFillEvent?.source === PEN_FILL_EVENT_SOURCE.ASSUMED_FULL;
+  const penStateEvents = shouldExcludeAssumedFill
+    ? getCurrentRunPenFillEvents().filter((event) => event.id !== existingFillEvent.id)
+    : undefined;
   const penState = getCurrentPenStateFromEvents({
     recordType: appState.recordType,
     rule,
-    physicalSheepTakenFromPen
+    physicalSheepTakenFromPen,
+    ...(penStateEvents ? { events: penStateEvents } : {})
   });
   const promptSuffix = Number.isFinite(fullFillAmount) ? ` (1-${fullFillAmount})` : "";
   const rawAmount = await showInputModal({
