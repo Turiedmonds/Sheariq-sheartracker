@@ -2554,7 +2554,12 @@ function getPenFillOverrideConfirmationMessage(normalValidationMessage = "") {
 }
 
 function confirmPenFillOverride(normalValidationMessage = "") {
-  return window.confirm(`${getPenFillOverrideConfirmationMessage(normalValidationMessage)}\n\nCancel = do not save\nOK = Override and Save`);
+  return confirmModal({
+    title: "Override Pen refill rule?",
+    message: `${getPenFillOverrideConfirmationMessage(normalValidationMessage)}\n\nCancel = do not save\nConfirm = Override and Save`,
+    confirmText: "Override and Save",
+    cancelText: "Do not save"
+  });
 }
 
 function getSheepEntryWallClockTime(entry) {
@@ -2689,7 +2694,7 @@ function recordPenFillEventForSheepEntry(entry, options = {}) {
   return { success: true, event: draft, message, error: null };
 }
 
-function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
+async function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
   const setValidation = (message) => {
     if (validationEl instanceof HTMLElement) validationEl.textContent = message;
   };
@@ -2697,11 +2702,19 @@ function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
   if (!penFillEventId) {
     const message = "Missing linked Pen refill event id.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Pen refill event missing",
+      message
+    });
     return { success: false, error: message };
   }
 
-  const confirmed = window.confirm("Remove Pen refill event for this sheep row? This will undo the linked planner event.");
+  const confirmed = await confirmModal({
+    title: "Remove Pen refill event?",
+    message: "Remove Pen refill event for this sheep row? This will undo the linked planner event.",
+    confirmText: "Remove Event",
+    cancelText: "Cancel"
+  });
   if (!confirmed) return { success: false, error: "Pen refill removal cancelled." };
 
   const result = undoPenFillEventById(penFillEventId, {
@@ -2711,7 +2724,10 @@ function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
   if (!result.success) {
     const message = result.message || "Unable to remove Pen refill event.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Unable to remove Pen refill event",
+      message
+    });
     return result;
   }
 
@@ -2719,7 +2735,7 @@ function promptRemovePenFillEventForSheepEntry(eventId, validationEl = null) {
   return result;
 }
 
-function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
+async function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   const entry = getSheepLogEntryById(sheepId);
   const setValidation = (message) => {
     if (validationEl instanceof HTMLElement) validationEl.textContent = message;
@@ -2728,7 +2744,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!entry) {
     const message = "Could not find this sheep row. Refresh and try again.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Sheep row not found",
+      message
+    });
     return { success: false, error: message };
   }
 
@@ -2736,7 +2755,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (linkedEvent) {
     const message = "Pen refill is already confirmed on this row.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Pen refill already confirmed",
+      message
+    });
     return { success: false, error: message };
   }
 
@@ -2745,7 +2767,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!recordType || recordType === "none" || !rule) {
     const message = "Select a pen refill record type first.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Pen refill record type required",
+      message
+    });
     return { success: false, error: message };
   }
 
@@ -2754,7 +2779,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (existingAtSheepCount && existingAtSheepCount.source !== PEN_FILL_EVENT_SOURCE.ASSUMED_FULL) {
     const message = "Pen refill is already confirmed at this sheep count.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Pen refill already confirmed",
+      message
+    });
     return { success: false, error: message };
   }
 
@@ -2767,16 +2795,30 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!penState) {
     const message = "Could not calculate historical pen state for this row.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Unable to calculate pen state",
+      message
+    });
     return { success: false, error: message };
   }
   const refillRuleMessage = penState.refillAllowedNow ? "" : "Pen refill is not allowed at this sheep count yet.";
 
   const defaultAmount = getDefaultPenFillAmountForSheepEntry(entry, penState, rule);
-  const rawAmount = window.prompt(
-    `Actual refill amount for sheep ${entry.number}?`,
-    Number.isInteger(defaultAmount) && defaultAmount > 0 ? String(defaultAmount) : ""
-  );
+  const rawAmount = await showInputModal({
+    title: "Add Pen refill",
+    message: `Actual refill amount for sheep ${entry.number}?`,
+    label: "Actual refill amount",
+    defaultValue: Number.isInteger(defaultAmount) && defaultAmount > 0 ? String(defaultAmount) : "",
+    confirmText: "Continue",
+    cancelText: "Cancel",
+    required: true,
+    validate: (value) => {
+      const trimmedValue = value.trim();
+      if (!/^\d+$/.test(trimmedValue)) return "Refill amount must be a whole number.";
+      const validation = validatePenFillAmountInput(Number(trimmedValue));
+      return validation.valid ? true : validation.reason;
+    }
+  });
   if (rawAmount === null) {
     setValidation("Pen refill add cancelled.");
     return { success: false, error: "Pen refill add cancelled." };
@@ -2784,7 +2826,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!/^\d+$/.test(rawAmount.trim())) {
     const message = "Refill amount must be a whole number.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Invalid refill amount",
+      message
+    });
     return { success: false, error: message };
   }
 
@@ -2793,13 +2838,16 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!basicValidation.valid) {
     const message = basicValidation.reason;
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Invalid refill amount",
+      message
+    });
     return { success: false, error: message };
   }
   const normalAmountValidation = validatePenFillAmount(actualFillAmount, penState, rule);
   const normalValidationMessage = refillRuleMessage || (normalAmountValidation.valid ? "" : normalAmountValidation.reason);
   const shouldOverride = Boolean(normalValidationMessage);
-  if (shouldOverride && !confirmPenFillOverride(normalValidationMessage)) {
+  if (shouldOverride && !(await confirmPenFillOverride(normalValidationMessage))) {
     setValidation("Pen refill add cancelled.");
     return { success: false, error: "Pen refill add cancelled." };
   }
@@ -2817,7 +2865,10 @@ function promptAddPenFillEventForSheepEntry(sheepId, validationEl = null) {
   if (!result.success) {
     const message = result.message || "Unable to add Pen refill event.";
     setValidation(message);
-    window.alert(message);
+    await showInfoModal({
+      title: "Unable to add Pen refill event",
+      message
+    });
     return result;
   }
 
@@ -12879,60 +12930,72 @@ function promptRestoreSheepById(sheepId) {
   return result;
 }
 
-function saveSheepLogMarkerNoteFromEditor(editor) {
+async function saveSheepLogMarkerNoteFromEditor(editor) {
   const sheepId = editor.dataset.sheepId || "";
   const markerCheckboxes = [...editor.querySelectorAll('[data-role="marker-checkbox"]')];
   const customInput = editor.querySelector('[data-role="custom-label"]');
   const noteInput = editor.querySelector('[data-role="note"]');
   const validation = editor.querySelector('[data-role="validation"]');
+  const saveButton = editor.querySelector('[data-action="save-marker-note"]');
+  if (editor.dataset.savePending === "true") return;
   if (!(noteInput instanceof HTMLTextAreaElement)) return;
 
-  const noteText = normalizeSheepNote(noteInput.value);
-  const manualMarkers = markerCheckboxes
-    .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked)
-    .map((checkbox) => buildManualMarker(checkbox.value))
-    .filter(Boolean);
-  const customToggle = editor.querySelector('[data-role="custom-toggle"]');
-  const customSelected = customToggle instanceof HTMLInputElement && customToggle.checked;
-  const customLabel = customSelected && customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
-  if (customSelected && !customLabel) {
-    if (validation) validation.textContent = "Enter a custom marker label or untick Custom before saving.";
-    if (customInput instanceof HTMLInputElement) customInput.focus();
-    return;
-  }
-  if (customLabel) {
-    const customMarker = buildManualMarker(MANUAL_MARKER_CUSTOM_TYPE, customLabel);
-    if (!customMarker) {
-      if (validation) validation.textContent = "Enter a valid custom marker label before saving.";
+  editor.dataset.savePending = "true";
+  if (saveButton instanceof HTMLButtonElement) saveButton.disabled = true;
+
+  try {
+    const noteText = normalizeSheepNote(noteInput.value);
+    const manualMarkers = markerCheckboxes
+      .filter((checkbox) => checkbox instanceof HTMLInputElement && checkbox.checked)
+      .map((checkbox) => buildManualMarker(checkbox.value))
+      .filter(Boolean);
+    const customToggle = editor.querySelector('[data-role="custom-toggle"]');
+    const customSelected = customToggle instanceof HTMLInputElement && customToggle.checked;
+    const customLabel = customSelected && customInput instanceof HTMLInputElement ? normalizeManualMarkerCustomLabel(customInput.value) : "";
+    if (customSelected && !customLabel) {
+      if (validation) validation.textContent = "Enter a custom marker label or untick Custom before saving.";
       if (customInput instanceof HTMLInputElement) customInput.focus();
       return;
     }
-    manualMarkers.push(customMarker);
-  }
+    if (customLabel) {
+      const customMarker = buildManualMarker(MANUAL_MARKER_CUSTOM_TYPE, customLabel);
+      if (!customMarker) {
+        if (validation) validation.textContent = "Enter a valid custom marker label before saving.";
+        if (customInput instanceof HTMLInputElement) customInput.focus();
+        return;
+      }
+      manualMarkers.push(customMarker);
+    }
 
-  const penFillCheckbox = editor.querySelector('[data-role="pen-fill-checkbox"]');
-  if (penFillCheckbox instanceof HTMLInputElement) {
-    const initiallyHadPenFill = penFillCheckbox.dataset.initialStatus === "linked";
-    if (penFillCheckbox.checked && !initiallyHadPenFill) {
-      const result = promptAddPenFillEventForSheepEntry(sheepId, validation);
-      if (!result.success) return;
-    } else if (!penFillCheckbox.checked && penFillCheckbox.dataset.initialStatus === "linked") {
-      const result = promptRemovePenFillEventForSheepEntry(penFillCheckbox.dataset.penFillEventId || "", validation);
-      if (!result.success) return;
+    const penFillCheckbox = editor.querySelector('[data-role="pen-fill-checkbox"]');
+    if (penFillCheckbox instanceof HTMLInputElement) {
+      const initiallyHadPenFill = penFillCheckbox.dataset.initialStatus === "linked";
+      if (penFillCheckbox.checked && !initiallyHadPenFill) {
+        const result = await promptAddPenFillEventForSheepEntry(sheepId, validation);
+        if (!result.success) return;
+      } else if (!penFillCheckbox.checked && penFillCheckbox.dataset.initialStatus === "linked") {
+        const result = await promptRemovePenFillEventForSheepEntry(penFillCheckbox.dataset.penFillEventId || "", validation);
+        if (!result.success) return;
+      }
+    }
+
+    const updated = updateSheepEntryMarkerNoteById(sheepId, manualMarkers, noteText);
+    if (!updated) {
+      if (validation) validation.textContent = "Could not find this sheep row. Refresh and try again.";
+      return;
+    }
+
+    closeSheepLogMarkerNoteEditor({ skipFocus: true });
+    autosaveState();
+    renderLogTable();
+    drawTrendGraph();
+    updateStatsPanel();
+  } finally {
+    if (document.contains(editor)) {
+      delete editor.dataset.savePending;
+      if (saveButton instanceof HTMLButtonElement) saveButton.disabled = false;
     }
   }
-
-  const updated = updateSheepEntryMarkerNoteById(sheepId, manualMarkers, noteText);
-  if (!updated) {
-    if (validation) validation.textContent = "Could not find this sheep row. Refresh and try again.";
-    return;
-  }
-
-  closeSheepLogMarkerNoteEditor({ skipFocus: true });
-  autosaveState();
-  renderLogTable();
-  drawTrendGraph();
-  updateStatsPanel();
 }
 
 function getSortedSheepLogEntries() {
@@ -17899,7 +17962,7 @@ function closeSimulationControlsHelpModal() {
   }
 }
 
-function handleSheepLogMarkerNoteAction(actionTarget) {
+async function handleSheepLogMarkerNoteAction(actionTarget) {
   const action = actionTarget.dataset.action;
   if (action === "edit-marker-note") {
     openSheepLogMarkerNoteEditor(actionTarget.dataset.sheepId || "", actionTarget);
@@ -17911,19 +17974,39 @@ function handleSheepLogMarkerNoteAction(actionTarget) {
   }
   if (action === "save-marker-note") {
     const editor = actionTarget.closest(".sheep-log-marker-note-editor");
-    if (editor instanceof HTMLElement) saveSheepLogMarkerNoteFromEditor(editor);
+    if (editor instanceof HTMLElement) await saveSheepLogMarkerNoteFromEditor(editor);
     return true;
   }
   if (action === "add-pen-fill-event") {
     const editor = actionTarget.closest(".sheep-log-marker-note-editor");
     const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
-    promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
+    if (actionTarget.dataset.actionPending === "true") return true;
+    actionTarget.dataset.actionPending = "true";
+    if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = true;
+    try {
+      await promptAddPenFillEventForSheepEntry(actionTarget.dataset.sheepId || "", validation);
+    } finally {
+      if (document.contains(actionTarget)) {
+        delete actionTarget.dataset.actionPending;
+        if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = false;
+      }
+    }
     return true;
   }
   if (action === "remove-pen-fill-event") {
     const editor = actionTarget.closest(".sheep-log-marker-note-editor");
     const validation = editor instanceof HTMLElement ? editor.querySelector('[data-role="validation"]') : null;
-    promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
+    if (actionTarget.dataset.actionPending === "true") return true;
+    actionTarget.dataset.actionPending = "true";
+    if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = true;
+    try {
+      await promptRemovePenFillEventForSheepEntry(actionTarget.dataset.penFillEventId || "", validation);
+    } finally {
+      if (document.contains(actionTarget)) {
+        delete actionTarget.dataset.actionPending;
+        if (actionTarget instanceof HTMLButtonElement) actionTarget.disabled = false;
+      }
+    }
     return true;
   }
   return false;
@@ -18437,7 +18520,9 @@ function bindEvents() {
       if (!(target instanceof Element)) return;
       const actionTarget = target.closest("[data-action]");
       if (!(actionTarget instanceof HTMLElement)) return;
-      handleSheepLogMarkerNoteAction(actionTarget);
+      handleSheepLogMarkerNoteAction(actionTarget).catch((error) => {
+        console.error("Sheep Log marker/note action failed", error);
+      });
     });
     elements.sheepLogBody.addEventListener("change", (event) => {
       const target = event.target;
@@ -18559,7 +18644,9 @@ function bindEvents() {
     if (!(target instanceof Element)) return;
     const actionTarget = target.closest("[data-action]");
     if (actionTarget instanceof HTMLElement && sheepLogMarkerNotePopoverEl?.contains(actionTarget)) {
-      handleSheepLogMarkerNoteAction(actionTarget);
+      handleSheepLogMarkerNoteAction(actionTarget).catch((error) => {
+        console.error("Sheep Log marker/note action failed", error);
+      });
       return;
     }
     if (!sheepLogMarkerNotePopoverEl) return;
