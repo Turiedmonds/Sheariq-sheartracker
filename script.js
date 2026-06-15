@@ -13166,7 +13166,7 @@ function updateQuarterDisplay() {
     quarterTotals.requiredExact
   );
 
-  setText(elements.currentQuarter, `Quarter ${currentQuarterNumber} of ${totalQuarters}`);
+  setText(elements.currentQuarter, `${currentQuarterNumber} of ${totalQuarters}`);
   setText(elements.quarterClock, formatElapsedMMSS(quarterElapsedSeconds));
   setText(elements.quarterSheepCount, String(actualQuarterSheep));
   setText(elements.quarterCurrentProgress, `${currentQuarterProgress.toFixed(3)} sheep`);
