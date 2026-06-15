@@ -32,7 +32,7 @@ const SHEEP_LOG_MARKER_SETTINGS_STORAGE_KEY = "sheariq.sheepLogMarkerSettings";
 const PEN_FILL_FINAL_TARGET_STORAGE_KEY = "sheariq.penFillFinalTargetByRecordType";
 const KEYBOARD_SHORTCUTS_STORAGE_KEY = "sheariq.keyboardShortcuts";
 const KEYBOARD_SHORTCUTS_VERSION_STORAGE_KEY = "sheariq.keyboardShortcuts.version";
-const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "2";
+const CURRENT_KEYBOARD_SHORTCUTS_VERSION = "3";
 const APP_ZOOM_STORAGE_KEY = "sheariq.appZoomPercent";
 const APP_ZOOM_MIN_PERCENT = 50;
 const APP_ZOOM_MAX_PERCENT = 125;
@@ -4809,6 +4809,14 @@ const elements = {
   shortcutMotorOff: document.getElementById("shortcutMotorOff"),
   shortcutToggleSimulationMode: document.getElementById("shortcutToggleSimulationMode"),
   shortcutResetCurrentSheep: document.getElementById("shortcutResetCurrentSheep"),
+  shortcutUndoLastSheep: document.getElementById("shortcutUndoLastSheep"),
+  shortcutStartNewDay: document.getElementById("shortcutStartNewDay"),
+  shortcutSaveSession: document.getElementById("shortcutSaveSession"),
+  shortcutLoadSession: document.getElementById("shortcutLoadSession"),
+  shortcutExportSession: document.getElementById("shortcutExportSession"),
+  shortcutImportSession: document.getElementById("shortcutImportSession"),
+  shortcutExportPdf: document.getElementById("shortcutExportPdf"),
+  shortcutLoadLastAutosave: document.getElementById("shortcutLoadLastAutosave"),
   resetShortcutsBtn: document.getElementById("resetShortcutsBtn"),
   shortcutSettingsBtn: document.getElementById("shortcutSettingsBtn"),
   shortcutSettingsModalOverlay: document.getElementById("shortcutSettingsModalOverlay"),
@@ -4928,7 +4936,15 @@ const DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   motorOn: "0",
   motorOff: "ENTER",
   toggleSimulationMode: "M",
-  resetCurrentSheep: "ARROWUP"
+  resetCurrentSheep: "ARROWUP",
+  undoLastSheep: "",
+  startNewDay: "",
+  saveSession: "",
+  loadSession: "",
+  exportSession: "",
+  importSession: "",
+  exportPdf: "",
+  loadLastAutosave: ""
 });
 
 const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
@@ -4940,7 +4956,15 @@ const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
   motorOn: "O",
   motorOff: "F",
   toggleSimulationMode: "",
-  resetCurrentSheep: ""
+  resetCurrentSheep: "",
+  undoLastSheep: "",
+  startNewDay: "",
+  saveSession: "",
+  loadSession: "",
+  exportSession: "",
+  importSession: "",
+  exportPdf: "",
+  loadLastAutosave: ""
 });
 
 const SHORTCUT_ACTIONS = [
@@ -4952,7 +4976,15 @@ const SHORTCUT_ACTIONS = [
   { key: "motorOn", label: "Motor ON", elementKey: "shortcutMotorOn", buttonKey: "simMotorOnBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOnShortcut },
   { key: "motorOff", label: "Motor OFF", elementKey: "shortcutMotorOff", buttonKey: "simMotorOffBtn", titleSuffix: " — Simulation Mode only", canRun: canRunSimulationMotorOffShortcut },
   { key: "toggleSimulationMode", label: "Toggle Simulation Mode", elementKey: "shortcutToggleSimulationMode", handler: toggleSimulationModeShortcut, titleSuffix: "" },
-  { key: "resetCurrentSheep", label: "Reset Current Sheep", elementKey: "shortcutResetCurrentSheep", buttonKey: "resetCurrentSheepBtn", titleSuffix: "", canRun: canResetCurrentSheepTiming }
+  { key: "resetCurrentSheep", label: "Reset Current Sheep", elementKey: "shortcutResetCurrentSheep", buttonKey: "resetCurrentSheepBtn", titleSuffix: "", canRun: canResetCurrentSheepTiming },
+  { key: "undoLastSheep", label: "Undo Last Sheep", elementKey: "shortcutUndoLastSheep", buttonKey: "undoLastSheepBtn", titleSuffix: " — asks for confirmation" },
+  { key: "startNewDay", label: "Start New Day", elementKey: "shortcutStartNewDay", buttonKey: "startNewDayBtn", titleSuffix: " — asks for confirmation" },
+  { key: "saveSession", label: "Save Session", elementKey: "shortcutSaveSession", buttonKey: "saveSessionBtn", titleSuffix: "" },
+  { key: "loadSession", label: "Load Session", elementKey: "shortcutLoadSession", buttonKey: "loadSessionBtn", titleSuffix: "" },
+  { key: "exportSession", label: "Export Session", elementKey: "shortcutExportSession", buttonKey: "exportSessionBtn", titleSuffix: "" },
+  { key: "importSession", label: "Import Session", elementKey: "shortcutImportSession", buttonKey: "importSessionBtn", titleSuffix: "" },
+  { key: "exportPdf", label: "Export PDF", elementKey: "shortcutExportPdf", buttonKey: "exportPdfBtn", titleSuffix: "" },
+  { key: "loadLastAutosave", label: "Load Last Autosave", elementKey: "shortcutLoadLastAutosave", buttonKey: "loadLastSaveBtn", titleSuffix: "" }
 ];
 
 const SPECIAL_SHORTCUT_KEYS = Object.freeze({
@@ -5163,8 +5195,13 @@ function runShortcutAction(action) {
   if (button && !button.disabled) button.click();
 }
 
+function isShortcutBlockedByOpenModal() {
+  if (appState.confirmModal.open || appState.penFillPromptModal.open || appState.penFillAdjustModalOpen) return true;
+  return Array.from(document.querySelectorAll('[id$="ModalOverlay"]')).some((overlay) => overlay instanceof HTMLElement && overlay.hidden === false);
+}
+
 function handleShortcutKeydown(event) {
-  if (event.repeat || isTypingTarget(event.target)) return;
+  if (event.repeat || isTypingTarget(event.target) || isShortcutBlockedByOpenModal()) return;
   const key = sanitizeShortcutKey(event.key);
   if (!key) return;
   for (const action of SHORTCUT_ACTIONS) {
