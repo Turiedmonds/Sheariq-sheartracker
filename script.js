@@ -17372,10 +17372,14 @@ function ensureAppModal() {
   overlay.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       closeAppModal(null);
     }
     if (event.key === "Enter") {
       event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
       submitAppModal();
     }
   });
