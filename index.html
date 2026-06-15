@@ -80,6 +80,7 @@
           <button id="testConnectionBtn" type="button">Test Connection</button>
         </div>
         <div id="connectionStatus" class="status-box">No connection test yet.</div>
+        <div id="modeStatus" class="status-box minimal-status">Current mode: <strong>Real Shelly Mode</strong> • Motor input: Shelly/Evo cord only</div>
         <pre id="connectionDebug" class="debug-box">Debug output appears here after a test.</pre>
       </div>
     </details>
@@ -141,8 +142,9 @@
               <span>Simulation Mode</span>
             </label>
             <div id="simulationBanner" class="sim-banner" hidden>
-              Simulation active: Shelly polling is paused.
+              Simulation Mode: Shelly polling is paused. Motor ON/OFF buttons simulate the cord.
             </div>
+            <div id="motorInputSource" class="status-box minimal-status">Current mode: <strong>Real Shelly Mode</strong> • Motor input: Shelly/Evo cord only</div>
             <div class="form-grid single-row sim-setting-row simulation-run-length-row">
               <label for="simulationRunLengthMode">Run length</label>
               <select id="simulationRunLengthMode" disabled>
@@ -180,6 +182,7 @@
             <div id="simulationControls" class="button-row run-controls-secondary-row">
               <button id="simMotorOnBtn" type="button" disabled>Motor ON</button>
               <button id="simMotorOffBtn" type="button" disabled>Motor OFF</button>
+              <span id="simulationMotorHelp" class="control-help-text">Motor ON/OFF buttons only work in Simulation Mode.</span>
               <button id="skipBreakForTestingBtn" class="btn-inline-small" type="button" hidden disabled>Skip Break for Testing</button>
               <button id="resetCurrentSheepBtn" class="btn-inline-small" type="button" disabled>Reset Current Sheep</button>
               <button id="undoLastSheepBtn" class="btn-inline-small" type="button" disabled>Undo Last Sheep</button>
@@ -477,8 +480,12 @@
           <div class="timing-group panel-section">
             <h3 class="timing-group-heading panel-section-title">Live sheep timing</h3>
             <div class="metric-row panel-metric-row">
-              <span class="metric-label panel-metric-label">Motor state:</span>
+              <span class="metric-label panel-metric-label">Timing motor state:</span>
               <strong id="motorState" class="panel-metric-value">OFF</strong>
+            </div>
+            <div class="metric-row panel-metric-row">
+              <span class="metric-label panel-metric-label">Raw Shelly motor:</span>
+              <strong id="rawShellyMotorState" class="panel-metric-value">Unknown</strong>
             </div>
             <div class="metric-row panel-metric-row">
               <span class="metric-label panel-metric-label">Current catch time:</span>
@@ -1236,8 +1243,14 @@
         <h4 class="connection-help-title">Run badge</h4>
         <p>Shows the current run number, such as Run 1 or Run 2. During an official break it shows the current break label, such as Morning Smoko or Lunch.</p>
 
+        <h4 class="connection-help-title">Mode and motor input</h4>
+        <p><strong>Real Shelly Mode:</strong><br />Uses the physical Shelly/Evo cord for motor ON/OFF timing. App buttons and shortcuts do not manually force motor ON/OFF in real mode.</p>
+        <p><strong>Simulation Mode:</strong><br />Pauses Shelly polling. Motor ON/OFF buttons and shortcuts are for Simulation Mode only and simulate sheep cycles for testing.</p>
+        <p><strong>Run controls:</strong><br />Start Run, Pause, Stop Run, Finish Run / Break, and other run controls are app controls, not physical motor controls.</p>
+
         <h4 class="connection-help-title">Live sheep timing</h4>
-        <p><strong>Motor state:</strong><br />Shows the live ON/OFF signal from the Shelly/Evo. ON means the motor is running. OFF means the motor is stopped. The app uses this to start and stop sheep timing.</p>
+        <p><strong>Timing motor state:</strong><br />Shows the app timing state. In Real Shelly Mode, ON/OFF timing comes only from the physical Shelly/Evo cord. In Simulation Mode, the Motor ON/OFF buttons and shortcuts simulate that cord.</p>
+        <p><strong>Raw Shelly motor:</strong><br />Shows the latest raw Shelly/Evo state when available: ON, OFF, Unknown, or Paused in Simulation.</p>
         <p><strong>Current catch time:</strong><br />Shows how long it has been since the last sheep finished and the next sheep started.</p>
         <p><strong>Current shear time:</strong><br />Shows how long the current sheep has been getting shorn while the motor is ON.</p>
         <p><strong>Total time per sheep:</strong><br />Shows the live running total for the current sheep while it is being shorn, using the current catch time plus the current shear time. Before there is valid timing data it shows —. After a sheep is logged it shows the final Total Time Per Sheep for the last logged sheep.</p>
@@ -1473,25 +1486,25 @@
         <p>The Simulation Controls panel is used to start, stop, pause, and test a run. It also shows simulation controls, autosave controls, manual save controls, shortcut settings, Shelly connection status, and run status.</p>
 
         <h4 class="connection-help-title">Simulation Mode</h4>
-        <p>Use Simulation Mode when testing the app without the real Evo/Shelly signal.</p>
+        <p>Real Shelly Mode uses the physical Shelly/Evo cord for motor ON/OFF timing. Simulation Mode is for testing without the real Evo/Shelly signal.</p>
         <p>Simulation run length lets you test the app with a short run such as 5, 10, or 15 minutes. It only works in Simulation Mode and resets to Real run when Simulation Mode is turned off.</p>
         <p>When Simulation Mode is ON:</p>
         <ul class="connection-help-list">
           <li>Shelly polling is paused.</li>
-          <li>Motor ON and Motor OFF buttons are shown.</li>
-          <li>Motor shortcuts can be used.</li>
+          <li>Motor ON/OFF buttons and shortcuts simulate the cord.</li>
         </ul>
         <p>When Simulation Mode is OFF:</p>
         <ul class="connection-help-list">
-          <li>Motor state should come from the real Evo/Shelly signal.</li>
-          <li>Motor ON/OFF shortcuts do not force the motor state.</li>
+          <li>Motor ON/OFF timing comes only from the physical Shelly/Evo cord.</li>
+          <li>Motor ON/OFF buttons and shortcuts do not force the motor state.</li>
         </ul>
 
         <h4 class="connection-help-title">Motor ON / Motor OFF</h4>
         <p>Motor ON simulates the Evo motor starting. Motor OFF simulates the Evo motor stopping.</p>
-        <p>These buttons are for testing only. In real use, the app should read the motor state from the Shelly inside the Evo.</p>
+        <p>These buttons and shortcuts are for Simulation Mode only. In real use, the app reads motor ON/OFF timing from the Shelly/Evo cord only.</p>
 
         <h4 class="connection-help-title">Run Controls</h4>
+        <p>Start Run, Pause, Stop Run, Finish Run / Break, and other run controls are app controls, not physical motor controls.</p>
         <p><strong>Start Run:</strong> Starts the current run timer.</p>
         <p><strong>Stop Run:</strong> Stops the current run.</p>
         <p><strong>Pause:</strong> Pauses or resumes the run timer.</p>

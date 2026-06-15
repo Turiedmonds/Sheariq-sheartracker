@@ -4787,6 +4787,10 @@ const elements = {
   connectionDebug: document.getElementById("connectionDebug"),
   simulationModeToggle: document.getElementById("simulationModeToggle"),
   simulationBanner: document.getElementById("simulationBanner"),
+  modeStatus: document.getElementById("modeStatus"),
+  motorInputSource: document.getElementById("motorInputSource"),
+  simulationMotorHelp: document.getElementById("simulationMotorHelp"),
+  rawShellyMotorState: document.getElementById("rawShellyMotorState"),
   simulationControls: document.getElementById("simulationControls"),
   simulationRunLengthMode: document.getElementById("simulationRunLengthMode"),
   simulationCustomMinutes: document.getElementById("simulationCustomMinutes"),
@@ -4943,7 +4947,7 @@ const LEGACY_DEFAULT_KEYBOARD_SHORTCUTS = Object.freeze({
 
 const SHORTCUT_ACTIONS = [
   { key: "startRun", label: "Start Run", elementKey: "shortcutStartRun", buttonKey: "startRunBtn", titleSuffix: "" },
-  { key: "stopRun", label: "Stop Run", elementKey: "shortcutStopRun", buttonKey: "stopRunBtn", titleSuffix: "" },
+  { key: "stopRun", label: "Stop Run", elementKey: "shortcutStopRun", buttonKey: "stopRunBtn", titleSuffix: " — asks for confirmation" },
   { key: "pauseRun", label: "Pause / Resume", elementKey: "shortcutPauseRun", buttonKey: "pauseRunBtn", titleSuffix: "" },
   { key: "resetRun", label: "Reset Run", elementKey: "shortcutResetRun", buttonKey: "resetRunBtn", titleSuffix: "" },
   { key: "finishRunBreak", label: "Finish Run / Break", elementKey: "shortcutFinishRunBreak", buttonKey: "finishRunBreakBtn", titleSuffix: "" },
@@ -6980,6 +6984,20 @@ function getEarlyBreakConfirmationDetails() {
   };
 }
 
+async function confirmStopRun() {
+  const confirmed = await confirmModal({
+    title: "Stop current run?",
+    message: "Stop the current run? This ends live timing for this run and generates the run review.",
+    confirmText: "Stop Run",
+    cancelText: "Keep running"
+  });
+  if (!confirmed) {
+    clearPanelInteractionHighlights();
+    return;
+  }
+  stopRun();
+}
+
 async function confirmEarlyFinishRunBreak() {
   const details = getEarlyBreakConfirmationDetails();
   if (!details) return true;
@@ -7449,9 +7467,31 @@ function canResetCurrentSheepTiming() {
   );
 }
 
+function updateModeStatusUI() {
+  const simulationEnabled = Boolean(appState.simulationMode);
+  const modeHtml = simulationEnabled
+    ? 'Current mode: <strong>Simulation Mode</strong> • Motor input: Simulation buttons/shortcuts'
+    : 'Current mode: <strong>Real Shelly Mode</strong> • Motor input: Shelly/Evo cord only';
+  if (elements.modeStatus) elements.modeStatus.innerHTML = modeHtml;
+  if (elements.motorInputSource) elements.motorInputSource.innerHTML = modeHtml;
+  if (elements.simulationMotorHelp) {
+    elements.simulationMotorHelp.textContent = simulationEnabled
+      ? 'Shelly polling is paused. Motor ON/OFF buttons simulate the cord.'
+      : 'Motor ON/OFF buttons only work in Simulation Mode.';
+  }
+}
+
+function getRawShellyMotorDisplay() {
+  if (appState.simulationMode) return 'Paused in Simulation';
+  if (appState.lastMotorState === true) return 'ON';
+  if (appState.lastMotorState === false) return 'OFF';
+  return 'Unknown';
+}
+
 function updateSimulationActionButtonsUI() {
   if (elements.simMotorOnBtn) elements.simMotorOnBtn.disabled = !canRunSimulationMotorOnShortcut();
   if (elements.simMotorOffBtn) elements.simMotorOffBtn.disabled = !canRunSimulationMotorOffShortcut();
+  updateModeStatusUI();
   updateSkipBreakForTestingButtonUI();
 }
 
@@ -14317,6 +14357,8 @@ function updateLivePanel() {
   }
 
   setText(elements.motorState, appState.currentMotorDisplay);
+  setText(elements.rawShellyMotorState, getRawShellyMotorDisplay());
+  updateModeStatusUI();
   setText(elements.currentShear, formatSeconds(shearCurrent));
   setText(elements.currentCatch, formatSeconds(catchCurrent));
   updateTotalSheepTimeDisplay(calculateTargetMetrics().requiredCycle, liveDisplayNowMs);
@@ -17573,7 +17615,7 @@ function handleSheepLogMarkerNoteAction(actionTarget) {
 function bindEvents() {
   ensureConfirmModal();
   if (elements.startRunBtn) elements.startRunBtn.addEventListener("click", startRun);
-  if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", stopRun);
+  if (elements.stopRunBtn) elements.stopRunBtn.addEventListener("click", confirmStopRun);
   if (elements.finishRunBreakBtn) elements.finishRunBreakBtn.addEventListener("click", handleFinishRunBreakClick);
   if (elements.appZoomMinusBtn) elements.appZoomMinusBtn.addEventListener("click", () => setAppZoomPercent(appState.appZoomPercent - 1));
   if (elements.appZoomPlusBtn) elements.appZoomPlusBtn.addEventListener("click", () => setAppZoomPercent(appState.appZoomPercent + 1));
