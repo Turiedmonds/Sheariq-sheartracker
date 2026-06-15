@@ -66,6 +66,8 @@ const ENDPOINT_PATHS = {
   rpcSwitch: "/rpc/Switch.GetStatus?id=0"
 };
 
+const MOTOR_ALREADY_ON_WARNING = "Motor already ON — release and pull cord again.";
+
 const DAY_SCHEDULES = {
   "9": [7200, 6300, 6300, 6300, 6300],
   "8": [7200, 7200, 7200, 7200]
@@ -8060,8 +8062,8 @@ function maybeHandleRunEndExpired() {
   return true;
 }
 
-function handleMotorOn() {
-  if (!appState.simulationMode || !appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
+function applyMotorOnTransition(source = "unknown") {
+  if (!appState.runActive || isCountingPaused() || appState.currentCycle.motorOn) return;
 
   const now = Date.now();
   const runEndStatus = getScheduledRunEndStatus();
@@ -8082,6 +8084,11 @@ function handleMotorOn() {
   updateSimulationActionButtonsUI();
 }
 
+function handleMotorOn() {
+  if (!appState.simulationMode) return;
+  applyMotorOnTransition("simulation");
+}
+
 function refreshAfterSheepEntry() {
   calculateAverages();
   updateTargetPacePredictionSnapshot(getLiveTargetPacePredictions());
@@ -8094,8 +8101,8 @@ function refreshAfterSheepEntry() {
   updateFinishRunBreakButtonUI();
 }
 
-function handleMotorOff() {
-  if (!appState.simulationMode || !appState.runActive || isCountingPaused()) return;
+function applyMotorOffTransition(source = "unknown") {
+  if (!appState.runActive || isCountingPaused()) return;
 
   if (!appState.currentCycle.motorOn || !appState.currentCycle.shearStart) {
     appState.currentCycle.motorOn = false;
@@ -8155,6 +8162,11 @@ function handleMotorOff() {
 
   refreshAfterSheepEntry();
   updateSimulationActionButtonsUI();
+}
+
+function handleMotorOff() {
+  if (!appState.simulationMode) return;
+  applyMotorOffTransition("simulation");
 }
 
 
@@ -14625,12 +14637,16 @@ async function pollShelly() {
 
     if (appState.lastMotorState === null) {
       appState.lastMotorState = nextState;
+      if (nextState) {
+        appState.connectionDebug = MOTOR_ALREADY_ON_WARNING;
+        result.debugText = MOTOR_ALREADY_ON_WARNING;
+      }
     } else if (nextState !== appState.lastMotorState) {
       appState.lastMotorState = nextState;
       if (nextState) {
-        handleMotorOn();
+        applyMotorOnTransition("shelly");
       } else {
-        handleMotorOff();
+        applyMotorOffTransition("shelly");
       }
     }
 
