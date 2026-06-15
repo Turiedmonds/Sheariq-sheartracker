@@ -999,35 +999,60 @@ body.layout-edit-on .panel:hover .resize-handle {
 
 #panel-sim .run-control-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10.5rem, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(10.75rem, 1fr));
+  gap: 0.55rem;
   align-items: stretch;
 }
 
 #panel-sim .run-control-group {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.45rem;
   min-width: 0;
-  padding: 0.55rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 0.6rem;
-  background: #f9fafb;
+  padding: 0.55rem 0.6rem 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  border-radius: 0.65rem;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 
 #panel-sim .run-control-group-title {
-  color: #374151;
-  font-size: 0.74rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: #334155;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.055em;
   line-height: 1.2;
   text-transform: uppercase;
 }
 
+#panel-sim .run-control-group-title::before {
+  content: "";
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: #94a3b8;
+  box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.14);
+}
+
 #panel-sim .run-controls-main-row,
 #panel-sim .run-controls-secondary-row {
-  gap: 0.35rem;
+  gap: 0.38rem;
   margin-top: 0;
+}
+
+#panel-sim .run-control-group button {
+  min-height: 2.15rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+#panel-sim .run-control-group-primary {
+  border-color: rgba(220, 38, 38, 0.18);
+  background: linear-gradient(180deg, #fff 0%, #fff7f7 100%);
 }
 
 #panel-sim .run-control-group-primary {
@@ -1036,6 +1061,117 @@ body.layout-edit-on .panel:hover .resize-handle {
 
 #panel-sim .run-control-group-primary .button-row {
   align-content: flex-start;
+}
+
+#panel-sim .run-control-group-primary .run-control-group-title::before {
+  background: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+
+#panel-sim .run-control-group-simulation {
+  border-color: rgba(14, 116, 144, 0.24);
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdfa 100%);
+}
+
+#panel-sim .run-control-group-simulation .run-control-group-title::before {
+  background: #0891b2;
+  box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.14);
+}
+
+#panel-sim .run-control-group-corrections {
+  border-color: rgba(217, 119, 6, 0.24);
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+}
+
+#panel-sim .run-control-group-corrections .run-control-group-title::before {
+  background: #d97706;
+  box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.14);
+}
+
+#panel-sim .run-control-group-reset {
+  border-color: rgba(127, 29, 29, 0.22);
+  background: linear-gradient(180deg, #ffffff 0%, #fef2f2 100%);
+}
+
+#panel-sim .run-control-group-reset .run-control-group-title::before {
+  background: #7f1d1d;
+  box-shadow: 0 0 0 3px rgba(127, 29, 29, 0.13);
+}
+
+#panel-sim .run-control-group-testing {
+  border-style: dashed;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+#panel-sim .btn-run-transition {
+  background: #4c1d95;
+  border-color: #4c1d95;
+  color: #fff;
+}
+
+#panel-sim .btn-run-transition:hover:not(:disabled) {
+  background: #5b21b6;
+  border-color: #5b21b6;
+}
+
+#panel-sim .btn-sim-motor {
+  background: #0f766e;
+  border-color: #0f766e;
+  color: #fff;
+}
+
+#panel-sim .btn-sim-motor:hover:not(:disabled) {
+  background: #0d9488;
+  border-color: #0d9488;
+}
+
+#panel-sim .btn-correction {
+  background: #fff7ed;
+  border-color: #fdba74;
+  color: #9a3412;
+}
+
+#panel-sim .btn-correction:hover:not(:disabled) {
+  background: #fed7aa;
+  border-color: #fb923c;
+}
+
+#panel-sim .btn-danger-secondary {
+  background: #fff;
+  border-color: #b91c1c;
+  color: #991b1b;
+}
+
+#panel-sim .btn-danger-secondary:hover:not(:disabled) {
+  background: #fee2e2;
+  border-color: #991b1b;
+}
+
+#panel-sim .btn-utility {
+  background: #f8fafc;
+  border-color: #cbd5e1;
+  color: #475569;
+}
+
+#panel-sim .btn-utility:hover:not(:disabled) {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  color: #334155;
+}
+
+#panel-sim .run-control-group button:disabled {
+  opacity: 1;
+  filter: saturate(0.52);
+  background: #e5e7eb;
+  border-color: #cbd5e1;
+  color: #64748b;
+  box-shadow: none;
+}
+
+#panel-sim .run-control-group-simulation .btn-sim-motor:disabled {
+  background: #dbeafe;
+  border-color: #bfdbfe;
+  color: #64748b;
 }
 
 @media (max-width: 520px) {
