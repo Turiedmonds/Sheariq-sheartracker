@@ -4595,6 +4595,9 @@ const appState = {
 };
 
 const elements = {
+  customScrollControls: document.getElementById("customScrollControls"),
+  customVerticalScrollThumb: document.getElementById("customVerticalScrollThumb"),
+  customHorizontalScrollThumb: document.getElementById("customHorizontalScrollThumb"),
   runStatus: document.getElementById("runStatus"),
   farmInput: document.getElementById("farmInput"),
   sessionDate: document.getElementById("sessionDate"),
@@ -18262,6 +18265,138 @@ function initializeOfflineStatusPanel() {
   }
 }
 
+
+const CUSTOM_SCROLL_HIDE_DELAY_MS = 2400;
+const CUSTOM_SCROLL_EDGE_INSET_PX = 12;
+
+function initializeCustomScrollControls() {
+  const controls = elements.customScrollControls;
+  const verticalThumb = elements.customVerticalScrollThumb;
+  const horizontalThumb = elements.customHorizontalScrollThumb;
+
+  if (!controls || !verticalThumb || !horizontalThumb) return;
+
+  let hideTimer = null;
+  let animationFrame = null;
+  let isDragging = false;
+
+  const getScrollElement = () => document.scrollingElement || document.documentElement || document.body;
+
+  function getScrollMetrics() {
+    const scrollElement = getScrollElement();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || scrollElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || scrollElement.clientHeight || 0;
+    const maxScrollTop = Math.max(scrollElement.scrollHeight - viewportHeight, 0);
+    const maxScrollLeft = Math.max(scrollElement.scrollWidth - viewportWidth, 0);
+
+    return {
+      scrollElement,
+      viewportWidth,
+      viewportHeight,
+      maxScrollTop,
+      maxScrollLeft,
+      scrollTop: scrollElement.scrollTop || window.scrollY || 0,
+      scrollLeft: scrollElement.scrollLeft || window.scrollX || 0
+    };
+  }
+
+  function setControlsVisible() {
+    controls.classList.add("is-visible");
+    window.clearTimeout(hideTimer);
+    hideTimer = window.setTimeout(() => {
+      if (!isDragging) controls.classList.remove("is-visible");
+    }, CUSTOM_SCROLL_HIDE_DELAY_MS);
+  }
+
+  function updateThumbPositions() {
+    animationFrame = null;
+    const metrics = getScrollMetrics();
+    const hasVerticalScroll = metrics.maxScrollTop > 1;
+    const hasHorizontalScroll = metrics.maxScrollLeft > 1;
+
+    controls.classList.toggle("has-vertical-scroll", hasVerticalScroll);
+    controls.classList.toggle("has-horizontal-scroll", hasHorizontalScroll);
+
+    if (hasVerticalScroll) {
+      const verticalHeight = Math.max(28, Math.min(56, Math.round(metrics.viewportHeight * 0.08)));
+      const verticalTrackLength = Math.max(metrics.viewportHeight - verticalHeight - (CUSTOM_SCROLL_EDGE_INSET_PX * 2), 1);
+      const verticalRatio = Math.min(Math.max(metrics.scrollTop / metrics.maxScrollTop, 0), 1);
+      verticalThumb.style.height = `${verticalHeight}px`;
+      verticalThumb.style.transform = `translate3d(0, ${CUSTOM_SCROLL_EDGE_INSET_PX + (verticalTrackLength * verticalRatio)}px, 0)`;
+    }
+
+    if (hasHorizontalScroll) {
+      const horizontalWidth = Math.max(28, Math.min(64, Math.round(metrics.viewportWidth * 0.08)));
+      const horizontalTrackLength = Math.max(metrics.viewportWidth - horizontalWidth - (CUSTOM_SCROLL_EDGE_INSET_PX * 2), 1);
+      const horizontalRatio = Math.min(Math.max(metrics.scrollLeft / metrics.maxScrollLeft, 0), 1);
+      horizontalThumb.style.width = `${horizontalWidth}px`;
+      horizontalThumb.style.transform = `translate3d(${CUSTOM_SCROLL_EDGE_INSET_PX + (horizontalTrackLength * horizontalRatio)}px, 0, 0)`;
+    }
+  }
+
+  function requestThumbUpdate(showControls = false) {
+    if (showControls) setControlsVisible();
+    if (animationFrame === null) animationFrame = window.requestAnimationFrame(updateThumbPositions);
+  }
+
+  function scrollToPosition(left, top) {
+    getScrollElement().scrollTo({ left, top, behavior: "auto" });
+  }
+
+  function startThumbDrag(event, axis) {
+    const metrics = getScrollMetrics();
+    const maxScroll = axis === "vertical" ? metrics.maxScrollTop : metrics.maxScrollLeft;
+    if (maxScroll <= 1) return;
+
+    const thumb = axis === "vertical" ? verticalThumb : horizontalThumb;
+    const thumbLength = axis === "vertical" ? thumb.offsetHeight : thumb.offsetWidth;
+    const viewportLength = axis === "vertical" ? metrics.viewportHeight : metrics.viewportWidth;
+    const trackLength = Math.max(viewportLength - thumbLength - (CUSTOM_SCROLL_EDGE_INSET_PX * 2), 1);
+    const startPointer = axis === "vertical" ? event.clientY : event.clientX;
+    const startScroll = axis === "vertical" ? metrics.scrollTop : metrics.scrollLeft;
+
+    isDragging = true;
+    thumb.classList.add("is-dragging");
+    setControlsVisible();
+    event.preventDefault();
+    thumb.setPointerCapture?.(event.pointerId);
+
+    function handlePointerMove(moveEvent) {
+      const currentPointer = axis === "vertical" ? moveEvent.clientY : moveEvent.clientX;
+      const nextScroll = Math.min(Math.max(startScroll + ((currentPointer - startPointer) / trackLength) * maxScroll, 0), maxScroll);
+      const latestMetrics = getScrollMetrics();
+      if (axis === "vertical") {
+        scrollToPosition(latestMetrics.scrollLeft, nextScroll);
+      } else {
+        scrollToPosition(nextScroll, latestMetrics.scrollTop);
+      }
+      requestThumbUpdate(true);
+      moveEvent.preventDefault();
+    }
+
+    function endDrag(endEvent) {
+      isDragging = false;
+      thumb.classList.remove("is-dragging");
+      thumb.releasePointerCapture?.(endEvent.pointerId);
+      document.removeEventListener("pointermove", handlePointerMove);
+      document.removeEventListener("pointerup", endDrag);
+      document.removeEventListener("pointercancel", endDrag);
+      setControlsVisible();
+    }
+
+    document.addEventListener("pointermove", handlePointerMove, { passive: false });
+    document.addEventListener("pointerup", endDrag);
+    document.addEventListener("pointercancel", endDrag);
+  }
+
+  window.addEventListener("scroll", () => requestThumbUpdate(true), { passive: true });
+  window.addEventListener("resize", () => requestThumbUpdate(false), { passive: true });
+  verticalThumb.addEventListener("pointerdown", (event) => startThumbDrag(event, "vertical"));
+  horizontalThumb.addEventListener("pointerdown", (event) => startThumbDrag(event, "horizontal"));
+
+  requestThumbUpdate(false);
+}
+
 function initialize() {
   initializeAppZoom();
   loadConnectionSettings();
@@ -18345,6 +18480,7 @@ function initialize() {
   if (appState.layoutEditMode) applyPanelLayout();
   startDayClockLoop();
   startAutosaveLoop();
+  initializeCustomScrollControls();
 
   if (shouldStartRealtimeLoops()) {
     startRealtimeLoops();
