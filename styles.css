@@ -2706,6 +2706,10 @@ body.layout-edit-on #panel-trend-graph .panel-body.run-pace-body {
   min-height: 0;
 }
 
+#panel-reviews.panel.collapsed .panel-body {
+  display: none;
+}
+
 #panel-reviews .panel-section,
 #panel-reviews .panel-section-content {
   display: flex;

@@ -7282,6 +7282,7 @@ function startRun(startedAtMs = Date.now()) {
   updateLivePanel();
   renderLogTable();
   renderReviewList();
+  scrollSheepLogToTop();
   drawTrendGraph();
   updateTrendFlags();
 }
@@ -7450,6 +7451,7 @@ function refreshAfterStartNewDayReset() {
   if (elements.blockMinutes) renderBlock(Number(elements.blockMinutes.value) || 15);
   applySmartSessionOpenLayout();
   applyPanelLayout();
+  scrollSheepLogToTop();
 }
 
 function startNewDay() {
@@ -8718,17 +8720,20 @@ function renderReviewList() {
   if (!elements.reviewList) return;
   const quarterSnapshots = Array.isArray(appState.quarterSnapshots) ? appState.quarterSnapshots : [];
   if (quarterSnapshots.length) {
-    elements.reviewList.innerHTML = quarterSnapshots.map((snapshot, index) => renderQuarterSnapshotReviewEntry(snapshot, index)).join("");
+    const latestFirstSnapshots = [...quarterSnapshots].reverse();
+    elements.reviewList.innerHTML = latestFirstSnapshots.map((snapshot, index) => renderQuarterSnapshotReviewEntry(snapshot, index)).join("");
     return;
   }
   if (!appState.reviewBlocks.length) {
     elements.reviewList.innerHTML = '<div class="review-entry">No quarter reviews yet.</div>';
     return;
   }
-  elements.reviewList.innerHTML = appState.reviewBlocks.map((block, index) => {
+  const latestFirstReviewBlocks = [...appState.reviewBlocks].reverse();
+  elements.reviewList.innerHTML = latestFirstReviewBlocks.map((block, index) => {
+    const originalIndex = appState.reviewBlocks.length - 1 - index;
     const quarterNumber = Number.isFinite(Number(block.startSec))
       ? Math.floor(Number(block.startSec) / (15 * 60)) + 1
-      : index + 1;
+      : originalIndex + 1;
     const avgCycleText = Number.isFinite(Number(block.avgCycle)) ? `${Number(block.avgCycle).toFixed(3)}s` : "—";
     const countText = Number.isFinite(Number(block.count)) ? Number(block.count) : "—";
     return `
@@ -13170,6 +13175,21 @@ function cacheSheepLogScroller() {
   return scroller;
 }
 
+
+function scrollSheepLogToTop() {
+  const scroller = cacheSheepLogScroller() || document.querySelector("#panel-log .sheep-log-scroll");
+  if (!scroller) return;
+
+  const applyScroll = () => {
+    scroller.scrollTop = 0;
+  };
+
+  applyScroll();
+  if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(applyScroll);
+  }
+}
+
 function handleSheepLogScroll() {
   const scroller = appState.sheepLogScroller;
   if (!scroller) return;
@@ -17476,6 +17496,7 @@ function restoreSessionPayload(raw, options = {}) {
   updateUndoLastSheepButtonUI();
   renderLogTable();
   renderReviewList();
+  scrollSheepLogToTop();
   drawTrendGraph();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updateReviewRunButtonState();
@@ -19613,6 +19634,7 @@ function initialize() {
 
   renderLogTable();
   renderReviewList();
+  scrollSheepLogToTop();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updateReviewRunButtonState();
   updatePauseButtonUI();
