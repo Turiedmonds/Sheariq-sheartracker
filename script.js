@@ -7448,6 +7448,8 @@ function refreshAfterStartNewDayReset() {
   updateTrendFlags();
   updateTrendDetailsVisibility();
   if (elements.blockMinutes) renderBlock(Number(elements.blockMinutes.value) || 15);
+  applySmartSessionOpenLayout();
+  applyPanelLayout();
 }
 
 function startNewDay() {
@@ -15494,6 +15496,147 @@ function fitPanelLayoutToViewport(options = {}) {
   return changed;
 }
 
+function getSmartLayoutExistingHeight(panelId, fallbackHeight = 180) {
+  const layoutHeight = appState.panelLayout?.panels?.[panelId]?.height;
+  if (Number.isFinite(layoutHeight)) return Math.max(layoutHeight, 130);
+  const panel = document.getElementById(panelId);
+  if (!panel) return fallbackHeight;
+  const rect = panel.getBoundingClientRect();
+  const zoom = getAppZoomScale();
+  const measuredHeight = rect.height ? rect.height / zoom : panel.offsetHeight;
+  return Math.max(Number.isFinite(measuredHeight) && measuredHeight > 0 ? measuredHeight : fallbackHeight, 130);
+}
+
+function setSmartLayoutItem(panelId, nextLayout, options = {}) {
+  const panels = appState.panelLayout.panels;
+  const current = normalizePanelLayoutItem(panels[panelId], nextLayout.x, nextLayout.y, nextLayout.width, nextLayout.height);
+  const z = Number.isFinite(current.z)
+    ? current.z
+    : (Number.isFinite(options.z) ? options.z : appState.panelLayout.nextZ || 1);
+  const next = normalizePanelLayoutItem({ ...nextLayout, z }, nextLayout.x, nextLayout.y, nextLayout.width, nextLayout.height);
+  const changed = current.x !== next.x
+    || current.y !== next.y
+    || current.width !== next.width
+    || current.height !== next.height
+    || current.z !== next.z;
+  panels[panelId] = next;
+  appState.panelLayout.nextZ = Math.max(appState.panelLayout.nextZ || 1, next.z || 1);
+  return changed;
+}
+
+function applySmartLayoutRow(panelIds, y, widths, options = {}) {
+  const gap = options.gap || 12;
+  const fallbackHeight = options.fallbackHeight || 180;
+  let x = options.x || gap;
+  let rowHeight = 0;
+  let changed = false;
+
+  panelIds.forEach((panelId, index) => {
+    const width = widths[index];
+    const height = Math.max(options.heights?.[index] || getSmartLayoutExistingHeight(panelId, fallbackHeight), 130);
+    changed = setSmartLayoutItem(panelId, { x, y, width, height }) || changed;
+    x += width + gap;
+    rowHeight = Math.max(rowHeight, height);
+  });
+
+  return { changed, nextY: y + rowHeight + gap };
+}
+
+function buildSmartEqualWidths(columnCount, availableWidth, gap) {
+  const innerWidth = Math.max(availableWidth - gap * (columnCount + 1), 260);
+  const width = Math.max(Math.floor(innerWidth / columnCount), 260);
+  return Array.from({ length: columnCount }, () => width);
+}
+
+function applySmartSessionOpenLayout(options = {}) {
+  if (!elements.dashboardPanels) return false;
+  ensureInitialPanelLayout();
+
+  const minWidth = 260;
+  const gap = 12;
+  const availableWidth = Math.max(Math.floor(getDashboardAvailableWidth()), minWidth);
+  const contentWidth = Math.max(availableWidth - gap * 2, minWidth);
+  const fullWidth = Math.min(contentWidth, availableWidth);
+  const columns = availableWidth >= 1180 ? 4 : (availableWidth >= 620 ? 2 : 1);
+  let y = gap;
+  let changed = false;
+
+  if (columns === 1) {
+    [
+      "panel-config",
+      "panel-sim",
+      "panel-cycle",
+      "panel-performance",
+      "panel-target",
+      "panel-pen-fill-planner",
+      "panel-log",
+      "panel-trend-flags",
+      "panel-trend-graph",
+      "panel-run-review",
+      "panel-reviews",
+      "panel-block"
+    ].forEach((panelId) => {
+      const row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: panelId === "panel-trend-graph" ? 320 : 180 });
+      changed = row.changed || changed;
+      y = row.nextY;
+    });
+  } else {
+    const setupConfigWidth = columns === 4 ? Math.min(Math.max(Math.floor(contentWidth * 0.36), minWidth), 460) : Math.floor((contentWidth - gap) / 2);
+    const setupSimWidth = columns === 4 ? Math.min(Math.max(Math.floor(contentWidth * 0.40), minWidth), 520) : Math.floor((contentWidth - gap) / 2);
+    let row = applySmartLayoutRow(["panel-config", "panel-sim"], y, [setupConfigWidth, setupSimWidth], { gap, fallbackHeight: 190 });
+    changed = row.changed || changed;
+    y = row.nextY;
+
+    if (columns === 4) {
+      const penWidth = Math.max(Math.floor(contentWidth * 0.28), minWidth);
+      const standardWidth = Math.max(Math.floor((contentWidth - penWidth - gap * 3) / 3), minWidth);
+      row = applySmartLayoutRow(
+        ["panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner"],
+        y,
+        [standardWidth, standardWidth, standardWidth, Math.min(penWidth, contentWidth - (standardWidth + gap) * 3)],
+        { gap, fallbackHeight: 220 }
+      );
+      changed = row.changed || changed;
+      y = row.nextY;
+    } else {
+      const twoColWidths = buildSmartEqualWidths(2, availableWidth, gap);
+      row = applySmartLayoutRow(["panel-cycle", "panel-performance"], y, twoColWidths, { gap, fallbackHeight: 220 });
+      changed = row.changed || changed;
+      y = row.nextY;
+      row = applySmartLayoutRow(["panel-target", "panel-pen-fill-planner"], y, twoColWidths, { gap, fallbackHeight: 220 });
+      changed = row.changed || changed;
+      y = row.nextY;
+    }
+
+    const logWidth = columns === 4 ? Math.max(Math.floor(contentWidth * 0.59), minWidth) : Math.floor((contentWidth - gap) / 2);
+    const trendFlagsWidth = Math.max(contentWidth - logWidth - gap, minWidth);
+    row = applySmartLayoutRow(["panel-log", "panel-trend-flags"], y, [logWidth, trendFlagsWidth], { gap, fallbackHeight: 260 });
+    changed = row.changed || changed;
+    y = row.nextY;
+
+    row = applySmartLayoutRow(["panel-trend-graph"], y, [fullWidth], { gap, fallbackHeight: 320 });
+    changed = row.changed || changed;
+    y = row.nextY;
+
+    const bottomPanels = ["panel-run-review", "panel-reviews", "panel-block"];
+    if (columns === 4) {
+      const bottomWidths = buildSmartEqualWidths(3, availableWidth, gap);
+      row = applySmartLayoutRow(bottomPanels, y, bottomWidths, { gap, fallbackHeight: 160 });
+      changed = row.changed || changed;
+    } else {
+      bottomPanels.forEach((panelId) => {
+        row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: 160 });
+        changed = row.changed || changed;
+        y = row.nextY;
+      });
+    }
+  }
+
+  changed = fitPanelLayoutToViewport({ persist: false }) || changed;
+  if (changed && options.persist !== false) persistPanelLayout();
+  return changed;
+}
+
 function ensureInitialPanelLayout() {
   const panelIds = getPanelElements().map((panel) => panel.id);
   const hasAllPanels = panelIds.every((id) => appState.panelLayout.panels[id]);
@@ -17112,8 +17255,7 @@ function restoreSessionPayload(raw, options = {}) {
   updateRunPaceCompareControls();
   applyPanelState();
   applyPanelSizes();
-  if (appState.layoutEditMode) ensureInitialPanelLayout();
-  fitPanelLayoutToViewport();
+  applySmartSessionOpenLayout();
   applyPanelLayout();
   if (elements.runStatus) {
     elements.runStatus.textContent = appState.dayComplete
@@ -19237,8 +19379,7 @@ function initialize() {
   initializeTopTabs();
   applyPanelState();
   applyPanelSizes();
-  ensureInitialPanelLayout();
-  fitPanelLayoutToViewport();
+  applySmartSessionOpenLayout();
   applyPanelLayout();
   renderFarmDropdown();
   updateEventNameDisplay();
