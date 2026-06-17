@@ -15437,6 +15437,63 @@ function clampLayoutItem(layoutItem) {
   layoutItem.y = Math.min(Math.max(layoutItem.y, 4), maxY);
 }
 
+function getDashboardAvailableWidth() {
+  const zoom = getAppZoomScale();
+  const dashboardRect = getDashboardRect();
+  const viewportRight = window.innerWidth / zoom;
+  const dashboardLeft = elements.dashboardPanels
+    ? Math.max(dashboardRect.left, 0)
+    : 0;
+  return Math.max(viewportRight - dashboardLeft, 260);
+}
+
+function fitPanelLayoutToViewport(options = {}) {
+  const panels = appState.panelLayout?.panels;
+  if (!panels || typeof panels !== "object") return false;
+
+  const panelIds = Array.isArray(options.panelIds)
+    ? options.panelIds
+    : (options.panelId ? [options.panelId] : Object.keys(panels));
+  const minWidth = 260;
+  const minHeight = 130;
+  const leftGap = 4;
+  const rightGap = 4;
+  const availableWidth = getDashboardAvailableWidth();
+  const maxWidth = Math.max(availableWidth - leftGap - rightGap, minWidth);
+  let changed = false;
+
+  panelIds.forEach((panelId) => {
+    const item = panels[panelId];
+    if (!item || typeof item !== "object") return;
+
+    const before = {
+      x: item.x,
+      y: item.y,
+      width: item.width,
+      height: item.height
+    };
+
+    item.width = Math.min(
+      Math.max(Number.isFinite(item.width) ? item.width : minWidth, minWidth),
+      maxWidth
+    );
+    item.height = Math.max(Number.isFinite(item.height) ? item.height : minHeight, minHeight);
+    item.x = Number.isFinite(item.x) ? item.x : leftGap;
+    item.y = Number.isFinite(item.y) ? item.y : leftGap;
+
+    const maxX = Math.max(availableWidth - item.width - rightGap, leftGap);
+    item.x = Math.min(Math.max(item.x, leftGap), maxX);
+    item.y = Math.max(item.y, leftGap);
+
+    if (item.x !== before.x || item.y !== before.y || item.width !== before.width || item.height !== before.height) {
+      changed = true;
+    }
+  });
+
+  if (changed && options.persist !== false) persistPanelLayout();
+  return changed;
+}
+
 function ensureInitialPanelLayout() {
   const panelIds = getPanelElements().map((panel) => panel.id);
   const hasAllPanels = panelIds.every((id) => appState.panelLayout.panels[id]);
@@ -16872,10 +16929,28 @@ function loadFollowLatestSettings() {
   appState.followLatestSheep = parseStoredBoolean(localStorage.getItem(FOLLOW_LATEST_STORAGE_KEY), true);
 }
 
+function clampControlsDockPosition() {
+  if (!elements.panelSim) return false;
+  const zoom = getAppZoomScale();
+  const panelWidth = elements.panelSim.offsetWidth || 260;
+  const panelHeight = elements.panelSim.offsetHeight || 130;
+  const maxX = Math.max(window.innerWidth / zoom - panelWidth - 8, 8);
+  const maxY = Math.max(window.innerHeight / zoom - panelHeight - 8, 8);
+  const nextPos = {
+    x: Math.min(Math.max(Number.isFinite(appState.controlsDockPos.x) ? appState.controlsDockPos.x : 20, 8), maxX),
+    y: Math.min(Math.max(Number.isFinite(appState.controlsDockPos.y) ? appState.controlsDockPos.y : 90, 8), maxY)
+  };
+  const changed = nextPos.x !== appState.controlsDockPos.x || nextPos.y !== appState.controlsDockPos.y;
+  appState.controlsDockPos = nextPos;
+  return changed;
+}
+
 function applyControlsDockPosition() {
   if (!elements.panelSim || !appState.controlsDockEnabled) return;
-  elements.panelSim.style.left = `${Math.max(appState.controlsDockPos.x, 8)}px`;
-  elements.panelSim.style.top = `${Math.max(appState.controlsDockPos.y, 8)}px`;
+  const changed = clampControlsDockPosition();
+  elements.panelSim.style.left = `${appState.controlsDockPos.x}px`;
+  elements.panelSim.style.top = `${appState.controlsDockPos.y}px`;
+  if (changed) persistControlsDockPosition();
 }
 
 function persistControlsDockPosition() {
@@ -17038,6 +17113,7 @@ function restoreSessionPayload(raw, options = {}) {
   applyPanelState();
   applyPanelSizes();
   if (appState.layoutEditMode) ensureInitialPanelLayout();
+  fitPanelLayoutToViewport();
   applyPanelLayout();
   if (elements.runStatus) {
     elements.runStatus.textContent = appState.dayComplete
@@ -18861,7 +18937,14 @@ function bindEvents() {
         panel.classList.toggle("collapsed", next);
         appState.panelCollapsed[panel.id] = next;
         persistPanelCollapsed();
+        if (!next) {
+          if (appState.layoutEditMode) ensureInitialPanelLayout();
+          bringPanelToFront(panel);
+          fitPanelLayoutToViewport({ panelId: panel.id, persist: false });
+          persistPanelLayout();
+        }
         applyPanelState();
+        if (!next) applyPanelLayout();
       });
     }
 
@@ -18882,6 +18965,7 @@ function bindEvents() {
           return;
         }
         if (appState.layoutEditMode) {
+          bringPanelToFront(panel);
           startAbsolutePanelDrag(panel, header, event);
           return;
         }
@@ -19154,6 +19238,7 @@ function initialize() {
   applyPanelState();
   applyPanelSizes();
   ensureInitialPanelLayout();
+  fitPanelLayoutToViewport();
   applyPanelLayout();
   renderFarmDropdown();
   updateEventNameDisplay();
