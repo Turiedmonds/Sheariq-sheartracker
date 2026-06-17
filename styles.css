@@ -16,6 +16,7 @@ body {
   margin: 0;
   background: #2b2b2b;
   color: #1f2937;
+  overflow-x: hidden;
   zoom: var(--app-zoom);
 }
 
@@ -624,6 +625,8 @@ body {
 .dashboard {
   display: grid;
   gap: 1.2rem;
+  max-width: 100%;
+  overflow-x: clip;
   padding: 0.8rem;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
