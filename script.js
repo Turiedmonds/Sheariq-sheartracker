@@ -80,6 +80,8 @@ const FINAL_FILL_IDEAL_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END
 const FINAL_FILL_MIN_BEFORE_END_SECONDS = Math.max(DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS - DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS, 0);
 const FINAL_FILL_MAX_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS + DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS;
 const FINAL_FILL_ANALYSIS_START_SECONDS = 1800;
+const LAST_CATCH_BUFFER_SECONDS = 1;
+const LAST_CATCH_FASTEST_TOLERANCE_SECONDS = 1.0;
 
 const PEN_RULES_BY_RECORD_TYPE = {
   strongWoolLambs: {
@@ -4807,6 +4809,7 @@ const elements = {
   penFillForecastFinal: document.getElementById("penFillForecastFinal"),
   penFillForecastAssumption: document.getElementById("penFillForecastAssumption"),
   penFillForecastStatus: document.getElementById("penFillForecastStatus"),
+  penFillLastCatchOpportunity: document.getElementById("penFillLastCatchOpportunity"),
   penFullnessCatchSummary: document.getElementById("penFullnessCatchSummary"),
   penFullnessCatchConfirmedCount: document.getElementById("penFullnessCatchConfirmedCount"),
   penFullnessCatchBeforeAvg: document.getElementById("penFullnessCatchBeforeAvg"),
@@ -13920,6 +13923,118 @@ function formatFinalPenFillForecastPoint(point) {
   return `${point.label} — ${formatPenFillCountdownDisplay(secondsBeforeRunEnd)} before end${clockText ? ` — about ${clockText}` : ""}`;
 }
 
+
+function getRecentCycleAverageSeconds(entries = appState.sheep, sampleSize = 3) {
+  const completedCycles = Array.isArray(entries)
+    ? entries.map((entry) => Number(entry?.fullCycle)).filter((seconds) => Number.isFinite(seconds) && seconds > 0)
+    : [];
+  if (!completedCycles.length) return null;
+  const recentCycles = completedCycles.slice(-Math.max(Math.floor(sampleSize), 1));
+  return recentCycles.reduce((sum, seconds) => sum + seconds, 0) / recentCycles.length;
+}
+
+function getFastestCompletedCycleSeconds(entries = appState.sheep) {
+  const completedCycles = Array.isArray(entries)
+    ? entries.map((entry) => Number(entry?.fullCycle)).filter((seconds) => Number.isFinite(seconds) && seconds > 0)
+    : [];
+  return completedCycles.length ? Math.min(...completedCycles) : null;
+}
+
+function formatLastCatchRequiredSeconds(seconds) {
+  const value = Number(seconds);
+  return Number.isFinite(value) ? `${value.toFixed(1)}s` : "—";
+}
+
+function buildLastCatchOpportunityModel(options = {}) {
+  const remainingRunSeconds = Number(options.remainingRunSeconds);
+  const avgCycleSeconds = Number(options.avgCycleSeconds);
+  const recentCycleAverageSeconds = Number.isFinite(Number(options.recentCycleAverageSeconds))
+    ? Number(options.recentCycleAverageSeconds)
+    : getRecentCycleAverageSeconds(options.completedSheep || appState.sheep);
+  const fastestCompletedSheepSeconds = Number.isFinite(Number(options.fastestCompletedSheepSeconds))
+    ? Number(options.fastestCompletedSheepSeconds)
+    : getFastestCompletedCycleSeconds(options.completedSheep || appState.sheep);
+  const bufferSeconds = Number.isFinite(Number(options.bufferSeconds))
+    ? Math.max(Number(options.bufferSeconds), 0)
+    : LAST_CATCH_BUFFER_SECONDS;
+  const fastestToleranceSeconds = Number.isFinite(Number(options.fastestToleranceSeconds))
+    ? Math.max(Number(options.fastestToleranceSeconds), 0)
+    : LAST_CATCH_FASTEST_TOLERANCE_SECONDS;
+  const referencePaceSeconds = Number.isFinite(recentCycleAverageSeconds) && recentCycleAverageSeconds > 0
+    ? recentCycleAverageSeconds
+    : avgCycleSeconds;
+
+  if (!Number.isFinite(remainingRunSeconds) || remainingRunSeconds <= bufferSeconds) {
+    return {
+      status: "gone",
+      message: "Last-catch chance gone",
+      reason: "Not enough time remains to create another catch/start chance.",
+      remainingRunSeconds: Number.isFinite(remainingRunSeconds) ? Math.max(remainingRunSeconds, 0) : null,
+      sheepToComplete: 0,
+      requiredAverageSeconds: null
+    };
+  }
+
+  if (!Number.isFinite(referencePaceSeconds) || referencePaceSeconds <= 0 || !Number.isFinite(fastestCompletedSheepSeconds) || fastestCompletedSheepSeconds <= 0) {
+    return {
+      status: "waiting",
+      message: "Waiting for pace data",
+      reason: "Waiting for completed sheep pace data.",
+      remainingRunSeconds,
+      sheepToComplete: 0,
+      requiredAverageSeconds: null
+    };
+  }
+
+  const availableCycleSeconds = remainingRunSeconds - bufferSeconds;
+  const chosenSheepToComplete = Math.max(Math.ceil(availableCycleSeconds / referencePaceSeconds), 1);
+  const requiredAverageSeconds = availableCycleSeconds / chosenSheepToComplete;
+  const requiredText = formatLastCatchRequiredSeconds(requiredAverageSeconds);
+  const nextText = chosenSheepToComplete === 1 ? "next 1" : `next ${chosenSheepToComplete}`;
+  const resultBase = {
+    remainingRunSeconds,
+    sheepToComplete: chosenSheepToComplete,
+    requiredAverageSeconds,
+    referencePaceSeconds,
+    recentCycleAverageSeconds: Number.isFinite(recentCycleAverageSeconds) ? recentCycleAverageSeconds : null,
+    fastestCompletedSheepSeconds
+  };
+
+  if (requiredAverageSeconds >= referencePaceSeconds) {
+    return {
+      ...resultBase,
+      status: "onPace",
+      message: "On pace for last-catch chance",
+      reason: "Current pace leaves time to catch/start one more before the horn."
+    };
+  }
+
+  if (requiredAverageSeconds >= fastestCompletedSheepSeconds) {
+    return {
+      ...resultBase,
+      status: "possible",
+      message: `Last-catch chance: ${nextText} under ${requiredText} each`,
+      reason: "Fastest sheep so far shows this is possible, but pace must lift."
+    };
+  }
+
+  if (requiredAverageSeconds + fastestToleranceSeconds >= fastestCompletedSheepSeconds) {
+    return {
+      ...resultBase,
+      status: "unlikely",
+      message: `Last-catch unlikely: need ${nextText} under ${requiredText} each`,
+      reason: "Required pace is faster than any sheep so far."
+    };
+  }
+
+  return {
+    ...resultBase,
+    status: "unrealistic",
+    message: `Last-catch unrealistic: need ${requiredText} sheep`,
+    reason: "Required pace is much faster than any sheep so far."
+  };
+}
+
 function analyzeFinalFillWindow(forecastPoints, options = {}) {
   const timingWindow = getFinalFillTimingWindow(options.recordType);
   const minBeforeEndSeconds = Number.isFinite(options.minBeforeEndSeconds)
@@ -14343,6 +14458,10 @@ function updatePenFillForecastDisplay() {
     setText(elements.penFillForecastStatus, analysis?.message || "—");
   };
 
+  const setLastCatchOpportunity = (model = { status: "waiting", message: "—" }) => {
+    setText(elements.penFillLastCatchOpportunity, model?.message || "—");
+  };
+
   const setFillStrategy = (planner = { status: "waiting", message: "—" }) => {
     if (elements.penFillStrategyRecommendation) {
       elements.penFillStrategyRecommendation.classList.remove(...strategyClassNames);
@@ -14380,6 +14499,7 @@ function updatePenFillForecastDisplay() {
     setText(elements.penFillForecastFinal, finalText);
     setText(elements.penFillForecastAssumption, assumptionText);
     setForecastStatus(analysis);
+    setLastCatchOpportunity(options.lastCatchOpportunity || { status: "waiting", message: "—" });
     setFillStrategy(planner);
     updatePenFillPlannerStrategyDetails({ planner });
   };
@@ -14396,7 +14516,14 @@ function updatePenFillForecastDisplay() {
 
   const avgCycleSeconds = appState.currentStats.avgCycle;
   if (!Number.isFinite(avgCycleSeconds) || avgCycleSeconds <= 0) {
-    setForecastDisplay("Waiting for pace data", "—", "Waiting for pace data");
+    setForecastDisplay(
+      "Waiting for pace data",
+      "—",
+      "Waiting for pace data",
+      { status: "waiting", message: "—" },
+      buildPlanner(),
+      { lastCatchOpportunity: { status: "waiting", message: "Waiting for pace data" } }
+    );
     return;
   }
 
@@ -14432,9 +14559,14 @@ function updatePenFillForecastDisplay() {
   const eventSignature = buildPenFillCountdownEventSignature(getCurrentRunPenFillEvents());
   const finalRefillAnalysis = analyzeFinalFillWindow(finalForecastPoints, { remainingRunSeconds });
   const planner = buildPlanner(finalForecastPoints, remainingRunSeconds);
+  const lastCatchOpportunity = buildLastCatchOpportunityModel({
+    remainingRunSeconds,
+    avgCycleSeconds,
+    completedSheep: appState.sheep
+  });
 
   if (displayForecastPoints.length === 0) {
-    setForecastDisplay("No more refills projected before run end", "No more refills projected before run end", assumptionText, finalRefillAnalysis, planner);
+    setForecastDisplay("No more refills projected before run end", "No more refills projected before run end", assumptionText, finalRefillAnalysis, planner, { lastCatchOpportunity });
     return;
   }
 
@@ -14451,7 +14583,7 @@ function updatePenFillForecastDisplay() {
     assumptionText,
     finalRefillAnalysis,
     planner,
-    { resetCountdownTarget: false }
+    { resetCountdownTarget: false, lastCatchOpportunity }
   );
 }
 
