@@ -15599,6 +15599,14 @@ const SMART_LAYOUT_LOG_ROW_HEIGHT = 360;
 const SMART_LAYOUT_GRAPH_HEIGHT = 460;
 const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 260;
 const SMART_LAYOUT_EXPANDED_HEIGHT_BUFFER = 12;
+const SMART_LAYOUT_TOP_PANEL_OVERSIZE_BUFFER = 160;
+const SMART_LAYOUT_TOP_PANEL_OVERSIZE_RATIO = 1.25;
+const SMART_LAYOUT_TOP_PANEL_IDS = new Set([
+  "panel-cycle",
+  "panel-performance",
+  "panel-target",
+  "panel-pen-fill-planner"
+]);
 
 const SMART_PANEL_LAYOUT = Object.freeze({
   "panel-config": { role: "setup", height: 220, minWidth: 320 },
@@ -15629,13 +15637,62 @@ function rememberExpandedPanelLayoutHeight(panelId) {
   layout.expandedHeight = height;
 }
 
+function getTopPanelNaturalExpandedHeight(panelId) {
+  const smartHeight = SMART_PANEL_LAYOUT[panelId]?.height;
+  const smartMinimum = Math.max(
+    Number.isFinite(smartHeight) ? smartHeight : SMART_LAYOUT_MIN_PANEL_HEIGHT,
+    SMART_LAYOUT_MIN_PANEL_HEIGHT
+  );
+  const panel = document.getElementById(panelId);
+  if (!panel || panel.classList.contains("collapsed")) return smartMinimum;
+
+  const header = panel.querySelector(".panel-header");
+  const body = panel.querySelector(".panel-body");
+  const zoom = getAppZoomScale();
+  const headerRect = header?.getBoundingClientRect();
+  const panelStyle = window.getComputedStyle(panel);
+  const borderHeight = (parseFloat(panelStyle.borderTopWidth) || 0) + (parseFloat(panelStyle.borderBottomWidth) || 0);
+  const headerHeight = headerRect?.height
+    ? headerRect.height / zoom
+    : (header?.offsetHeight || 0);
+  const bodyScrollHeight = body?.scrollHeight || 0;
+  const measuredHeight = headerHeight + bodyScrollHeight + borderHeight + SMART_LAYOUT_EXPANDED_HEIGHT_BUFFER;
+
+  return Math.max(
+    smartMinimum,
+    Number.isFinite(measuredHeight) && measuredHeight > 0 ? Math.ceil(measuredHeight) : 0
+  );
+}
+
+function getTopPanelOversizeLimit(panelId) {
+  const naturalHeight = getTopPanelNaturalExpandedHeight(panelId);
+  return Math.max(
+    naturalHeight + SMART_LAYOUT_TOP_PANEL_OVERSIZE_BUFFER,
+    Math.ceil(naturalHeight * SMART_LAYOUT_TOP_PANEL_OVERSIZE_RATIO)
+  );
+}
+
+function clearRememberedExpandedPanelHeight(panelId) {
+  if (appState.panelExpandedHeights) delete appState.panelExpandedHeights[panelId];
+  const layout = appState.panelLayout?.panels?.[panelId];
+  if (layout && Object.prototype.hasOwnProperty.call(layout, "expandedHeight")) delete layout.expandedHeight;
+}
+
 function getRememberedExpandedPanelHeight(panelId) {
   const layoutHeight = appState.panelLayout?.panels?.[panelId]?.expandedHeight;
   const stateHeight = appState.panelExpandedHeights?.[panelId];
   const rememberedHeight = Number.isFinite(layoutHeight) ? layoutHeight : stateHeight;
-  return Number.isFinite(rememberedHeight) && rememberedHeight > SMART_LAYOUT_COLLAPSED_HEIGHT
-    ? rememberedHeight
-    : 0;
+  if (!Number.isFinite(rememberedHeight) || rememberedHeight <= SMART_LAYOUT_COLLAPSED_HEIGHT) return 0;
+
+  if (SMART_LAYOUT_TOP_PANEL_IDS.has(panelId)) {
+    const oversizeLimit = getTopPanelOversizeLimit(panelId);
+    if (rememberedHeight > oversizeLimit) {
+      clearRememberedExpandedPanelHeight(panelId);
+      return 0;
+    }
+  }
+
+  return rememberedHeight;
 }
 
 function getSmartLayoutCollapsedHeight(panelId) {
@@ -15733,11 +15790,9 @@ const SMART_LAYOUT_GAP = 4;
 function applySmartLayoutRow(panelIds, y, widths, options = {}) {
   const gap = Number.isFinite(options.gap) ? options.gap : SMART_LAYOUT_GAP;
   const fallbackHeight = options.fallbackHeight || 180;
-  const equalizeExpandedHeights = options.equalizeExpandedHeights === true;
   const rowItems = [];
   let x = options.x || gap;
   let rowHeight = 0;
-  let maxExpandedHeight = 0;
   let changed = false;
 
   panelIds.forEach((panelId, index) => {
@@ -15753,16 +15808,12 @@ function applySmartLayoutRow(panelIds, y, widths, options = {}) {
     rowItems.push({ panelId, x, width, height, collapsed });
     x += width + gap;
     rowHeight = Math.max(rowHeight, height);
-    if (!collapsed) maxExpandedHeight = Math.max(maxExpandedHeight, height);
   });
 
   rowItems.forEach(({ panelId, x: itemX, width, height, collapsed }) => {
-    const itemHeight = equalizeExpandedHeights && !collapsed && maxExpandedHeight > 0
-      ? maxExpandedHeight
-      : height;
     const minHeight = collapsed ? SMART_LAYOUT_COLLAPSED_HEIGHT : SMART_LAYOUT_MIN_PANEL_HEIGHT;
-    changed = setSmartLayoutItem(panelId, { x: itemX, y, width, height: itemHeight }, { minHeight, collapsed }) || changed;
-    rowHeight = Math.max(rowHeight, itemHeight);
+    changed = setSmartLayoutItem(panelId, { x: itemX, y, width, height }, { minHeight, collapsed }) || changed;
+    rowHeight = Math.max(rowHeight, height);
   });
 
   return { changed, nextY: y + rowHeight + gap };
@@ -15881,7 +15932,7 @@ function applySmartSessionOpenLayout(options = {}) {
         ["panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner"],
         y,
         topRowWidths,
-        { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth, equalizeExpandedHeights: true }
+        { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth }
       );
       changed = row.changed || changed;
       y = row.nextY;
