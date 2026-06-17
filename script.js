@@ -15512,22 +15512,22 @@ function fitPanelLayoutToViewport(options = {}) {
 
 const SMART_LAYOUT_MIN_PANEL_HEIGHT = 130;
 const SMART_LAYOUT_COLLAPSED_HEIGHT = 48;
-const SMART_LAYOUT_SETUP_EXPANDED_HEIGHT = 210;
-const SMART_LAYOUT_WORKING_ROW_HEIGHT = 260;
-const SMART_LAYOUT_LOG_ROW_HEIGHT = 340;
-const SMART_LAYOUT_GRAPH_HEIGHT = 360;
-const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 240;
+const SMART_LAYOUT_SETUP_EXPANDED_HEIGHT = 220;
+const SMART_LAYOUT_WORKING_ROW_HEIGHT = 430;
+const SMART_LAYOUT_LOG_ROW_HEIGHT = 360;
+const SMART_LAYOUT_GRAPH_HEIGHT = 460;
+const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 260;
 
 const SMART_PANEL_LAYOUT = Object.freeze({
-  "panel-config": { role: "setup", height: 210, minWidth: 320 },
-  "panel-sim": { role: "setup", height: 210, minWidth: 340 },
-  "panel-cycle": { role: "working", height: 260, minWidth: 280 },
-  "panel-performance": { role: "working", height: 260, minWidth: 280 },
-  "panel-target": { role: "working", height: 260, minWidth: 280 },
-  "panel-pen-fill-planner": { role: "working", height: 280, minWidth: 300 },
+  "panel-config": { role: "setup", height: 220, minWidth: 320 },
+  "panel-sim": { role: "setup", height: 220, minWidth: 340 },
+  "panel-cycle": { role: "working", height: 430, minWidth: 280 },
+  "panel-performance": { role: "working", height: 430, minWidth: 280 },
+  "panel-target": { role: "working", height: 430, minWidth: 280 },
+  "panel-pen-fill-planner": { role: "working", height: 520, minWidth: 300 },
   "panel-log": { role: "log", height: 360, minWidth: 520 },
   "panel-trend-flags": { role: "log", height: 360, minWidth: 360 },
-  "panel-trend-graph": { role: "full", height: 380, minWidth: 520, fullWidth: true },
+  "panel-trend-graph": { role: "full", height: 460, minWidth: 520, fullWidth: true },
   "panel-run-review": { role: "bottom", height: 260, minWidth: 340 },
   "panel-reviews": { role: "bottom", height: 260, minWidth: 340 },
   "panel-block": { role: "bottom", height: 260, minWidth: 340 }
@@ -15847,6 +15847,7 @@ function applyPanelLayout() {
       panel.style.order = "";
       panel.style.gridColumn = "";
       panel.style.maxWidth = "";
+      panel.style.minHeight = "";
       updatePanelScale(panel, layout);
     } else {
       if (!(panel.id === "panel-sim" && appState.controlsDockEnabled)) {
@@ -15856,7 +15857,8 @@ function applyPanelLayout() {
       const layout = item ? normalizePanelLayoutItem(item) : null;
       if (layout) {
         panel.style.width = "100%";
-        panel.style.height = panel.classList.contains("collapsed") ? "auto" : `${layout.height}px`;
+        panel.style.height = "auto";
+        panel.style.minHeight = panel.classList.contains("collapsed") ? "0" : `${layout.height}px`;
       }
       const placement = getSmartLayoutGridPlacement(panel.id, smartColumns);
       panel.style.order = String(placement.order);
