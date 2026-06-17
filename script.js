@@ -81,6 +81,7 @@ const FINAL_FILL_MIN_BEFORE_END_SECONDS = Math.max(DEFAULT_FINAL_FILL_TARGET_BEF
 const FINAL_FILL_MAX_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_SECONDS + DEFAULT_FINAL_FILL_TARGET_TOLERANCE_SECONDS;
 const FINAL_FILL_ANALYSIS_START_SECONDS = 1800;
 const LAST_CATCH_BUFFER_SECONDS = 1;
+const LAST_CATCH_ACTIVE_WINDOW_SECONDS = 300;
 const LAST_CATCH_FASTEST_TOLERANCE_SECONDS = 1.0;
 const LAST_CATCH_DISPLAY_MAX_FORWARD_SHEEP = 4;
 const LAST_CATCH_MIN_PRACTICAL_REQUIRED_SECONDS = 25;
@@ -13955,6 +13956,17 @@ function shouldShowLastCatchForwardSheep(sheepToComplete) {
   return Number.isFinite(count) && count > 0 && count <= LAST_CATCH_DISPLAY_MAX_FORWARD_SHEEP;
 }
 
+function buildDisplayLastCatchOpportunityModel(options = {}) {
+  const remainingRunSeconds = Number(options.remainingRunSeconds);
+  if (!Number.isFinite(remainingRunSeconds) || remainingRunSeconds > LAST_CATCH_ACTIVE_WINDOW_SECONDS) {
+    return {
+      status: "inactive",
+      message: "Final 5 min only"
+    };
+  }
+  return buildLastCatchOpportunityModel(options);
+}
+
 function buildLastCatchOpportunityModel(options = {}) {
   const remainingRunSeconds = Number(options.remainingRunSeconds);
   const avgCycleSeconds = Number(options.avgCycleSeconds);
@@ -14586,7 +14598,7 @@ function updatePenFillForecastDisplay() {
   const eventSignature = buildPenFillCountdownEventSignature(getCurrentRunPenFillEvents());
   const finalRefillAnalysis = analyzeFinalFillWindow(finalForecastPoints, { remainingRunSeconds });
   const planner = buildPlanner(finalForecastPoints, remainingRunSeconds);
-  const lastCatchOpportunity = buildLastCatchOpportunityModel({
+  const lastCatchOpportunity = buildDisplayLastCatchOpportunityModel({
     remainingRunSeconds,
     avgCycleSeconds,
     completedSheep: appState.sheep
