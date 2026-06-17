@@ -15889,6 +15889,21 @@ function applySmartSessionOpenLayout(options = {}) {
   return changed;
 }
 
+function restoreExpandedPanelSmartHeight(panelId) {
+  if (appState.layoutEditMode || isPanelCollapsedForSmartLayout(panelId)) return;
+  applySmartSessionOpenLayout({ persist: false });
+  fitPanelLayoutToViewport({ panelId, persist: false });
+  persistPanelLayout();
+  applyPanelLayout();
+}
+
+function scheduleExpandedPanelSmartHeightRestore(panelId) {
+  if (appState.layoutEditMode) return;
+  requestAnimationFrame(() => {
+    restoreExpandedPanelSmartHeight(panelId);
+  });
+}
+
 function ensureInitialPanelLayout() {
   const panelIds = getPanelElements().map((panel) => panel.id);
   const hasAllPanels = panelIds.every((id) => appState.panelLayout.panels[id]);
@@ -19366,6 +19381,7 @@ function bindEvents() {
         fitPanelLayoutToViewport({ panelId: panel.id, persist: false });
         persistPanelLayout();
         applyPanelLayout();
+        if (!next) scheduleExpandedPanelSmartHeightRestore(panel.id);
       });
     }
 
