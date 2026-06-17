@@ -2694,6 +2694,40 @@ body.layout-edit-on #panel-trend-graph .panel-body.run-pace-body {
   padding: 0.5rem;
 }
 
+#panel-reviews {
+  display: flex;
+  flex-direction: column;
+}
+
+#panel-reviews .panel-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#panel-reviews .panel-section,
+#panel-reviews .panel-section-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#panel-reviews #reviewList.scroll-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.45rem;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+}
+
+#panel-reviews #reviewList .review-entry {
+  flex: 1 1 auto;
+}
+
 .review-entry {
   padding: 0.45rem;
   border-bottom: 1px solid #e5e7eb;
