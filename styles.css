@@ -1612,6 +1612,10 @@ button:disabled {
   flex-direction: column;
 }
 
+#panel-log.panel.collapsed .panel-body {
+  display: none;
+}
+
 body.layout-edit-on #panel-log .panel-body {
   overflow: hidden;
 }
