@@ -3097,6 +3097,7 @@ td {
 #panel-pen-fill-planner #penFillForecastStatus,
 #panel-pen-fill-planner #penFillFinalRefillTargetWindow,
 #panel-pen-fill-planner #penFillPlannerProjectedAfterTarget,
+#panel-pen-fill-planner #penFillLastCatchOpportunity,
 #panel-pen-fill-planner #penFillStrategyRecommendation,
 #panel-pen-fill-planner #penFillPlannerReason,
 #panel-pen-fill-planner #penFillConfirmStatus,
@@ -3132,6 +3133,7 @@ td {
 #panel-pen-fill-planner .metric-row:has(#penFillForecastStatus),
 #panel-pen-fill-planner .metric-row:has(#penFillFinalRefillTargetWindow),
 #panel-pen-fill-planner .metric-row:has(#penFillPlannerProjectedAfterTarget),
+#panel-pen-fill-planner .metric-row:has(#penFillLastCatchOpportunity),
 #panel-pen-fill-planner .metric-row:has(#penFillStrategyRecommendation),
 #panel-pen-fill-planner .metric-row:has(#penFillPlannerReason),
 #panel-pen-fill-planner .metric-row:has(#penFillConfirmStatus) {
