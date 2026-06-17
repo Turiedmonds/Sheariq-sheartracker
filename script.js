@@ -1907,14 +1907,6 @@ function formatUsefulRefillTimingWindowSeconds(totalSeconds) {
   return `${seconds}s`;
 }
 
-function formatUsefulRefillTimingAlignmentMessage(context) {
-  if (!context?.available) return "";
-  if (context.alignment === "aligned") return "Target looks right.";
-  if (context.alignment === "selectedEarlier") return "Target may be too early.";
-  if (context.alignment === "selectedLater") return "Target may be too late.";
-  return "";
-}
-
 function buildUsefulRefillTimingTargetContext(options = {}) {
   const catchAdvantageWindowAnalysis = options.catchAdvantageWindowAnalysis || null;
   const unavailableResult = (reason, extras = {}) => ({
@@ -1974,7 +1966,6 @@ function buildUsefulRefillTimingTargetContext(options = {}) {
   const alignment = Math.abs(differenceSeconds) <= toleranceSeconds
     ? "aligned"
     : (differenceSeconds > toleranceSeconds ? "selectedEarlier" : "selectedLater");
-  const message = formatUsefulRefillTimingAlignmentMessage({ available: true, alignment });
 
   return {
     available: true,
@@ -1984,8 +1975,7 @@ function buildUsefulRefillTimingTargetContext(options = {}) {
     estimatedUsefulWindowSeconds,
     selectedTargetSeconds,
     differenceSeconds,
-    alignment,
-    message
+    alignment
   };
 }
 
@@ -2008,10 +1998,9 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
 
   const usefulAdvantageSheep = Math.floor(Number(usefulRefillTimingTargetContext.usefulAdvantageSheep));
   const estimatedUsefulWindowSeconds = Number(usefulRefillTimingTargetContext.estimatedUsefulWindowSeconds);
-  const alignmentMessage = usefulRefillTimingTargetContext.message || formatUsefulRefillTimingAlignmentMessage(usefulRefillTimingTargetContext);
-  if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) return baseSummary;
+  if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds)) return baseSummary;
 
-  return `${baseSummary} Helps for about ${usefulAdvantageSheep} sheep after refill. ${alignmentMessage}`;
+  return `${baseSummary} Helps for about ${usefulAdvantageSheep} sheep after refill.`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -4156,18 +4145,31 @@ function buildRemainingFillPlanFromCandidate(candidate) {
   })).filter((fill) => Number.isInteger(fill.amount) && fill.amount > 0);
 }
 
+function formatNoMoreRefillsExpectedMessage(options = {}) {
+  return options.hasCompletedRefill
+    ? "Final refill already done."
+    : "No more refills expected before the run ends.";
+}
+
+function hasCompletedPenFillAmountEvent(events = getCurrentRunPenFillEvents()) {
+  return Array.isArray(events) && events.some(isPenFillAmountEvent);
+}
+
 function formatRemainingFillsMessage(remainingFillPlan, options = {}) {
   const plannerStatus = options.status || "waiting";
   const hasReductionPlan = Boolean(options.hasReductionPlan);
+  const noMoreRefillsMessage = options.noMoreRefillsMessage || formatNoMoreRefillsExpectedMessage({
+    hasCompletedRefill: Boolean(options.hasCompletedRefill)
+  });
   if (["waiting", "notPlanningYet"].includes(plannerStatus)) return "—";
-  if (plannerStatus === "noFutureFill") return "No more refills projected before run end";
-  if (!Array.isArray(remainingFillPlan) || remainingFillPlan.length === 0) return "No more refills projected before run end";
+  if (plannerStatus === "noFutureFill") return noMoreRefillsMessage;
+  if (!Array.isArray(remainingFillPlan) || remainingFillPlan.length === 0) return noMoreRefillsMessage;
   if (!hasReductionPlan) return "Full refills";
 
   const amounts = remainingFillPlan
     .map((fill) => Number(fill.amount))
     .filter((amount) => Number.isInteger(amount) && amount > 0);
-  if (amounts.length === 0) return "No more refills projected before run end";
+  if (amounts.length === 0) return noMoreRefillsMessage;
 
   const visibleAmounts = amounts.slice(0, 5).join(", ");
   return amounts.length > 5 ? `${visibleAmounts}, …` : visibleAmounts;
@@ -4378,6 +4380,9 @@ function planFinalFillStrategy(options = {}) {
     remainingRunSeconds,
     ...finalFillTimingWindow
   });
+  const noMoreRefillsMessage = formatNoMoreRefillsExpectedMessage({
+    hasCompletedRefill: hasCompletedPenFillAmountEvent()
+  });
   const currentFinalFill = finalRefillAnalysis.finalFill || forecastPoints[forecastPoints.length - 1] || null;
   const currentFullFillFinalSecondsBeforeEnd = Number.isFinite(currentFinalFill?.secondsBeforeRunEnd)
     ? currentFinalFill.secondsBeforeRunEnd
@@ -4388,13 +4393,13 @@ function planFinalFillStrategy(options = {}) {
   if (forecastPoints.length === 0 || !currentFinalFill) {
     return buildFinalFillPlannerResult({
       status: "noFutureFill",
-      message: "No more refills projected before run end",
+      message: noMoreRefillsMessage,
       fullFillAmount,
       currentFullFillFinalSecondsBeforeEnd,
       currentFullFillFinalSheepNumber,
       remainingFillPlan: [],
-      remainingFillsMessage: "No more refills projected before run end",
-      reason: "No more refills are expected before the run ends."
+      remainingFillsMessage: noMoreRefillsMessage,
+      reason: noMoreRefillsMessage
     });
   }
 
@@ -13984,7 +13989,7 @@ function formatPenFillClockAmPm(secondsFromMidnight) {
 
 function formatFinalPenFillForecastPoint(point) {
   const secondsBeforeRunEnd = Number(point?.secondsBeforeRunEnd);
-  if (!Number.isFinite(secondsBeforeRunEnd)) return "No more refills projected before run end";
+  if (!Number.isFinite(secondsBeforeRunEnd)) return formatNoMoreRefillsExpectedMessage({ hasCompletedRefill: hasCompletedPenFillAmountEvent() });
   const effectiveElapsedSeconds = Number(point?.effectiveElapsedSeconds);
   const clockText = Number.isFinite(appState.dayClockStartSecondsFromMidnight) && Number.isFinite(effectiveElapsedSeconds)
     ? formatPenFillClockAmPm(appState.dayClockStartSecondsFromMidnight + effectiveElapsedSeconds)
@@ -14163,7 +14168,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (!Array.isArray(forecastPoints) || forecastPoints.length === 0) {
     return {
       status: "none",
-      message: "No more refills projected before run end",
+      message: "No more refills expected before the run ends.",
       secondsBeforeRunEnd: null,
       finalFill: null
     };
@@ -14669,7 +14674,13 @@ function updatePenFillForecastDisplay() {
   });
 
   if (displayForecastPoints.length === 0) {
-    setForecastDisplay("No more refills projected before run end", "No more refills projected before run end", assumptionText, finalRefillAnalysis, planner, { lastCatchOpportunity });
+    const noMoreRefillsMessage = planner?.message || formatNoMoreRefillsExpectedMessage({
+      hasCompletedRefill: hasCompletedPenFillAmountEvent()
+    });
+    setForecastDisplay(noMoreRefillsMessage, noMoreRefillsMessage, assumptionText, {
+      ...finalRefillAnalysis,
+      message: noMoreRefillsMessage
+    }, planner, { lastCatchOpportunity });
     return;
   }
 
