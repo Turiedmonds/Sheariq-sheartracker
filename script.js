@@ -1909,9 +1909,9 @@ function formatUsefulRefillTimingWindowSeconds(totalSeconds) {
 
 function formatUsefulRefillTimingAlignmentMessage(context) {
   if (!context?.available) return "";
-  if (context.alignment === "aligned") return "Selected target appears aligned.";
-  if (context.alignment === "selectedEarlier") return "Selected target may be earlier than this window.";
-  if (context.alignment === "selectedLater") return "Selected target may be later than this window.";
+  if (context.alignment === "aligned") return "Target looks right.";
+  if (context.alignment === "selectedEarlier") return "Target may be too early.";
+  if (context.alignment === "selectedLater") return "Target may be too late.";
   return "";
 }
 
@@ -1936,7 +1936,7 @@ function buildUsefulRefillTimingTargetContext(options = {}) {
     || !Number.isFinite(usefulAdvantageSheep)
     || usefulAdvantageSheep <= 0
   ) {
-    return unavailableResult("Useful catch advantage timing is not available yet.", {
+    return unavailableResult("Catch benefit timing is not available yet.", {
       usefulAdvantageSheep: Number.isFinite(usefulAdvantageSheep) ? usefulAdvantageSheep : null
     });
   }
@@ -1978,7 +1978,7 @@ function buildUsefulRefillTimingTargetContext(options = {}) {
 
   return {
     available: true,
-    reason: "Useful catch advantage timing estimate is available.",
+    reason: "Catch benefit timing estimate is available.",
     usefulAdvantageSheep,
     avgCycleSeconds,
     estimatedUsefulWindowSeconds,
@@ -2011,8 +2011,7 @@ function buildPenFullnessCatchSummary({ available, reason, refillComparisons = [
   const alignmentMessage = usefulRefillTimingTargetContext.message || formatUsefulRefillTimingAlignmentMessage(usefulRefillTimingTargetContext);
   if (usefulAdvantageSheep <= 0 || !Number.isFinite(estimatedUsefulWindowSeconds) || !alignmentMessage) return baseSummary;
 
-  const timingText = formatUsefulRefillTimingWindowSeconds(estimatedUsefulWindowSeconds);
-  return `${baseSummary} Advantage lasts about ${usefulAdvantageSheep} sheep after refill, about ${timingText} before end of run. ${alignmentMessage}`;
+  return `${baseSummary} Helps for about ${usefulAdvantageSheep} sheep after refill. ${alignmentMessage}`;
 }
 
 function buildPenFullnessCatchAnalysis(options = {}) {
@@ -3551,12 +3550,12 @@ function getPenFillInstructionModel(options = {}) {
 
   const projectedFinalFillSecondsBeforeEnd = Number(planner?.projectedFinalFillSecondsBeforeEnd);
   const reasonByStatus = {
-    onTarget: planner?.reason || "Full refills already hit the target window.",
-    recommendReduction: planner?.reason || "Smaller fill may shift the final full pen closer to target.",
-    tooEarly: planner?.reason || "Smaller fill may shift the final full pen closer to target.",
-    tooLate: planner?.reason || "Reducing now would move the final refill later.",
-    noGoodPlan: planner?.reason || "Smaller fills did not safely improve final refill timing.",
-    noFutureFill: planner?.reason || "Current run timing does not forecast another refill.",
+    onTarget: planner?.reason || "Full refills already put the final refill near the target.",
+    recommendReduction: planner?.reason || "A smaller refill may move the final refill closer to the target.",
+    tooEarly: planner?.reason || "A smaller refill may move the final refill closer to the target.",
+    tooLate: planner?.reason || "A smaller refill now would make the final refill too late.",
+    noGoodPlan: planner?.reason || "Small refills do not improve the final refill timing enough.",
+    noFutureFill: planner?.reason || "No more refills are expected before the run ends.",
     notPlanningYet: "",
     waiting: "Waiting for pace data"
   };
@@ -4238,7 +4237,7 @@ function buildUsefulCatchAdvantageStrategyContext(options = {}) {
       alignment: "aligned",
       usefulAdvantageSheep,
       projectedSheepAfterTarget,
-      message: "Target appears aligned with the useful catch advantage window."
+      message: "The target matches where the catch-time gain usually helps."
     };
   }
 
@@ -4248,7 +4247,7 @@ function buildUsefulCatchAdvantageStrategyContext(options = {}) {
       alignment: "moreThanAdvantage",
       usefulAdvantageSheep,
       projectedSheepAfterTarget,
-      message: "Target may leave more sheep than the useful catch advantage window."
+      message: "The target may be too early for the catch-time gain."
     };
   }
 
@@ -4257,7 +4256,7 @@ function buildUsefulCatchAdvantageStrategyContext(options = {}) {
     alignment: "lessThanAdvantage",
     usefulAdvantageSheep,
     projectedSheepAfterTarget,
-    message: "Target may leave fewer sheep than the useful catch advantage window."
+    message: "The target may be too late for the catch-time gain."
   };
 }
 
@@ -4318,7 +4317,7 @@ function planFinalFillStrategy(options = {}) {
   if (!recordType || recordType === "none" || !rule) {
     return buildFinalFillPlannerResult({
       message: "Select record type.",
-      reason: "Pen refill planning needs a record type with pen rules."
+      reason: "Select a sheep type so refill rules are available."
     });
   }
 
@@ -4326,7 +4325,7 @@ function planFinalFillStrategy(options = {}) {
     return buildFinalFillPlannerResult({
       message: "Start run.",
       fullFillAmount,
-      reason: "Pen refill planning starts when the run is active."
+      reason: "Start the run to see refill advice."
     });
   }
 
@@ -4349,7 +4348,7 @@ function planFinalFillStrategy(options = {}) {
   if (remainingRunSeconds > FINAL_FILL_ANALYSIS_START_SECONDS) {
     return buildFinalFillPlannerResult({
       status: "notPlanningYet",
-      message: `Final-fill planning starts at ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} remaining`,
+      message: `Final refill advice starts with ${formatCountdown(FINAL_FILL_ANALYSIS_START_SECONDS)} left in the run.`,
       fullFillAmount,
       reason: ""
     });
@@ -4395,7 +4394,7 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: [],
       remainingFillsMessage: "No more refills projected before run end",
-      reason: "Current run timing does not forecast another refill."
+      reason: "No more refills are expected before the run ends."
     });
   }
 
@@ -4411,7 +4410,7 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: currentFullRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "onTarget", hasReductionPlan: false }),
-      reason: "Full refills already hit the target window.",
+      reason: "Full refills already put the final refill near the target.",
       confidence: "high"
     });
   }
@@ -4428,7 +4427,7 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: currentFullRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "tooLate", hasReductionPlan: false }),
-      reason: "Reducing now would move the final refill later.",
+      reason: "A smaller refill now would make the final refill too late.",
       confidence: "medium"
     });
   }
@@ -4455,7 +4454,7 @@ function planFinalFillStrategy(options = {}) {
       currentFullFillFinalSheepNumber,
       remainingFillPlan: currentFullRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "tooEarly", hasReductionPlan: false }),
-      reason: "Smaller fill may shift the final full pen closer to target.",
+      reason: "A smaller refill may move the final refill closer to the target.",
       confidence: "medium"
     });
   }
@@ -4504,7 +4503,7 @@ function planFinalFillStrategy(options = {}) {
       plan: bestCandidate.plan,
       remainingFillPlan: bestRemainingFillPlan,
       remainingFillsMessage: formatRemainingFillsMessage(bestRemainingFillPlan, { status: "recommendReduction", hasReductionPlan: true }),
-      reason: "Smaller fill may shift the final full pen closer to target.",
+      reason: "A smaller refill may move the final refill closer to the target.",
       confidence: bestCandidate.finalFill.secondsBeforeRunEnd <= finalFillTimingWindow.maxBeforeEndSeconds ? "high" : "medium",
       candidates: includeCandidates ? candidates : []
     });
@@ -4518,7 +4517,7 @@ function planFinalFillStrategy(options = {}) {
     currentFullFillFinalSheepNumber,
     remainingFillPlan: currentFullRemainingFillPlan,
     remainingFillsMessage: formatRemainingFillsMessage(currentFullRemainingFillPlan, { status: "noGoodPlan", hasReductionPlan: false }),
-    reason: "Smaller fills did not safely improve final refill timing.",
+    reason: "Small refills do not improve the final refill timing enough.",
     confidence: "low",
     candidates: includeCandidates ? candidates : []
   });
@@ -14090,7 +14089,7 @@ function analyzeFinalFillWindow(forecastPoints, options = {}) {
   if (Number.isFinite(remainingRunSeconds) && remainingRunSeconds > analysisStartSeconds) {
     return {
       status: "waiting",
-      message: `Final-fill planning starts at ${formatCountdown(analysisStartSeconds)} remaining`,
+      message: `Final refill advice starts with ${formatCountdown(analysisStartSeconds)} left in the run.`,
       secondsBeforeRunEnd: null,
       finalFill: null
     };
@@ -14224,7 +14223,7 @@ function formatCatchAdvantageWindowValue(analysis) {
     return "Not enough catch data yet.";
   }
   const sheepCount = Math.floor(usefulAdvantageSheep);
-  return `Advantage lasts about ${sheepCount} sheep after refill`;
+  return `Helps for about ${sheepCount} sheep after refill`;
 }
 
 function getPenFullnessConfounderDisplayName(type) {
@@ -16442,8 +16441,8 @@ function getPdfPenRefillPlannerRows() {
     ["Refill reminder", getSafeText("penFillEarlyReminder")],
     ["Final projected refill", getSafeText("penFillForecastFinal")],
     ["Final refill status", getSafeText("penFillForecastStatus")],
-    ["Refill strategy", getSafeText("penFillStrategyRecommendation")],
-    ["Reason", getSafeText("penFillPlannerReason")]
+    ["Recommended action", getSafeText("penFillStrategyRecommendation")],
+    ["Why", getSafeText("penFillPlannerReason")]
   ];
   if (isElementVisibleForPdf("penFillConfirmSection")) {
     rows.push(["Confirmation instruction", getVisibleSafeText("penFillConfirmInstruction")]);
