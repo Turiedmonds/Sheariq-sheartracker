@@ -15496,24 +15496,75 @@ function fitPanelLayoutToViewport(options = {}) {
   return changed;
 }
 
-function getSmartLayoutExistingHeight(panelId, fallbackHeight = 180) {
-  const layoutHeight = appState.panelLayout?.panels?.[panelId]?.height;
-  if (Number.isFinite(layoutHeight)) return Math.max(layoutHeight, 130);
+const SMART_LAYOUT_MIN_PANEL_HEIGHT = 130;
+const SMART_LAYOUT_COLLAPSED_HEIGHT = 48;
+const SMART_LAYOUT_SETUP_EXPANDED_HEIGHT = 190;
+const SMART_LAYOUT_WORKING_ROW_HEIGHT = 220;
+const SMART_LAYOUT_LOG_ROW_HEIGHT = 260;
+const SMART_LAYOUT_GRAPH_HEIGHT = 320;
+const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 160;
+
+function isPanelCollapsedForSmartLayout(panelId) {
   const panel = document.getElementById(panelId);
-  if (!panel) return fallbackHeight;
-  const rect = panel.getBoundingClientRect();
+  return Boolean(appState.panelCollapsed?.[panelId] || panel?.classList.contains("collapsed"));
+}
+
+function getSmartLayoutCollapsedHeight(panelId) {
+  const panel = document.getElementById(panelId);
+  const header = panel?.querySelector(".panel-header");
+  if (!header) return SMART_LAYOUT_COLLAPSED_HEIGHT;
+  const rect = header.getBoundingClientRect();
   const zoom = getAppZoomScale();
-  const measuredHeight = rect.height ? rect.height / zoom : panel.offsetHeight;
-  return Math.max(Number.isFinite(measuredHeight) && measuredHeight > 0 ? measuredHeight : fallbackHeight, 130);
+  const measuredHeight = rect.height ? rect.height / zoom : header.offsetHeight;
+  return Math.max(
+    Math.ceil(Number.isFinite(measuredHeight) && measuredHeight > 0 ? measuredHeight : SMART_LAYOUT_COLLAPSED_HEIGHT),
+    SMART_LAYOUT_COLLAPSED_HEIGHT
+  );
+}
+
+function getSmartLayoutPreferredHeight(panelId, fallbackHeight = 180, options = {}) {
+  if (isPanelCollapsedForSmartLayout(panelId)) return getSmartLayoutCollapsedHeight(panelId);
+
+  const preferredHeight = options.preferredHeights?.[panelId];
+  if (Number.isFinite(preferredHeight)) return Math.max(preferredHeight, SMART_LAYOUT_MIN_PANEL_HEIGHT);
+
+  if (options.useMeasuredHeight) {
+    const panel = document.getElementById(panelId);
+    if (panel) {
+      const rect = panel.getBoundingClientRect();
+      const zoom = getAppZoomScale();
+      const measuredHeight = rect.height ? rect.height / zoom : panel.offsetHeight;
+      if (Number.isFinite(measuredHeight) && measuredHeight > 0) {
+        return Math.max(Math.min(Math.ceil(measuredHeight), fallbackHeight), SMART_LAYOUT_MIN_PANEL_HEIGHT);
+      }
+    }
+  }
+
+  return Math.max(fallbackHeight, SMART_LAYOUT_MIN_PANEL_HEIGHT);
 }
 
 function setSmartLayoutItem(panelId, nextLayout, options = {}) {
   const panels = appState.panelLayout.panels;
-  const current = normalizePanelLayoutItem(panels[panelId], nextLayout.x, nextLayout.y, nextLayout.width, nextLayout.height);
+  const minHeight = Number.isFinite(options.minHeight) ? options.minHeight : SMART_LAYOUT_MIN_PANEL_HEIGHT;
+  const fallbackHeight = Math.max(nextLayout.height, minHeight);
+  const currentLayout = panels[panelId];
+  const current = {
+    x: Number.isFinite(currentLayout?.x) ? currentLayout.x : nextLayout.x,
+    y: Number.isFinite(currentLayout?.y) ? currentLayout.y : nextLayout.y,
+    width: Math.max(Number.isFinite(currentLayout?.width) ? currentLayout.width : nextLayout.width, 260),
+    height: Math.max(Number.isFinite(currentLayout?.height) ? currentLayout.height : fallbackHeight, minHeight),
+    z: Number.isFinite(currentLayout?.z) ? currentLayout.z : 1
+  };
   const z = Number.isFinite(current.z)
     ? current.z
     : (Number.isFinite(options.z) ? options.z : appState.panelLayout.nextZ || 1);
-  const next = normalizePanelLayoutItem({ ...nextLayout, z }, nextLayout.x, nextLayout.y, nextLayout.width, nextLayout.height);
+  const next = {
+    x: Number.isFinite(nextLayout.x) ? nextLayout.x : current.x,
+    y: Number.isFinite(nextLayout.y) ? nextLayout.y : current.y,
+    width: Math.max(Number.isFinite(nextLayout.width) ? nextLayout.width : current.width, 260),
+    height: fallbackHeight,
+    z
+  };
   const changed = current.x !== next.x
     || current.y !== next.y
     || current.width !== next.width
@@ -15533,8 +15584,12 @@ function applySmartLayoutRow(panelIds, y, widths, options = {}) {
 
   panelIds.forEach((panelId, index) => {
     const width = widths[index];
-    const height = Math.max(options.heights?.[index] || getSmartLayoutExistingHeight(panelId, fallbackHeight), 130);
-    changed = setSmartLayoutItem(panelId, { x, y, width, height }) || changed;
+    const explicitHeight = options.heights?.[index];
+    const height = Number.isFinite(explicitHeight)
+      ? explicitHeight
+      : getSmartLayoutPreferredHeight(panelId, fallbackHeight, options);
+    const minHeight = isPanelCollapsedForSmartLayout(panelId) ? SMART_LAYOUT_COLLAPSED_HEIGHT : SMART_LAYOUT_MIN_PANEL_HEIGHT;
+    changed = setSmartLayoutItem(panelId, { x, y, width, height }, { minHeight }) || changed;
     x += width + gap;
     rowHeight = Math.max(rowHeight, height);
   });
@@ -15576,14 +15631,14 @@ function applySmartSessionOpenLayout(options = {}) {
       "panel-reviews",
       "panel-block"
     ].forEach((panelId) => {
-      const row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: panelId === "panel-trend-graph" ? 320 : 180 });
+      const row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: panelId === "panel-trend-graph" ? SMART_LAYOUT_GRAPH_HEIGHT : 180 });
       changed = row.changed || changed;
       y = row.nextY;
     });
   } else {
     const setupConfigWidth = columns === 4 ? Math.min(Math.max(Math.floor(contentWidth * 0.36), minWidth), 460) : Math.floor((contentWidth - gap) / 2);
     const setupSimWidth = columns === 4 ? Math.min(Math.max(Math.floor(contentWidth * 0.40), minWidth), 520) : Math.floor((contentWidth - gap) / 2);
-    let row = applySmartLayoutRow(["panel-config", "panel-sim"], y, [setupConfigWidth, setupSimWidth], { gap, fallbackHeight: 190 });
+    let row = applySmartLayoutRow(["panel-config", "panel-sim"], y, [setupConfigWidth, setupSimWidth], { gap, fallbackHeight: SMART_LAYOUT_SETUP_EXPANDED_HEIGHT });
     changed = row.changed || changed;
     y = row.nextY;
 
@@ -15594,38 +15649,38 @@ function applySmartSessionOpenLayout(options = {}) {
         ["panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner"],
         y,
         [standardWidth, standardWidth, standardWidth, Math.min(penWidth, contentWidth - (standardWidth + gap) * 3)],
-        { gap, fallbackHeight: 220 }
+        { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT }
       );
       changed = row.changed || changed;
       y = row.nextY;
     } else {
       const twoColWidths = buildSmartEqualWidths(2, availableWidth, gap);
-      row = applySmartLayoutRow(["panel-cycle", "panel-performance"], y, twoColWidths, { gap, fallbackHeight: 220 });
+      row = applySmartLayoutRow(["panel-cycle", "panel-performance"], y, twoColWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT });
       changed = row.changed || changed;
       y = row.nextY;
-      row = applySmartLayoutRow(["panel-target", "panel-pen-fill-planner"], y, twoColWidths, { gap, fallbackHeight: 220 });
+      row = applySmartLayoutRow(["panel-target", "panel-pen-fill-planner"], y, twoColWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT });
       changed = row.changed || changed;
       y = row.nextY;
     }
 
     const logWidth = columns === 4 ? Math.max(Math.floor(contentWidth * 0.59), minWidth) : Math.floor((contentWidth - gap) / 2);
     const trendFlagsWidth = Math.max(contentWidth - logWidth - gap, minWidth);
-    row = applySmartLayoutRow(["panel-log", "panel-trend-flags"], y, [logWidth, trendFlagsWidth], { gap, fallbackHeight: 260 });
+    row = applySmartLayoutRow(["panel-log", "panel-trend-flags"], y, [logWidth, trendFlagsWidth], { gap, fallbackHeight: SMART_LAYOUT_LOG_ROW_HEIGHT });
     changed = row.changed || changed;
     y = row.nextY;
 
-    row = applySmartLayoutRow(["panel-trend-graph"], y, [fullWidth], { gap, fallbackHeight: 320 });
+    row = applySmartLayoutRow(["panel-trend-graph"], y, [fullWidth], { gap, fallbackHeight: SMART_LAYOUT_GRAPH_HEIGHT });
     changed = row.changed || changed;
     y = row.nextY;
 
     const bottomPanels = ["panel-run-review", "panel-reviews", "panel-block"];
     if (columns === 4) {
       const bottomWidths = buildSmartEqualWidths(3, availableWidth, gap);
-      row = applySmartLayoutRow(bottomPanels, y, bottomWidths, { gap, fallbackHeight: 160 });
+      row = applySmartLayoutRow(bottomPanels, y, bottomWidths, { gap, fallbackHeight: SMART_LAYOUT_BOTTOM_ROW_HEIGHT });
       changed = row.changed || changed;
     } else {
       bottomPanels.forEach((panelId) => {
-        row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: 160 });
+        row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: SMART_LAYOUT_BOTTOM_ROW_HEIGHT });
         changed = row.changed || changed;
         y = row.nextY;
       });
