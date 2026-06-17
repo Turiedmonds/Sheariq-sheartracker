@@ -7282,7 +7282,7 @@ function startRun(startedAtMs = Date.now()) {
   updateLivePanel();
   renderLogTable();
   renderReviewList();
-  scrollSheepLogToTop();
+  scrollSheepLogToLatest();
   drawTrendGraph();
   updateTrendFlags();
 }
@@ -7451,7 +7451,7 @@ function refreshAfterStartNewDayReset() {
   if (elements.blockMinutes) renderBlock(Number(elements.blockMinutes.value) || 15);
   applySmartSessionOpenLayout();
   applyPanelLayout();
-  scrollSheepLogToTop();
+  scrollSheepLogToLatest();
 }
 
 function startNewDay() {
@@ -12089,6 +12089,8 @@ function renderLogTable() {
   const penFillMarkerEventsBySheepRow = getPenFillMarkerEventsBySheepRow(sortedSheep);
   sortedSheep.forEach((entry) => {
     const row = document.createElement("tr");
+    row.dataset.sheepNumber = String(entry.number);
+    if (entry.id) row.dataset.sheepId = entry.id;
     const fullCycleClass = getSheepLogTimingGradeClass(entry.fullCycle, requiredCycle);
     const shearAnomalyClass = getSheepLogAnomalyClass(entry.shearDuration, anomalyAverages.avgShearDuration);
     const catchAnomalyClass = getSheepLogAnomalyClass(entry.catchDuration, anomalyAverages.avgCatchDuration);
@@ -13176,17 +13178,59 @@ function cacheSheepLogScroller() {
 }
 
 
-function scrollSheepLogToTop() {
+function getLatestSheepLogRow() {
+  if (!elements.sheepLogBody) return null;
+
+  let latestRow = null;
+  let latestNumber = -Infinity;
+  [...elements.sheepLogBody.querySelectorAll("tr")].forEach((row) => {
+    if (!(row instanceof HTMLElement)) return;
+    const sheepNumber = Number(row.dataset.sheepNumber || row.cells?.[1]?.textContent);
+    if (!Number.isFinite(sheepNumber) || sheepNumber <= latestNumber) return;
+    latestNumber = sheepNumber;
+    latestRow = row;
+  });
+
+  return latestRow;
+}
+
+function scrollSheepLogRowIntoView(scroller, row) {
+  if (!scroller || !row) return false;
+
+  const scrollerRect = scroller.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  const rowAboveView = rowRect.top < scrollerRect.top;
+  const rowBelowView = rowRect.bottom > scrollerRect.bottom;
+
+  if (rowAboveView) {
+    scroller.scrollTop += rowRect.top - scrollerRect.top;
+  } else if (rowBelowView) {
+    scroller.scrollTop += rowRect.bottom - scrollerRect.bottom;
+  }
+
+  return rowAboveView || rowBelowView;
+}
+
+function scrollSheepLogToLatest() {
   const scroller = cacheSheepLogScroller() || document.querySelector("#panel-log .sheep-log-scroll");
   if (!scroller) return;
 
   const applyScroll = () => {
-    scroller.scrollTop = 0;
+    const latestRow = getLatestSheepLogRow();
+    if (latestRow && scrollSheepLogRowIntoView(scroller, latestRow)) return;
+
+    if (latestRow) return;
+
+    scroller.scrollTop = appState.sheepLogFillDirection === "oldestFirst"
+      ? scroller.scrollHeight
+      : 0;
   };
 
   applyScroll();
   if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
-    window.requestAnimationFrame(applyScroll);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(applyScroll);
+    });
   }
 }
 
@@ -17496,7 +17540,7 @@ function restoreSessionPayload(raw, options = {}) {
   updateUndoLastSheepButtonUI();
   renderLogTable();
   renderReviewList();
-  scrollSheepLogToTop();
+  scrollSheepLogToLatest();
   drawTrendGraph();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updateReviewRunButtonState();
@@ -19634,7 +19678,7 @@ function initialize() {
 
   renderLogTable();
   renderReviewList();
-  scrollSheepLogToTop();
+  scrollSheepLogToLatest();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updateReviewRunButtonState();
   updatePauseButtonUI();
