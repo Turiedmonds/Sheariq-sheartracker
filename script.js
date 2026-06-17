@@ -15512,22 +15512,23 @@ function fitPanelLayoutToViewport(options = {}) {
 
 const SMART_LAYOUT_MIN_PANEL_HEIGHT = 130;
 const SMART_LAYOUT_COLLAPSED_HEIGHT = 48;
-const SMART_LAYOUT_SETUP_EXPANDED_HEIGHT = 210;
-const SMART_LAYOUT_WORKING_ROW_HEIGHT = 260;
-const SMART_LAYOUT_LOG_ROW_HEIGHT = 340;
-const SMART_LAYOUT_GRAPH_HEIGHT = 360;
-const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 240;
+const SMART_LAYOUT_SETUP_EXPANDED_HEIGHT = 220;
+const SMART_LAYOUT_WORKING_ROW_HEIGHT = 430;
+const SMART_LAYOUT_LOG_ROW_HEIGHT = 360;
+const SMART_LAYOUT_GRAPH_HEIGHT = 460;
+const SMART_LAYOUT_BOTTOM_ROW_HEIGHT = 260;
+const SMART_LAYOUT_EXPANDED_HEIGHT_BUFFER = 12;
 
 const SMART_PANEL_LAYOUT = Object.freeze({
-  "panel-config": { role: "setup", height: 210, minWidth: 320 },
-  "panel-sim": { role: "setup", height: 210, minWidth: 340 },
-  "panel-cycle": { role: "working", height: 260, minWidth: 280 },
-  "panel-performance": { role: "working", height: 260, minWidth: 280 },
-  "panel-target": { role: "working", height: 260, minWidth: 280 },
-  "panel-pen-fill-planner": { role: "working", height: 280, minWidth: 300 },
+  "panel-config": { role: "setup", height: 220, minWidth: 320 },
+  "panel-sim": { role: "setup", height: 220, minWidth: 340 },
+  "panel-cycle": { role: "working", height: 430, minWidth: 280 },
+  "panel-performance": { role: "working", height: 430, minWidth: 280 },
+  "panel-target": { role: "working", height: 430, minWidth: 280 },
+  "panel-pen-fill-planner": { role: "working", height: 520, minWidth: 300 },
   "panel-log": { role: "log", height: 360, minWidth: 520 },
   "panel-trend-flags": { role: "log", height: 360, minWidth: 360 },
-  "panel-trend-graph": { role: "full", height: 380, minWidth: 520, fullWidth: true },
+  "panel-trend-graph": { role: "full", height: 460, minWidth: 520, fullWidth: true },
   "panel-run-review": { role: "bottom", height: 260, minWidth: 340 },
   "panel-reviews": { role: "bottom", height: 260, minWidth: 340 },
   "panel-block": { role: "bottom", height: 260, minWidth: 340 }
@@ -15551,26 +15552,37 @@ function getSmartLayoutCollapsedHeight(panelId) {
   );
 }
 
+function getExpandedPanelRequiredHeight(panel) {
+  if (!panel || panel.classList.contains("collapsed")) return 0;
+
+  const header = panel.querySelector(".panel-header");
+  const body = panel.querySelector(".panel-body");
+  const zoom = getAppZoomScale();
+  const headerRect = header?.getBoundingClientRect();
+  const panelStyle = window.getComputedStyle(panel);
+  const borderHeight = (parseFloat(panelStyle.borderTopWidth) || 0) + (parseFloat(panelStyle.borderBottomWidth) || 0);
+  const headerHeight = headerRect?.height
+    ? headerRect.height / zoom
+    : (header?.offsetHeight || 0);
+  const bodyHeight = body
+    ? Math.max(body.scrollHeight || 0, body.offsetHeight || 0)
+    : 0;
+  const requiredHeight = headerHeight + bodyHeight + borderHeight + SMART_LAYOUT_EXPANDED_HEIGHT_BUFFER;
+  return Number.isFinite(requiredHeight) && requiredHeight > 0 ? Math.ceil(requiredHeight) : 0;
+}
+
 function getSmartLayoutPreferredHeight(panelId, fallbackHeight = 180, options = {}) {
   if (isPanelCollapsedForSmartLayout(panelId)) return getSmartLayoutCollapsedHeight(panelId);
 
   const smartHeight = SMART_PANEL_LAYOUT[panelId]?.height;
-  const preferredHeight = options.preferredHeights?.[panelId] ?? smartHeight;
-  if (Number.isFinite(preferredHeight)) return Math.max(preferredHeight, SMART_LAYOUT_MIN_PANEL_HEIGHT);
+  const preferredHeight = options.preferredHeights?.[panelId] ?? smartHeight ?? fallbackHeight;
+  const smartMinimum = Math.max(
+    Number.isFinite(preferredHeight) ? preferredHeight : fallbackHeight,
+    SMART_LAYOUT_MIN_PANEL_HEIGHT
+  );
+  const measuredHeight = getExpandedPanelRequiredHeight(document.getElementById(panelId));
 
-  if (options.useMeasuredHeight) {
-    const panel = document.getElementById(panelId);
-    if (panel) {
-      const rect = panel.getBoundingClientRect();
-      const zoom = getAppZoomScale();
-      const measuredHeight = rect.height ? rect.height / zoom : panel.offsetHeight;
-      if (Number.isFinite(measuredHeight) && measuredHeight > 0) {
-        return Math.max(Math.min(Math.ceil(measuredHeight), fallbackHeight), SMART_LAYOUT_MIN_PANEL_HEIGHT);
-      }
-    }
-  }
-
-  return Math.max(fallbackHeight, SMART_LAYOUT_MIN_PANEL_HEIGHT);
+  return Math.max(smartMinimum, measuredHeight || 0);
 }
 
 function setSmartLayoutItem(panelId, nextLayout, options = {}) {
@@ -15843,6 +15855,7 @@ function applyPanelLayout() {
       panel.style.top = `${layout.y}px`;
       panel.style.width = `${layout.width}px`;
       panel.style.height = `${layout.height}px`;
+      panel.style.minHeight = "";
       panel.style.zIndex = String(layout.z || 1);
       panel.style.order = "";
       panel.style.gridColumn = "";
@@ -15856,7 +15869,13 @@ function applyPanelLayout() {
       const layout = item ? normalizePanelLayoutItem(item) : null;
       if (layout) {
         panel.style.width = "100%";
-        panel.style.height = panel.classList.contains("collapsed") ? "auto" : `${layout.height}px`;
+        if (panel.classList.contains("collapsed")) {
+          panel.style.height = "auto";
+          panel.style.minHeight = "0";
+        } else {
+          panel.style.height = "auto";
+          panel.style.minHeight = `${layout.height}px`;
+        }
       }
       const placement = getSmartLayoutGridPlacement(panel.id, smartColumns);
       panel.style.order = String(placement.order);
