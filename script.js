@@ -15697,8 +15697,11 @@ const SMART_LAYOUT_GAP = 4;
 function applySmartLayoutRow(panelIds, y, widths, options = {}) {
   const gap = Number.isFinite(options.gap) ? options.gap : SMART_LAYOUT_GAP;
   const fallbackHeight = options.fallbackHeight || 180;
+  const equalizeExpandedHeights = options.equalizeExpandedHeights === true;
+  const rowItems = [];
   let x = options.x || gap;
   let rowHeight = 0;
+  let maxExpandedHeight = 0;
   let changed = false;
 
   panelIds.forEach((panelId, index) => {
@@ -15710,10 +15713,20 @@ function applySmartLayoutRow(panelIds, y, widths, options = {}) {
     const height = Number.isFinite(explicitHeight)
       ? explicitHeight
       : getSmartLayoutPreferredHeight(panelId, fallbackHeight, options);
-    const minHeight = isPanelCollapsedForSmartLayout(panelId) ? SMART_LAYOUT_COLLAPSED_HEIGHT : SMART_LAYOUT_MIN_PANEL_HEIGHT;
-    changed = setSmartLayoutItem(panelId, { x, y, width, height }, { minHeight }) || changed;
+    const collapsed = isPanelCollapsedForSmartLayout(panelId);
+    rowItems.push({ panelId, x, width, height, collapsed });
     x += width + gap;
     rowHeight = Math.max(rowHeight, height);
+    if (!collapsed) maxExpandedHeight = Math.max(maxExpandedHeight, height);
+  });
+
+  rowItems.forEach(({ panelId, x: itemX, width, height, collapsed }) => {
+    const itemHeight = equalizeExpandedHeights && !collapsed && maxExpandedHeight > 0
+      ? maxExpandedHeight
+      : height;
+    const minHeight = collapsed ? SMART_LAYOUT_COLLAPSED_HEIGHT : SMART_LAYOUT_MIN_PANEL_HEIGHT;
+    changed = setSmartLayoutItem(panelId, { x: itemX, y, width, height: itemHeight }, { minHeight }) || changed;
+    rowHeight = Math.max(rowHeight, itemHeight);
   });
 
   return { changed, nextY: y + rowHeight + gap };
@@ -15832,7 +15845,7 @@ function applySmartSessionOpenLayout(options = {}) {
         ["panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner"],
         y,
         topRowWidths,
-        { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth }
+        { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth, equalizeExpandedHeights: true }
       );
       changed = row.changed || changed;
       y = row.nextY;
