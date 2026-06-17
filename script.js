@@ -82,6 +82,9 @@ const FINAL_FILL_MAX_BEFORE_END_SECONDS = DEFAULT_FINAL_FILL_TARGET_BEFORE_END_S
 const FINAL_FILL_ANALYSIS_START_SECONDS = 1800;
 const LAST_CATCH_BUFFER_SECONDS = 1;
 const LAST_CATCH_FASTEST_TOLERANCE_SECONDS = 1.0;
+const LAST_CATCH_DISPLAY_MAX_FORWARD_SHEEP = 4;
+const LAST_CATCH_MIN_PRACTICAL_REQUIRED_SECONDS = 25;
+const LAST_CATCH_GONE_FASTEST_MARGIN_SECONDS = 5;
 
 const PEN_RULES_BY_RECORD_TYPE = {
   strongWoolLambs: {
@@ -13945,6 +13948,11 @@ function formatLastCatchRequiredSeconds(seconds) {
   return Number.isFinite(value) ? `${value.toFixed(1)}s` : "—";
 }
 
+function shouldShowLastCatchForwardSheep(sheepToComplete) {
+  const count = Math.floor(Number(sheepToComplete));
+  return Number.isFinite(count) && count > 0 && count <= LAST_CATCH_DISPLAY_MAX_FORWARD_SHEEP;
+}
+
 function buildLastCatchOpportunityModel(options = {}) {
   const remainingRunSeconds = Number(options.remainingRunSeconds);
   const avgCycleSeconds = Number(options.avgCycleSeconds);
@@ -13991,6 +13999,7 @@ function buildLastCatchOpportunityModel(options = {}) {
   const requiredAverageSeconds = availableCycleSeconds / chosenSheepToComplete;
   const requiredText = formatLastCatchRequiredSeconds(requiredAverageSeconds);
   const nextText = chosenSheepToComplete === 1 ? "next 1" : `next ${chosenSheepToComplete}`;
+  const showForwardSheep = shouldShowLastCatchForwardSheep(chosenSheepToComplete);
   const resultBase = {
     remainingRunSeconds,
     sheepToComplete: chosenSheepToComplete,
@@ -14000,11 +14009,23 @@ function buildLastCatchOpportunityModel(options = {}) {
     fastestCompletedSheepSeconds
   };
 
+  if (
+    requiredAverageSeconds < LAST_CATCH_MIN_PRACTICAL_REQUIRED_SECONDS
+    || requiredAverageSeconds + LAST_CATCH_GONE_FASTEST_MARGIN_SECONDS < fastestCompletedSheepSeconds
+  ) {
+    return {
+      ...resultBase,
+      status: "gone",
+      message: "Last-catch chance gone",
+      reason: "Required pace is no longer practical for this run."
+    };
+  }
+
   if (requiredAverageSeconds >= referencePaceSeconds) {
     return {
       ...resultBase,
       status: "onPace",
-      message: "On pace for last-catch chance",
+      message: showForwardSheep ? "On pace for last-catch chance" : `On pace — hold under ${requiredText}`,
       reason: "Current pace leaves time to catch/start one more before the horn."
     };
   }
@@ -14013,7 +14034,9 @@ function buildLastCatchOpportunityModel(options = {}) {
     return {
       ...resultBase,
       status: "possible",
-      message: `Last-catch chance: ${nextText} under ${requiredText} each`,
+      message: showForwardSheep
+        ? `Last-catch chance: ${nextText} under ${requiredText} each`
+        : `Last-catch chance: hold under ${requiredText} pace`,
       reason: "Fastest sheep so far shows this is possible, but pace must lift."
     };
   }
@@ -14022,7 +14045,9 @@ function buildLastCatchOpportunityModel(options = {}) {
     return {
       ...resultBase,
       status: "unlikely",
-      message: `Last-catch unlikely: need ${nextText} under ${requiredText} each`,
+      message: showForwardSheep
+        ? `Last-catch unlikely: need ${nextText} under ${requiredText} each`
+        : `Last-catch unlikely: need ${requiredText} sheep`,
       reason: "Required pace is faster than any sheep so far."
     };
   }
