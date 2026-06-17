@@ -624,10 +624,10 @@ body {
 
 .dashboard {
   display: grid;
-  gap: 1.2rem;
+  gap: 4px;
   max-width: 100%;
   overflow-x: clip;
-  padding: 0.8rem;
+  padding: 4px;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
 }
 

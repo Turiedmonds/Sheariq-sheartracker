@@ -15617,8 +15617,10 @@ function setSmartLayoutItem(panelId, nextLayout, options = {}) {
   return changed;
 }
 
+const SMART_LAYOUT_GAP = 4;
+
 function applySmartLayoutRow(panelIds, y, widths, options = {}) {
-  const gap = options.gap || 12;
+  const gap = Number.isFinite(options.gap) ? options.gap : SMART_LAYOUT_GAP;
   const fallbackHeight = options.fallbackHeight || 180;
   let x = options.x || gap;
   let rowHeight = 0;
@@ -15642,10 +15644,32 @@ function applySmartLayoutRow(panelIds, y, widths, options = {}) {
   return { changed, nextY: y + rowHeight + gap };
 }
 
-function buildSmartEqualWidths(columnCount, availableWidth, gap) {
-  const innerWidth = Math.max(availableWidth - gap * (columnCount + 1), 260);
-  const width = Math.max(Math.floor(innerWidth / columnCount), 260);
-  return Array.from({ length: columnCount }, () => width);
+function buildSmartWeightedWidths(weights, contentWidth, gap, minWidth = 260) {
+  const columnCount = weights.length;
+  const totalGapWidth = gap * Math.max(columnCount - 1, 0);
+  const usableWidth = Math.max(contentWidth - totalGapWidth, minWidth * columnCount);
+  const totalWeight = weights.reduce((sum, weight) => sum + weight, 0) || columnCount;
+  const widths = weights.map(() => minWidth);
+  const remainingWidth = Math.max(usableWidth - minWidth * columnCount, 0);
+  let allocatedWidth = minWidth * columnCount;
+
+  weights.forEach((weight, index) => {
+    const extraWidth = Math.floor((remainingWidth * weight) / totalWeight);
+    widths[index] += extraWidth;
+    allocatedWidth += extraWidth;
+  });
+
+  let leftoverWidth = usableWidth - allocatedWidth;
+  for (let index = widths.length - 1; leftoverWidth > 0 && widths.length; index = (index - 1 + widths.length) % widths.length) {
+    widths[index] += 1;
+    leftoverWidth -= 1;
+  }
+
+  return widths;
+}
+
+function buildSmartEqualWidths(columnCount, contentWidth, gap) {
+  return buildSmartWeightedWidths(Array.from({ length: columnCount }, () => 1), contentWidth, gap);
 }
 
 
@@ -15693,7 +15717,7 @@ function applySmartSessionOpenLayout(options = {}) {
   ensureInitialPanelLayout();
 
   const minWidth = 260;
-  const gap = 12;
+  const gap = SMART_LAYOUT_GAP;
   const availableWidth = Math.max(Math.floor(getDashboardAvailableWidth()), minWidth);
   const contentWidth = Math.max(availableWidth - gap * 2, minWidth);
   const fullWidth = contentWidth;
@@ -15728,22 +15752,22 @@ function applySmartSessionOpenLayout(options = {}) {
     y = row.nextY;
 
     if (columns === 4) {
-      const penWidth = Math.max(Math.floor(contentWidth * 0.28), minWidth);
-      const standardWidth = Math.max(Math.floor((contentWidth - penWidth - gap * 3) / 3), minWidth);
+      const topRowWidths = buildSmartWeightedWidths([23, 20, 25, 32], contentWidth, gap, minWidth);
       row = applySmartLayoutRow(
         ["panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner"],
         y,
-        [standardWidth, standardWidth, standardWidth, Math.min(penWidth, contentWidth - (standardWidth + gap) * 3)],
+        topRowWidths,
         { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth }
       );
       changed = row.changed || changed;
       y = row.nextY;
     } else {
-      const twoColWidths = buildSmartEqualWidths(2, availableWidth, gap);
-      row = applySmartLayoutRow(["panel-cycle", "panel-performance"], y, twoColWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth });
+      const timingPerformanceWidths = buildSmartWeightedWidths([55, 45], contentWidth, gap, minWidth);
+      const targetPenWidths = buildSmartWeightedWidths([42, 58], contentWidth, gap, minWidth);
+      row = applySmartLayoutRow(["panel-cycle", "panel-performance"], y, timingPerformanceWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth });
       changed = row.changed || changed;
       y = row.nextY;
-      row = applySmartLayoutRow(["panel-target", "panel-pen-fill-planner"], y, twoColWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth });
+      row = applySmartLayoutRow(["panel-target", "panel-pen-fill-planner"], y, targetPenWidths, { gap, fallbackHeight: SMART_LAYOUT_WORKING_ROW_HEIGHT, maxWidth: contentWidth });
       changed = row.changed || changed;
       y = row.nextY;
     }
@@ -15760,7 +15784,7 @@ function applySmartSessionOpenLayout(options = {}) {
 
     const bottomPanels = ["panel-run-review", "panel-reviews", "panel-block"];
     if (columns === 4) {
-      const bottomWidths = buildSmartEqualWidths(3, availableWidth, gap);
+      const bottomWidths = buildSmartEqualWidths(3, contentWidth, gap);
       row = applySmartLayoutRow(bottomPanels, y, bottomWidths, { gap, fallbackHeight: SMART_LAYOUT_BOTTOM_ROW_HEIGHT, maxWidth: contentWidth });
       changed = row.changed || changed;
     } else {
