@@ -4588,6 +4588,7 @@ const appState = {
   dayClockTimerId: null,
   savedFarms: [],
   panelCollapsed: {},
+  panelExpandedHeights: {},
   draggedPanelId: null,
   confirmModal: {
     open: false,
@@ -15418,6 +15419,11 @@ function loadPanelLayout() {
       panels: stored.panels && typeof stored.panels === "object" ? stored.panels : {},
       nextZ: Number.isFinite(stored.nextZ) ? stored.nextZ : 1
     };
+    appState.panelExpandedHeights = {};
+    Object.entries(appState.panelLayout.panels).forEach(([panelId, layout]) => {
+      const height = Number.isFinite(layout?.expandedHeight) ? layout.expandedHeight : 0;
+      if (height > SMART_LAYOUT_COLLAPSED_HEIGHT) appState.panelExpandedHeights[panelId] = height;
+    });
     appState.layoutEditMode = stored.layoutEditMode === true;
   } catch (error) {
     console.debug("Failed to load panel layout", error);
@@ -15614,6 +15620,24 @@ function isPanelCollapsedForSmartLayout(panelId) {
   return Boolean(appState.panelCollapsed?.[panelId] || panel?.classList.contains("collapsed"));
 }
 
+function rememberExpandedPanelLayoutHeight(panelId) {
+  if (!panelId || appState.layoutEditMode || isPanelCollapsedForSmartLayout(panelId)) return;
+  const layout = appState.panelLayout?.panels?.[panelId];
+  const height = Number.isFinite(layout?.height) ? layout.height : 0;
+  if (height <= SMART_LAYOUT_COLLAPSED_HEIGHT) return;
+  appState.panelExpandedHeights[panelId] = height;
+  layout.expandedHeight = height;
+}
+
+function getRememberedExpandedPanelHeight(panelId) {
+  const layoutHeight = appState.panelLayout?.panels?.[panelId]?.expandedHeight;
+  const stateHeight = appState.panelExpandedHeights?.[panelId];
+  const rememberedHeight = Number.isFinite(layoutHeight) ? layoutHeight : stateHeight;
+  return Number.isFinite(rememberedHeight) && rememberedHeight > SMART_LAYOUT_COLLAPSED_HEIGHT
+    ? rememberedHeight
+    : 0;
+}
+
 function getSmartLayoutCollapsedHeight(panelId) {
   const panel = document.getElementById(panelId);
   const header = panel?.querySelector(".panel-header");
@@ -15656,8 +15680,9 @@ function getSmartLayoutPreferredHeight(panelId, fallbackHeight = 180, options = 
     SMART_LAYOUT_MIN_PANEL_HEIGHT
   );
   const measuredHeight = getExpandedPanelRequiredHeight(document.getElementById(panelId));
+  const rememberedHeight = getRememberedExpandedPanelHeight(panelId);
 
-  return Math.max(smartMinimum, measuredHeight || 0);
+  return Math.max(smartMinimum, measuredHeight || 0, rememberedHeight);
 }
 
 function setSmartLayoutItem(panelId, nextLayout, options = {}) {
@@ -15665,6 +15690,8 @@ function setSmartLayoutItem(panelId, nextLayout, options = {}) {
   const minHeight = Number.isFinite(options.minHeight) ? options.minHeight : SMART_LAYOUT_MIN_PANEL_HEIGHT;
   const fallbackHeight = Math.max(nextLayout.height, minHeight);
   const currentLayout = panels[panelId];
+  const isCollapsed = options.collapsed === true;
+  const currentExpandedHeight = getRememberedExpandedPanelHeight(panelId);
   const current = {
     x: Number.isFinite(currentLayout?.x) ? currentLayout.x : nextLayout.x,
     y: Number.isFinite(currentLayout?.y) ? currentLayout.y : nextLayout.y,
@@ -15680,13 +15707,22 @@ function setSmartLayoutItem(panelId, nextLayout, options = {}) {
     y: Number.isFinite(nextLayout.y) ? nextLayout.y : current.y,
     width: Math.max(Number.isFinite(nextLayout.width) ? nextLayout.width : current.width, 260),
     height: fallbackHeight,
-    z
+    z,
+    expandedHeight: isCollapsed
+      ? currentExpandedHeight || undefined
+      : Math.max(fallbackHeight, currentExpandedHeight || 0)
   };
   const changed = current.x !== next.x
     || current.y !== next.y
     || current.width !== next.width
     || current.height !== next.height
-    || current.z !== next.z;
+    || current.z !== next.z
+    || currentExpandedHeight !== next.expandedHeight;
+  if (Number.isFinite(next.expandedHeight) && next.expandedHeight > SMART_LAYOUT_COLLAPSED_HEIGHT) {
+    appState.panelExpandedHeights[panelId] = next.expandedHeight;
+  } else {
+    delete next.expandedHeight;
+  }
   panels[panelId] = next;
   appState.panelLayout.nextZ = Math.max(appState.panelLayout.nextZ || 1, next.z || 1);
   return changed;
@@ -15725,7 +15761,7 @@ function applySmartLayoutRow(panelIds, y, widths, options = {}) {
       ? maxExpandedHeight
       : height;
     const minHeight = collapsed ? SMART_LAYOUT_COLLAPSED_HEIGHT : SMART_LAYOUT_MIN_PANEL_HEIGHT;
-    changed = setSmartLayoutItem(panelId, { x: itemX, y, width, height: itemHeight }, { minHeight }) || changed;
+    changed = setSmartLayoutItem(panelId, { x: itemX, y, width, height: itemHeight }, { minHeight, collapsed }) || changed;
     rowHeight = Math.max(rowHeight, itemHeight);
   });
 
@@ -19370,6 +19406,7 @@ function bindEvents() {
     if (collapseBtn) {
       collapseBtn.addEventListener("click", () => {
         const next = !panel.classList.contains("collapsed");
+        if (next) rememberExpandedPanelLayoutHeight(panel.id);
         panel.classList.toggle("collapsed", next);
         appState.panelCollapsed[panel.id] = next;
         persistPanelCollapsed();
