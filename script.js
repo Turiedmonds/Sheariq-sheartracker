@@ -4980,6 +4980,7 @@ const elements = {
   reviewList: document.getElementById("reviewList"),
   runReviewText: document.getElementById("runReviewText"),
   reviewRunBtn: document.getElementById("reviewRunBtn"),
+  runHistoryBtn: document.getElementById("runHistoryBtn"),
   appZoomMinusBtn: document.getElementById("appZoomMinusBtn"),
   appZoomInput: document.getElementById("appZoomInput"),
   appZoomPlusBtn: document.getElementById("appZoomPlusBtn"),
@@ -4987,6 +4988,10 @@ const elements = {
   reviewRunModalOverlay: document.getElementById("reviewRunModalOverlay"),
   reviewRunModalCloseBtn: document.getElementById("reviewRunModalCloseBtn"),
   reviewRunModalContent: document.getElementById("reviewRunModalContent"),
+  runHistoryModalTitle: document.getElementById("runHistoryModalTitle"),
+  runHistoryModalOverlay: document.getElementById("runHistoryModalOverlay"),
+  runHistoryModalCloseBtn: document.getElementById("runHistoryModalCloseBtn"),
+  runHistoryModalContent: document.getElementById("runHistoryModalContent"),
   trendFlags: document.getElementById("trendFlags"),
   autosaveSettingsBtn: document.getElementById("autosaveSettingsBtn"),
   autosaveSettingsModalOverlay: document.getElementById("autosaveSettingsModalOverlay"),
@@ -7348,7 +7353,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
   generateRunReview();
   appState.latestCompletedRunSnapshot = buildCompletedRunSnapshot();
   appendCompletedRunSnapshot(appState.latestCompletedRunSnapshot);
-  updateReviewRunButtonState();
+  updateCompletedRunViewerButtonStates();
 
   appState.runActive = false;
   if (appState.paused) {
@@ -7417,7 +7422,7 @@ function resetRun() {
   renderLogTable();
   updateLivePanel();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
-  updateReviewRunButtonState();
+  updateCompletedRunViewerButtonStates();
   renderReviewList();
   drawTrendGraph();
   updateTrendFlags();
@@ -7449,7 +7454,7 @@ function refreshAfterStartNewDayReset() {
   updateStatsPanel();
   renderLogTable();
   renderReviewList();
-  updateReviewRunButtonState();
+  updateCompletedRunViewerButtonStates();
   drawTrendGraph();
   updateTrendFlags();
   updateTrendDetailsVisibility();
@@ -9291,11 +9296,27 @@ function hasCompletedRunSnapshot() {
   return Boolean(appState.latestCompletedRunSnapshot && typeof appState.latestCompletedRunSnapshot === "object");
 }
 
+function hasCompletedRuns() {
+  return sanitizeCompletedRuns(appState.completedRuns).length > 0;
+}
+
 function updateReviewRunButtonState() {
   if (!elements.reviewRunBtn) return;
   const hasSnapshot = hasCompletedRunSnapshot();
   elements.reviewRunBtn.disabled = !hasSnapshot;
   elements.reviewRunBtn.title = hasSnapshot ? "Open the latest completed run snapshot" : "No completed run snapshot yet";
+}
+
+function updateRunHistoryButtonState() {
+  if (!elements.runHistoryBtn) return;
+  const hasRuns = hasCompletedRuns();
+  elements.runHistoryBtn.disabled = !hasRuns;
+  elements.runHistoryBtn.title = hasRuns ? "Open saved completed run history" : "No completed runs saved yet";
+}
+
+function updateCompletedRunViewerButtonStates() {
+  updateReviewRunButtonState();
+  updateRunHistoryButtonState();
 }
 
 function formatReviewRunDateTime(value) {
@@ -10242,19 +10263,19 @@ function formatReviewRunTextForModal(text, snapshot) {
     .replace(/^Worst:/gm, `Worst ${bucketLabel} period:`);
 }
 
-function renderReviewRunModal(snapshot) {
-  if (!elements.reviewRunModalContent) return;
-  elements.reviewRunModalContent.innerHTML = "";
+function renderCompletedRunReport(container, snapshot, options = {}) {
+  if (!container) return;
+  container.innerHTML = "";
   if (!snapshot) {
     const empty = document.createElement("div");
     empty.className = "status-box minimal-status";
-    empty.textContent = "No completed run snapshot yet.";
-    elements.reviewRunModalContent.appendChild(empty);
+    empty.textContent = options.emptyText || "No completed run snapshot yet.";
+    container.appendChild(empty);
     return;
   }
 
   const runLabel = getReviewRunNumberLabel(snapshot);
-  if (elements.reviewRunModalTitle) elements.reviewRunModalTitle.textContent = `Review Run — ${runLabel}`;
+  if (options.titleElement) options.titleElement.textContent = `${options.titlePrefix || "Review Run"} — ${runLabel}`;
 
   const heading = document.createElement("div");
   heading.className = "review-run-heading status-box minimal-status";
@@ -10265,14 +10286,14 @@ function renderReviewRunModal(snapshot) {
     formattedSessionDate !== "—" ? formattedSessionDate : ""
   ].filter(Boolean);
   heading.textContent = headingParts.join(" — ");
-  elements.reviewRunModalContent.appendChild(heading);
+  container.appendChild(heading);
 
   const intro = document.createElement("div");
   intro.className = "review-run-intro status-box minimal-status";
-  intro.textContent = `Frozen snapshot captured ${snapshot.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : "at run finish"}. Live panels continue to update separately.`;
-  elements.reviewRunModalContent.appendChild(intro);
+  intro.textContent = options.introText || `Frozen snapshot captured ${snapshot.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : "at run finish"}. Live panels continue to update separately.`;
+  container.appendChild(intro);
 
-  const runInfo = appendReviewRunSection(elements.reviewRunModalContent, "Run Info");
+  const runInfo = appendReviewRunSection(container, "Run Info");
   appendReviewRunKeyValueTable(runInfo, buildCompletedRunKeyValueRows([
     ["Event", snapshot.farm || "—"],
     ["Session date", formattedSessionDate],
@@ -10288,25 +10309,25 @@ function renderReviewRunModal(snapshot) {
     ["Official reject adjustment", snapshot.officialRejectedAdjustment ?? "0"]
   ]));
 
-  const performance = appendReviewRunSection(elements.reviewRunModalContent, "Performance / Run Summary");
+  const performance = appendReviewRunSection(container, "Performance / Run Summary");
   appendReviewRunKeyValueTable(performance, buildReviewRunPerformanceRows(snapshot));
   appendReviewRunPortionSelectors(performance, snapshot);
   appendReviewRunKeyValueTable(performance, buildReviewRunPeriodRows(snapshot));
   if (snapshot.runReviewText) {
-    const fullTextSummary = appendReviewRunSection(elements.reviewRunModalContent, "Full text summary", { collapsedByDefault: true });
+    const fullTextSummary = appendReviewRunSection(container, "Full text summary", { collapsedByDefault: true });
     const reviewText = document.createElement("pre");
     reviewText.className = "review-run-text";
     reviewText.textContent = formatReviewRunTextForModal(snapshot.runReviewText, snapshot);
     fullTextSummary.appendChild(reviewText);
   }
 
-  const targetPace = appendReviewRunSection(elements.reviewRunModalContent, "Target / Pace");
+  const targetPace = appendReviewRunSection(container, "Target / Pace");
   appendReviewRunKeyValueTable(targetPace, filterRemovedDynamicTargetPaceRows(snapshot.display?.targetPaceRows || []));
 
-  const timing = appendReviewRunSection(elements.reviewRunModalContent, "Timing / Alerts");
+  const timing = appendReviewRunSection(container, "Timing / Alerts");
   appendReviewRunKeyValueTable(timing, snapshot.display?.timingRows || []);
 
-  const penPlanner = appendReviewRunSection(elements.reviewRunModalContent, "Pen Refill Planner");
+  const penPlanner = appendReviewRunSection(container, "Pen Refill Planner");
   appendReviewRunKeyValueTable(penPlanner, snapshot.display?.penRefillPlannerRows || []);
   appendReviewRunDataTable(
     penPlanner,
@@ -10321,25 +10342,107 @@ function renderReviewRunModal(snapshot) {
     "No pen refill events captured for this run."
   );
 
-  const flags = appendReviewRunSection(elements.reviewRunModalContent, "Trend Flags");
+  const flags = appendReviewRunSection(container, "Trend Flags");
   appendReviewRunDataTable(flags, ["Flag"], snapshot.display?.trendFlagRows || [], "No trend flags captured.");
 
-  const reviews = appendReviewRunSection(elements.reviewRunModalContent, "15-Minute Reviews");
+  const reviews = appendReviewRunSection(container, "15-Minute Reviews");
   appendReviewRunDataTable(reviews, ["Range", "Sheep", "Avg cycle", "Delta", "Status"], buildReviewRunReviewRows(snapshot), "No 15-minute reviews captured.");
 
-  const buckets = appendReviewRunSection(elements.reviewRunModalContent, "Trend Graph Bucket Data");
+  const buckets = appendReviewRunSection(container, "Trend Graph Bucket Data");
   appendReviewRunDataTable(buckets, ["Bucket", "Start", "Sheep", "Avg cycle", "Avg catch"], buildReviewRunTrendBucketRows(snapshot), "No trend bucket data captured.");
 
-  const sheepLog = appendReviewRunSection(elements.reviewRunModalContent, "Sheep Log");
+  const sheepLog = appendReviewRunSection(container, "Sheep Log");
   appendReviewRunDataTable(sheepLog, ["Sheep", "Start", "End", "Catch", "Shear", "Total", "Markers", "Notes"], buildReviewRunSheepLogRows(snapshot), "No sheep captured for this run.");
 
   const qualityRows = snapshot.display?.qualityRows || [];
   if (qualityRows.length) {
-    const quality = appendReviewRunSection(elements.reviewRunModalContent, "Quality Ratings");
+    const quality = appendReviewRunSection(container, "Quality Ratings");
     appendReviewRunDataTable(quality, ["Period", "Rating", "Official", "Physical", "Warning", "Notes"], qualityRows);
   }
 
-  updateReviewRunSectionMoveButtons(elements.reviewRunModalContent);
+  updateReviewRunSectionMoveButtons(container);
+}
+
+
+function renderReviewRunModal(snapshot) {
+  renderCompletedRunReport(elements.reviewRunModalContent, snapshot, {
+    titleElement: elements.reviewRunModalTitle,
+    titlePrefix: "Review Run",
+    emptyText: "No completed run snapshot yet."
+  });
+}
+
+function getCompletedRunsForHistory() {
+  return sanitizeCompletedRuns(appState.completedRuns);
+}
+
+function getHistoricalRunSummary(snapshot, index) {
+  const runLabel = getReviewRunNumberLabel(snapshot) || `Run ${index + 1}`;
+  const sheepCount = Array.isArray(snapshot?.sheep) ? snapshot.sheep.length : null;
+  const stats = snapshot?.currentStats || {};
+  return {
+    runLabel,
+    sheepCount: sheepCount !== null ? sheepCount : "—",
+    start: formatReviewRunSnapshotDayClock(snapshot, "runStartDayClockDisplay", "runStartDayClockSeconds", "runStartTime"),
+    end: formatReviewRunSnapshotDayClock(snapshot, "actualLastSheepEndDayClockDisplay", "actualLastSheepEndDayClockSeconds", "actualLastSheepEndTime"),
+    sheepPerHour: Number.isFinite(Number(stats.sheepPerHour)) ? Number(stats.sheepPerHour).toFixed(2) : "—",
+    avgCycle: Number.isFinite(Number(stats.avgCycle)) ? formatSeconds(Number(stats.avgCycle)) : "—"
+  };
+}
+
+function renderRunHistoryList(container, runs, selectedIndex) {
+  const list = document.createElement("div");
+  list.className = "run-history-list";
+  runs.forEach((snapshot, index) => {
+    const summary = getHistoricalRunSummary(snapshot, index);
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = `run-history-item${index === selectedIndex ? " is-selected" : ""}`;
+    item.dataset.runHistoryIndex = String(index);
+    item.innerHTML = `
+      <span class="run-history-item-title"></span>
+      <span class="run-history-item-meta"></span>
+    `;
+    item.querySelector(".run-history-item-title").textContent = summary.runLabel;
+    item.querySelector(".run-history-item-meta").textContent = `${summary.sheepCount} sheep · Start ${summary.start} · End ${summary.end} · ${summary.sheepPerHour} sheep/hr · Avg cycle ${summary.avgCycle}`;
+    list.appendChild(item);
+  });
+  container.appendChild(list);
+}
+
+function renderSelectedHistoricalRun(container, snapshot) {
+  renderCompletedRunReport(container, snapshot, {
+    titleElement: elements.runHistoryModalTitle,
+    titlePrefix: "Run History",
+    emptyText: "Select a completed run to view its saved report.",
+    introText: `Historical run snapshot. Live panels continue separately. Saved ${snapshot?.capturedAt ? new Date(snapshot.capturedAt).toLocaleString() : "at run finish"}.`
+  });
+}
+
+function renderRunHistoryModal(selectedIndex = null) {
+  if (!elements.runHistoryModalContent) return;
+  const runs = getCompletedRunsForHistory();
+  elements.runHistoryModalContent.innerHTML = "";
+  if (!runs.length) {
+    if (elements.runHistoryModalTitle) elements.runHistoryModalTitle.textContent = "Run History";
+    const empty = document.createElement("div");
+    empty.className = "status-box minimal-status";
+    empty.textContent = "No completed runs saved yet.";
+    elements.runHistoryModalContent.appendChild(empty);
+    return;
+  }
+
+  const safeIndex = Number.isInteger(selectedIndex) && selectedIndex >= 0 && selectedIndex < runs.length ? selectedIndex : runs.length - 1;
+  const layout = document.createElement("div");
+  layout.className = "run-history-layout";
+  const listPanel = document.createElement("aside");
+  listPanel.className = "run-history-list-panel";
+  const reportPanel = document.createElement("div");
+  reportPanel.className = "run-history-report-panel";
+  renderRunHistoryList(listPanel, runs, safeIndex);
+  renderSelectedHistoricalRun(reportPanel, runs[safeIndex]);
+  layout.append(listPanel, reportPanel);
+  elements.runHistoryModalContent.appendChild(layout);
 }
 
 function openReviewRunModal() {
@@ -10351,6 +10454,17 @@ function openReviewRunModal() {
 function closeReviewRunModal() {
   if (elements.reviewRunModalOverlay) elements.reviewRunModalOverlay.hidden = true;
   if (elements.reviewRunModalTitle) elements.reviewRunModalTitle.textContent = "Review Run";
+}
+
+function openRunHistoryModal() {
+  if (!elements.runHistoryModalOverlay) return;
+  renderRunHistoryModal();
+  elements.runHistoryModalOverlay.hidden = false;
+}
+
+function closeRunHistoryModal() {
+  if (elements.runHistoryModalOverlay) elements.runHistoryModalOverlay.hidden = true;
+  if (elements.runHistoryModalTitle) elements.runHistoryModalTitle.textContent = "Run History";
 }
 
 function formatDeltaPlain(delta) {
@@ -17693,7 +17807,7 @@ function restoreSessionPayload(raw, options = {}) {
   scrollSheepLogToLatest();
   drawTrendGraph();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
-  updateReviewRunButtonState();
+  updateCompletedRunViewerButtonStates();
   updateTrendFlags();
   updateTrendDetailsVisibility();
   if (options.source === "manual") {
@@ -18921,10 +19035,24 @@ function bindEvents() {
     });
   }
   if (elements.reviewRunBtn) elements.reviewRunBtn.addEventListener("click", openReviewRunModal);
+  if (elements.runHistoryBtn) elements.runHistoryBtn.addEventListener("click", openRunHistoryModal);
   if (elements.reviewRunModalCloseBtn) elements.reviewRunModalCloseBtn.addEventListener("click", closeReviewRunModal);
   if (elements.reviewRunModalOverlay) {
     elements.reviewRunModalOverlay.addEventListener("click", (event) => {
       if (event.target === elements.reviewRunModalOverlay) closeReviewRunModal();
+    });
+  }
+  if (elements.runHistoryModalCloseBtn) elements.runHistoryModalCloseBtn.addEventListener("click", closeRunHistoryModal);
+  if (elements.runHistoryModalOverlay) {
+    elements.runHistoryModalOverlay.addEventListener("click", (event) => {
+      if (event.target === elements.runHistoryModalOverlay) closeRunHistoryModal();
+    });
+  }
+  if (elements.runHistoryModalContent) {
+    elements.runHistoryModalContent.addEventListener("click", (event) => {
+      const item = event.target.closest("[data-run-history-index]");
+      if (!item) return;
+      renderRunHistoryModal(Number(item.dataset.runHistoryIndex));
     });
   }
   if (elements.breakOverlayDismissBtn) elements.breakOverlayDismissBtn.addEventListener("click", hideBreakBannerForCurrentBreak);
@@ -19801,7 +19929,7 @@ function initialize() {
   renderReviewList();
   scrollSheepLogToLatest();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
-  updateReviewRunButtonState();
+  updateCompletedRunViewerButtonStates();
   updatePauseButtonUI();
   updateFinishRunBreakButtonUI();
   updateStartRunButtonUI();
