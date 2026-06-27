@@ -4661,6 +4661,7 @@ const appState = {
   runReviewText: "Run review will be generated when you stop a run.",
   trendFlags: ["Set a target to enable trend flags."],
   latestCompletedRunSnapshot: null,
+  completedRuns: [],
   panelSizes: {},
   autosaveTimerId: null,
   trendGraphRenderPoints: [],
@@ -7346,6 +7347,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
 
   generateRunReview();
   appState.latestCompletedRunSnapshot = buildCompletedRunSnapshot();
+  appendCompletedRunSnapshot(appState.latestCompletedRunSnapshot);
   updateReviewRunButtonState();
 
   appState.runActive = false;
@@ -7459,6 +7461,7 @@ function refreshAfterStartNewDayReset() {
 function startNewDay() {
   clearPanelInteractionHighlights();
   resetRunState();
+  appState.completedRuns = [];
   appState.qualityRatings = [];
   appState.qualityRatingEditId = "";
   appState.officialRejectedAdjustment = 0;
@@ -9225,6 +9228,63 @@ function buildCompletedRunSnapshot() {
       qualityRows: getCompletedRunQualityRows()
     }
   };
+}
+
+function getCompletedRunFingerprint(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") return "";
+  const sheep = Array.isArray(snapshot.sheep) ? snapshot.sheep : [];
+  const lastSheep = sheep[sheep.length - 1] || null;
+  const lastSheepId = lastSheep?.id ?? lastSheep?.number ?? lastSheep?.dayNumber ?? "";
+  return [
+    snapshot.sessionDate || "",
+    Number.isFinite(Number(snapshot.runIndex)) ? Number(snapshot.runIndex) : "",
+    Number.isFinite(Number(snapshot.runNumber)) ? Number(snapshot.runNumber) : "",
+    Number.isFinite(Number(snapshot.runStartTime)) ? Number(snapshot.runStartTime) : "",
+    Number.isFinite(Number(snapshot.actualLastSheepEndTime)) ? Number(snapshot.actualLastSheepEndTime) : "",
+    sheep.length,
+    lastSheepId
+  ].join("|");
+}
+
+function dedupeCompletedRuns(runs) {
+  if (!Array.isArray(runs)) return [];
+  const deduped = [];
+  const indexByFingerprint = new Map();
+  runs.forEach((run) => {
+    if (!run || typeof run !== "object" || Array.isArray(run)) return;
+    const fingerprint = getCompletedRunFingerprint(run);
+    if (!fingerprint) return;
+    const normalizedRun = { ...run, historyFingerprint: fingerprint };
+    if (indexByFingerprint.has(fingerprint)) {
+      deduped[indexByFingerprint.get(fingerprint)] = normalizedRun;
+      return;
+    }
+    indexByFingerprint.set(fingerprint, deduped.length);
+    deduped.push(normalizedRun);
+  });
+  return deduped;
+}
+
+function sanitizeCompletedRuns(runs) {
+  return dedupeCompletedRuns(Array.isArray(runs) ? runs : []);
+}
+
+function appendCompletedRunSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return;
+  const existingRuns = sanitizeCompletedRuns(appState.completedRuns);
+  const fingerprint = getCompletedRunFingerprint(snapshot);
+  if (!fingerprint) {
+    appState.completedRuns = existingRuns;
+    return;
+  }
+  const historySnapshot = { ...cloneSnapshotValue(snapshot, {}), historyFingerprint: fingerprint };
+  const existingIndex = existingRuns.findIndex((run) => getCompletedRunFingerprint(run) === fingerprint);
+  if (existingIndex >= 0) {
+    existingRuns[existingIndex] = historySnapshot;
+  } else {
+    existingRuns.push(historySnapshot);
+  }
+  appState.completedRuns = existingRuns;
 }
 
 function hasCompletedRunSnapshot() {
@@ -16353,6 +16413,7 @@ function getAutosavePayload() {
       runReviewText: appState.runReviewText,
       trendFlags: appState.trendFlags,
       latestCompletedRunSnapshot: appState.latestCompletedRunSnapshot,
+      completedRuns: sanitizeCompletedRuns(appState.completedRuns),
       panelCollapsed: appState.panelCollapsed,
       effectiveElapsedBeforePauseMs: appState.effectiveElapsedBeforePauseMs,
       effectiveResumeRealMs: appState.effectiveResumeRealMs,
@@ -17557,6 +17618,7 @@ function restoreSessionPayload(raw, options = {}) {
     && typeof appState.latestCompletedRunSnapshot === "object"
     ? appState.latestCompletedRunSnapshot
     : null;
+  appState.completedRuns = sanitizeCompletedRuns(appState.completedRuns);
   migrateLegacyRejectedSheepStatusesToAdjustment();
   appState.recordType = appState.recordType === "strongWoolLambs" || appState.recordType === "strongWoolEwes" ? appState.recordType : "none";
   if (forcePaused && appState.runActive) {
