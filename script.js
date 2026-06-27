@@ -4872,8 +4872,6 @@ const elements = {
   currentSheepTimeLeft: document.getElementById("currentSheepTimeLeft"),
   maxCatchTime: document.getElementById("maxCatchTime"),
   catchPrediction: document.getElementById("catchPrediction"),
-  blockMinutes: document.getElementById("blockMinutes"),
-  blockResults: document.getElementById("blockResults"),
   sheepLogBody: document.getElementById("sheepLogBody"),
   mergeSelectedSheepBtn: document.getElementById("mergeSelectedSheepBtn"),
   mergeSelectedSheepStatus: document.getElementById("mergeSelectedSheepStatus"),
@@ -7401,7 +7399,7 @@ function finishRunAndEnterBreak(source = "record-day-break", breakStartedAtMs = 
 }
 
 function resetRun() {
-  if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus || !elements.blockMinutes) return;
+  if (!elements.startRunBtn || !elements.stopRunBtn || !elements.runStatus) return;
   clearPanelInteractionHighlights();
   resetRunState();
   elements.startRunBtn.disabled = false;
@@ -7415,7 +7413,6 @@ function resetRun() {
   elements.runStatus.textContent = "Idle";
   updatePauseButtonUI();
   renderLogTable();
-  renderBlock(Number(elements.blockMinutes.value) || 15);
   updateLivePanel();
   if (elements.runReviewText) elements.runReviewText.textContent = appState.runReviewText;
   updateReviewRunButtonState();
@@ -7454,7 +7451,6 @@ function refreshAfterStartNewDayReset() {
   drawTrendGraph();
   updateTrendFlags();
   updateTrendDetailsVisibility();
-  if (elements.blockMinutes) renderBlock(Number(elements.blockMinutes.value) || 15);
   applySmartSessionOpenLayout();
   applyPanelLayout();
   scrollSheepLogToLatest();
@@ -8658,34 +8654,6 @@ function predictCatch(targetMetrics = null, requiredRunTotalSheep = null) {
   }
 
   return "On target.";
-}
-
-function calculateBlockData(minutes) {
-  const windowSeconds = Math.max(Number(minutes) || 0, 1) * 60;
-  const now = Date.now();
-  const entries = appState.sheep.filter((item) => now - item.endTime <= windowSeconds * 1000);
-
-  if (!entries.length) {
-    return { count: 0, avgShear: 0, avgCatch: 0, avgCycle: 0, rate: 0 };
-  }
-
-  const totals = entries.reduce(
-    (acc, entry) => {
-      acc.shear += entry.shearDuration;
-      acc.catch += entry.catchDuration;
-      acc.cycle += entry.fullCycle;
-      return acc;
-    },
-    { shear: 0, catch: 0, cycle: 0 }
-  );
-
-  return {
-    count: entries.length,
-    avgShear: totals.shear / entries.length,
-    avgCatch: totals.catch / entries.length,
-    avgCycle: totals.cycle / entries.length,
-    rate: (entries.length * 3600) / windowSeconds
-  };
 }
 
 function getBucketKey(effectiveElapsedSeconds, bucketMinutes = appState.trendBucketMinutes) {
@@ -15630,8 +15598,7 @@ const SMART_PANEL_LAYOUT = Object.freeze({
   "panel-trend-flags": { role: "log", height: 360, minWidth: 360 },
   "panel-trend-graph": { role: "full", height: 460, minWidth: 520, fullWidth: true },
   "panel-run-review": { role: "bottom", height: 260, minWidth: 340 },
-  "panel-reviews": { role: "bottom", height: 260, minWidth: 340 },
-  "panel-block": { role: "bottom", height: 260, minWidth: 340 }
+  "panel-reviews": { role: "bottom", height: 260, minWidth: 340 }
 });
 
 function isPanelCollapsedForSmartLayout(panelId) {
@@ -15876,8 +15843,7 @@ function getSmartLayoutGridPlacement(panelId, columns) {
     "panel-trend-flags": { order: 8, span: 1 },
     "panel-trend-graph": { order: 9, span: 4 },
     "panel-run-review": { order: 10, span: 1 },
-    "panel-reviews": { order: 11, span: 1 },
-    "panel-block": { order: 12, span: 1 }
+    "panel-reviews": { order: 11, span: 1 }
   };
   const mediumPlacements = {
     "panel-config": { order: 1, span: 1 },
@@ -15890,10 +15856,9 @@ function getSmartLayoutGridPlacement(panelId, columns) {
     "panel-trend-flags": { order: 8, span: 1 },
     "panel-trend-graph": { order: 9, span: 2 },
     "panel-run-review": { order: 10, span: 2 },
-    "panel-reviews": { order: 11, span: 2 },
-    "panel-block": { order: 12, span: 2 }
+    "panel-reviews": { order: 11, span: 2 }
   };
-  const narrowOrder = ["panel-config", "panel-sim", "panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner", "panel-log", "panel-trend-flags", "panel-trend-graph", "panel-run-review", "panel-reviews", "panel-block"];
+  const narrowOrder = ["panel-config", "panel-sim", "panel-cycle", "panel-performance", "panel-target", "panel-pen-fill-planner", "panel-log", "panel-trend-flags", "panel-trend-graph", "panel-run-review", "panel-reviews"];
   if (columns === 1) return { order: narrowOrder.indexOf(panelId) + 1 || 999, span: 1 };
   return (columns === 4 ? widePlacements : mediumPlacements)[panelId] || { order: 999, span: 1 };
 }
@@ -15923,8 +15888,7 @@ function applySmartSessionOpenLayout(options = {}) {
       "panel-trend-flags",
       "panel-trend-graph",
       "panel-run-review",
-      "panel-reviews",
-      "panel-block"
+      "panel-reviews"
     ].forEach((panelId) => {
       const row = applySmartLayoutRow([panelId], y, [fullWidth], { gap, fallbackHeight: panelId === "panel-trend-graph" ? SMART_LAYOUT_GRAPH_HEIGHT : 180, maxWidth: contentWidth });
       changed = row.changed || changed;
@@ -15968,9 +15932,9 @@ function applySmartSessionOpenLayout(options = {}) {
     changed = row.changed || changed;
     y = row.nextY;
 
-    const bottomPanels = ["panel-run-review", "panel-reviews", "panel-block"];
+    const bottomPanels = ["panel-run-review", "panel-reviews"];
     if (columns === 4) {
-      const bottomWidths = buildSmartEqualWidths(3, contentWidth, gap);
+      const bottomWidths = buildSmartEqualWidths(2, contentWidth, gap);
       row = applySmartLayoutRow(bottomPanels, y, bottomWidths, { gap, fallbackHeight: SMART_LAYOUT_BOTTOM_ROW_HEIGHT, maxWidth: contentWidth });
       changed = row.changed || changed;
     } else {
@@ -16704,9 +16668,7 @@ function getPdfExportSnapshot() {
     ["Time spare to bell", "timeSpareToBell"],
     ["Current sheep time left", "currentSheepTimeLeft"],
     ["Max catch time", "maxCatchTime"],
-    ["Catch prediction", "catchPrediction"],
-    ["Block minutes", "blockMinutes"],
-    ["Block results", "blockResults"]
+    ["Catch prediction", "catchPrediction"]
   ].map(([label, id]) => [label, getSafeText(id)]);
 
   return {
@@ -18471,20 +18433,6 @@ function setSimulationMode(enabled) {
   }
 }
 
-function renderBlock(minutes) {
-  if (!elements.blockResults) return;
-  const block = calculateBlockData(minutes);
-  elements.blockResults.innerHTML = `
-    <p><strong>Window:</strong> ${minutes} minutes</p>
-    <p><strong>Sheep completed:</strong> ${block.count}</p>
-    <p><strong>Average shear:</strong> ${formatSeconds(block.avgShear)}</p>
-    <p><strong>Average catch:</strong> ${formatSeconds(block.avgCatch)}</p>
-    <p><strong>Average Total Time Per Sheep:</strong> ${formatSeconds(block.avgCycle)}</p>
-    <p><strong>Rate:</strong> ${block.rate.toFixed(2)} sheep/hour</p>
-  `;
-}
-
-
 function sanitizeAppZoomPercent(value) {
   if (value === null || value === undefined || value === "") return APP_ZOOM_DEFAULT_PERCENT;
   const percent = Number(value);
@@ -19104,20 +19052,6 @@ function bindEvents() {
     });
   }
 
-  if (elements.blockMinutes) {
-    elements.blockMinutes.addEventListener("change", () => {
-      renderBlock(Number(elements.blockMinutes.value));
-    });
-  }
-
-  document.querySelectorAll(".block-btn").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!elements.blockMinutes) return;
-      const minutes = Number(button.dataset.minutes);
-      elements.blockMinutes.value = String(minutes);
-      renderBlock(minutes);
-    });
-  });
 
   [elements.shellyIpInput, elements.endpointMode, elements.pollIntervalInput]
     .filter(Boolean)
@@ -19800,9 +19734,6 @@ function initialize() {
   updateRunPaceCompareControls();
   updateRunPaceCustomRangeControls();
 
-  if (elements.blockMinutes) {
-    renderBlock(Number(elements.blockMinutes.value) || 15);
-  }
 
   renderLogTable();
   renderReviewList();
