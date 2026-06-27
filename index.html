@@ -32,6 +32,7 @@
         <button id="appZoomPlusBtn" class="app-tab app-zoom-step-btn" type="button" aria-label="Increase app zoom by 1 percent">+</button>
       </div>
       <button id="reviewRunBtn" class="app-tab top-nav-review-run-btn" type="button" disabled>Review Run</button>
+      <button id="runHistoryBtn" class="app-tab top-nav-run-history-btn" type="button" disabled>Run History</button>
     </div>
   </header>
 
@@ -1007,6 +1008,18 @@
       </div>
       <div id="reviewRunModalContent" class="connection-help-modal-content review-run-modal-content">
         <div class="status-box minimal-status">No completed run snapshot yet.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="runHistoryModalOverlay" class="connection-help-modal-overlay" hidden>
+    <div class="connection-help-modal run-history-modal" role="dialog" aria-modal="true" aria-labelledby="runHistoryModalTitle">
+      <div class="connection-help-modal-header">
+        <h3 id="runHistoryModalTitle">Run History</h3>
+        <button id="runHistoryModalCloseBtn" class="connection-help-modal-close" type="button" aria-label="Close Run History">✕</button>
+      </div>
+      <div id="runHistoryModalContent" class="connection-help-modal-content run-history-modal-content">
+        <div class="status-box minimal-status">No completed runs saved yet.</div>
       </div>
     </div>
   </div>
