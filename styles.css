@@ -2249,21 +2249,6 @@ td {
   font-size: 0.9rem;
 }
 
-#blockResults {
-  padding: 0.6rem;
-  border: 1px dashed #9ca3af;
-  background: #f9fafb;
-}
-
-#panel-block .panel-body {
-  display: grid;
-  gap: 0.7rem;
-}
-
-#panel-block.panel.collapsed .panel-body {
-  display: none;
-}
-
 #trendGraphCanvas {
   width: 100%;
   max-width: 100%;
